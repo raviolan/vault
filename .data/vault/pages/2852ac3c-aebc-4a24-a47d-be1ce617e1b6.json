@@ -1,0 +1,19 @@
+{
+  "id": "2852ac3c-aebc-4a24-a47d-be1ce617e1b6",
+  "title": "Welcome to DM Vault",
+  "type": "note",
+  "createdAt": "2025-12-20T21:54:42.840Z",
+  "updatedAt": "2025-12-20T21:54:42.840Z",
+  "content": {
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "This vault lives locally on your machine (Docker volume). Updates won't overwrite your content."
+      },
+      {
+        "type": "paragraph",
+        "text": "Next steps: build the page editor, tags, backlinks, graph, and tools as clean route modules."
+      }
+    ]
+  }
+}

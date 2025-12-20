@@ -1,0 +1,12 @@
+services:
+  dm-vault:
+    build: .
+    image: dm-vault:local
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATA_DIR=/data
+    volumes:
+      # User-owned vault data. Safe across updates.
+      - ./data:/data

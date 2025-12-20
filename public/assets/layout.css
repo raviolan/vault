@@ -1,0 +1,297 @@
+/* Core layout and grid structure */
+* {
+    box-sizing: border-box
+}
+
+html,
+body {
+    height: 100%
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 18px/1.65 system-ui, Segoe UI, Roboto, Inter, Helvetica, Arial
+}
+
+a {
+    color: var(--link);
+    text-decoration: none
+}
+
+a:hover {
+    text-decoration: underline
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: var(--left-w) 1fr var(--right-w);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "top top top" "left main right";
+    height: 100vh
+}
+
+.layout {
+    position: relative
+}
+
+.top {
+    grid-area: top;
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    align-items: center
+}
+
+.top {
+    min-height: 64px
+}
+
+.left {
+    grid-area: left;
+    overflow: auto;
+    border-right: 1px solid var(--border);
+    padding: 16px 16px 16px 24px
+}
+
+.left .tree {
+    font-size: 16px
+}
+
+.left summary {
+    cursor: pointer;
+    user-select: none
+}
+
+.left summary::-webkit-details-marker {
+    display: none
+}
+
+.left details>summary::marker {
+    content: ''
+}
+
+.left details>summary::before {
+    content: '';
+    display: none
+}
+
+.left details[open]>summary::before {
+    content: '';
+    display: none;
+    transform: none
+}
+
+.main {
+    grid-area: main;
+    overflow: auto;
+    padding: 40px 48px;
+    background: var(--main-bg)
+}
+
+.right {
+    grid-area: right;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-left: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column
+}
+
+.drawer-content {
+    overflow-x: hidden;
+    flex: 1;
+    min-height: 0
+}
+
+.right-split {
+    display: grid;
+    grid-template-rows: var(--pane-top-h, 20%) 6px 1fr;
+    gap: 8px;
+    position: relative;
+    height: 100%;
+    min-height: 0;
+}
+
+.right-split .tool-view {
+    display: block
+}
+
+.right-split #toolHome {
+    display: none
+}
+
+.pane {
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px
+}
+
+.pane-toolbar {
+    display: none
+}
+
+.pane-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column
+}
+
+/* Resizers for side panels */
+.resizer {
+    position: absolute;
+    top: 56px;
+    bottom: 0;
+    width: 6px;
+    z-index: 1002;
+    cursor: col-resize;
+}
+
+.resizer-left {
+    left: calc(var(--left-w) - 3px)
+}
+
+.resizer-right {
+    left: calc(100% - var(--right-w) - 3px)
+}
+
+.resizer:hover {
+    background: rgba(255, 255, 255, 0.06)
+}
+
+.pane-resizer-h {
+    height: 6px;
+    background: transparent;
+    cursor: row-resize;
+    border-radius: 4px
+}
+
+.pane-resizer-h:hover {
+    background: rgba(255, 255, 255, 0.06)
+}
+
+/* Collapse states */
+.drawer-tab {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    background: #10131a;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-right: none;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    padding: 8px 6px;
+    cursor: pointer;
+    z-index: 1001
+}
+
+.drawer-tab:hover {
+    background: #141a24;
+    color: #e5e7eb
+}
+
+body.drawer-collapsed .drawer-tab {
+    display: block
+}
+
+body:not(.drawer-collapsed) .drawer-tab {
+    display: none
+}
+
+.left-drawer-tab {
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    background: #10131a;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    padding: 8px 6px;
+    cursor: pointer;
+    z-index: 1001
+}
+
+.left-drawer-tab:hover {
+    background: #141a24;
+    color: #e5e7eb
+}
+
+body.left-collapsed .left-drawer-tab {
+    display: block
+}
+
+body:not(.left-collapsed) .left-drawer-tab {
+    display: none
+}
+
+body.drawer-collapsed {
+    --right-w: 0px
+}
+
+body.drawer-collapsed .right {
+    display: none
+}
+
+body.left-collapsed {
+    --left-w: 0px
+}
+
+body.left-collapsed .left {
+    display: none
+}
+
+/* Drawer state */
+.right {
+    position: relative
+}
+
+.left {
+    position: relative
+}
+
+.right .drawer-handle {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px
+}
+
+.left .drawer-handle {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px
+}
+
+.right.collapsed .drawer-content {
+    display: none
+}
+
+.left.collapsed .drawer-content {
+    display: none
+}
+
+.right.collapsed .drawer-handle {
+    position: absolute;
+    top: 8px;
+    right: 8px
+}
+
+.left.collapsed .drawer-handle {
+    position: absolute;
+    top: 8px;
+    left: 8px
+}

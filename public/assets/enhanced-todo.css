@@ -1,0 +1,505 @@
+/**
+ * enhanced-todo.css - Apple Reminders-style to-do list
+ */
+
+/* Enhanced todo form */
+#todoForm {
+    background: rgba(139, 92, 246, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+#todoInput {
+    font-size: 16px;
+}
+
+#todoInput:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.todo-add {
+    background: var(--accent);
+    color: white;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.todo-add:hover {
+    background: #7c3aed;
+    transform: translateY(-1px);
+}
+
+/* Enhanced todo items - clean, spacious, minimal borders */
+.todo-item {
+    display: block;
+    position: relative;
+    background: transparent;
+    border: none;
+    transition: all 0.15s ease;
+    width: 100%;
+}
+
+.todo-item.top-level {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--panel);
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.todo-item.top-level.is-parent {
+    margin-bottom: 12px;
+}
+
+.todo-item.top-level:hover {
+    background: rgba(139, 92, 246, 0.06);
+    border-color: rgba(139, 92, 246, 0.1);
+}
+
+.todo-item:focus-within {
+    background: rgba(139, 92, 246, 0.08);
+}
+
+/* Apple Reminders-style row layout */
+.todo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 2px 0;
+}
+
+/* Chevron toggle button - right-facing by default, down when expanded */
+.todo-chevron {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--muted);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    padding: 0;
+    transform: rotate(0deg);
+}
+
+.todo-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.todo-chevron:hover {
+    color: var(--text);
+}
+
+.todo-chevron-spacer {
+    width: 20px;
+    flex-shrink: 0;
+}
+
+/* Circular checkboxes - clean, no shading, minimal style */
+.todo-check {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    background: transparent;
+    position: relative;
+    margin: 0;
+}
+
+.todo-check:hover {
+    border-color: var(--accent);
+}
+
+.todo-check:checked {
+    border-color: var(--accent);
+    background: transparent;
+}
+
+.todo-check:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Text field enhancement */
+.todo-text {
+    flex: 1;
+    min-height: 24px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+    line-height: 1.4;
+    font-size: 15px;
+}
+
+.todo-text.parent-text {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.todo-text:focus {
+    outline: none;
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.todo-text:empty::before {
+    content: "Type task...";
+    color: var(--muted);
+    opacity: 0.5;
+}
+
+.todo-text.done {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+/* Count badge on the right */
+.todo-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--muted);
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-left: auto;
+    user-select: none;
+}
+
+/* Nested sublists - vertical hierarchy */
+.todo-sublist {
+    display: block !important;
+    list-style: none;
+    padding-left: 32px;
+    margin: 4px 0 0 0;
+    width: 100%;
+    clear: both;
+}
+
+.todo-sublist.collapsed {
+    display: none !important;
+}
+
+.todo-sublist .todo-item {
+    display: block !important;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 4px 0;
+    margin: 0;
+    width: 100%;
+}
+
+.todo-sublist .todo-item:hover {
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.todo-sublist .todo-row {
+    display: flex;
+    width: 100%;
+}
+
+/* Grip enhancement */
+.todo-grip {
+    opacity: 0.3;
+    transition: opacity 0.2s;
+    cursor: grab;
+    font-size: 14px;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.todo-grip:active {
+    cursor: grabbing;
+}
+
+.todo-item:hover .todo-grip {
+    opacity: 0.6;
+}
+
+.todo-grip:hover {
+    opacity: 1 !important;
+}
+
+/* Actions menu enhancement */
+.todo-actions {
+    opacity: 0;
+    transition: opacity 0.2s;
+    flex-shrink: 0;
+}
+
+.todo-item:hover .todo-actions,
+.todo-item:focus-within .todo-actions {
+    opacity: 1;
+}
+
+.todo-more {
+    font-size: 16px;
+    line-height: 1;
+    padding: 4px 8px;
+    transition: all 0.2s;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+}
+
+.todo-more:hover {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--text);
+    border-radius: 4px;
+}
+
+/* Apple Reminders-style layout */
+.todo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 2px 0;
+}
+
+/* Duplicates removed - see definitions above */
+
+/* Enhanced drag and drop */
+.todo-check {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    background: transparent;
+    position: relative;
+}
+
+.todo-check:hover {
+    border-color: var(--accent);
+}
+
+.todo-check:checked {
+    border-color: var(--accent);
+    background: transparent;
+}
+
+.todo-check:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Parent task text is bold */
+.todo-text.parent-text {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+/* Count badge on the right */
+.todo-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--muted);
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-left: auto;
+    user-select: none;
+}
+
+/* Drag and drop visual feedback */
+.todo-item.drop-before {
+    box-shadow: inset 0 3px 0 0 var(--accent);
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.todo-item.drop-after {
+    box-shadow: inset 0 -3px 0 0 var(--accent);
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.todo-item.drop-into {
+    outline: 2px dashed var(--accent);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+/* Todo list container - scrollable */
+.todo-list-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* Keyboard shortcuts in left sidebar */
+.sidebar-shortcuts {
+    margin-top: 16px;
+    padding: 10px;
+    background: rgba(139, 92, 246, 0.05);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+    border: 1px solid rgba(139, 92, 246, 0.1);
+}
+
+.sidebar-shortcuts summary {
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sidebar-shortcuts summary:hover {
+    color: var(--text);
+}
+
+.shortcuts-list {
+    margin-top: 8px;
+    padding-left: 0;
+    list-style: none;
+}
+
+.shortcuts-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    gap: 16px;
+    font-size: 11px;
+}
+
+.shortcut-key {
+    font-family: 'Monaco', 'Menlo', monospace;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.todo-shortcuts summary {
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.todo-shortcuts summary:hover {
+    color: var(--text);
+}
+
+.todo-shortcuts-list {
+    margin-top: 8px;
+    padding-left: 0;
+    list-style: none;
+}
+
+.todo-shortcuts-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    gap: 16px;
+}
+
+.todo-key {
+    font-family: 'Monaco', 'Menlo', monospace;
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* Hide completed animation */
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateX(-8px);
+        max-height: 0;
+        margin: 0;
+        padding: 0;
+    }
+}
+
+.todo-item.hiding {
+    animation: fadeOut 0.2s ease forwards;
+}
+
+/* Empty state */
+.todo-list:empty::after {
+    content: "No tasks yet. Add one above! 🎯";
+    display: block;
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    font-style: italic;
+}
+
+/* Compact mode for smaller screens */
+@media (max-width: 600px) {
+    .todo-item {
+        padding: 8px;
+    }
+
+    .todo-sublist {
+        margin-left: 20px;
+    }
+
+    .todo-grip {
+        opacity: 0.6;
+    }
+}
+
+/* Light theme overrides */
+body[data-theme='light'] #todoForm {
+    background: rgba(139, 92, 246, 0.08);
+}
+
+body[data-theme='light'] .todo-item:hover {
+    background: rgba(139, 92, 246, 0.12);
+}
+
+body[data-theme='light'] .todo-text {
+    color: #0b0d12;
+}

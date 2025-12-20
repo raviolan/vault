@@ -1,0 +1,176 @@
+/* Enhanced Features CSS - Keyboard nav, Recent pages, Search previews */
+
+/* Search Result Enhancements */
+.search-result {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.search-result:hover {
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.search-result.selected {
+    background: rgba(139, 92, 246, 0.15);
+    border-left: 3px solid var(--accent);
+    padding-left: 5px;
+}
+
+.search-result a {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.search-result .meta {
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.search-preview {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.4;
+    margin-top: 4px;
+    padding-left: 0;
+}
+
+/* Keyboard Toast Notification */
+.keyboard-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--accent);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+/* Recent Pages Dropdown */
+.recent-dropdown {
+    position: fixed;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    max-width: 320px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 2000;
+    padding: 4px;
+}
+
+.recent-item {
+    display: block;
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.15s ease;
+    cursor: pointer;
+}
+
+.recent-item:hover {
+    background: rgba(139, 92, 246, 0.1);
+    text-decoration: none;
+}
+
+.recent-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 2px;
+    line-height: 1.3;
+}
+
+.recent-time {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* Light theme support */
+body[data-theme='light'] .search-result.selected {
+    background: rgba(124, 58, 237, 0.1);
+    border-left-color: var(--accent);
+}
+
+body[data-theme='light'] .keyboard-toast {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+body[data-theme='light'] .recent-dropdown {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+body[data-theme='light'] .recent-item:hover {
+    background: rgba(124, 58, 237, 0.08);
+}
+
+/* Enhanced search results container */
+#searchResults {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 500px;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+#searchResults::-webkit-scrollbar {
+    width: 8px;
+}
+
+#searchResults::-webkit-scrollbar-track {
+    background: var(--panel);
+}
+
+#searchResults::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+#searchResults::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+
+/* Keyboard shortcut hints (optional - can show on hover) */
+.keyboard-hint {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 17, 21, 0.95);
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 9999;
+}
+
+.keyboard-hint.show {
+    opacity: 1;
+}
+
+body[data-theme='light'] .keyboard-hint {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}

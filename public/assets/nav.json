@@ -1,0 +1,40 @@
+{
+  "sections": [
+    {
+      "label": "Characters",
+      "cls": "f-pc",
+      "icon": "",
+      "items": []
+    },
+    {
+      "label": "NPCs",
+      "cls": "f-npc",
+      "icon": "",
+      "items": []
+    },
+    {
+      "label": "World",
+      "cls": "f-location",
+      "icon": "",
+      "items": []
+    },
+    {
+      "label": "Arcs",
+      "cls": "f-arc",
+      "icon": "",
+      "items": []
+    },
+    {
+      "label": "Campaign",
+      "cls": "f-other",
+      "icon": "",
+      "items": []
+    },
+    {
+      "label": "Tools",
+      "cls": "f-other",
+      "icon": "",
+      "items": []
+    }
+  ]
+}

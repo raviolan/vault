@@ -1,0 +1,46 @@
+/* Theme variables and color definitions */
+:root{--bg:#0f1115;--panel:#151821;--text:#e5e7eb;--muted:#9aa3b2;--link:#7cc7ff;--accent:#8b5cf6;--border:#222635;--right-w:340px;--left-w:300px;--main-bg:#0c1118}
+
+/* Tag color classes aligned with node colors */
+.tag-pc{background:#0b2e33;color:#6ee7f3;border-color:#164e63}
+.tag-npc{background:#341627;color:#f9a8d4;border-color:#4a1030}
+.tag-location{background:#20310b;color:#bef264;border-color:#3f6212}
+.tag-arc,.tag-planning{background:#3b2906;color:#fcd34d;border-color:#713f12}
+
+/* Theme support - Light mode */
+body[data-theme='light']{--bg:#f7f7fb;--panel:#ffffff;--text:#0b0d12;--muted:#4b5563;--link:#2563eb;--accent:#7c3aed;--border:#e5e7eb}
+body[data-theme='light'] .card{background:#ffffff}
+body[data-theme='light']{--main-bg:#fafafb}
+
+/* Keep tag colors readable on light */
+body[data-theme='light'] .tag-pc{background:#dff6fa;color:#0e7490;border-color:#7dd3fc}
+body[data-theme='light'] .tag-npc{background:#fde7f1;color:#9d174d;border-color:#f9a8d4}
+body[data-theme='light'] .tag-location{background:#edf7dc;color:#3f6212;border-color:#bef264}
+body[data-theme='light'] .tag-arc, body[data-theme='light'] .tag-planning{background:#fff1cc;color:#92400e;border-color:#fcd34d}
+
+/* Light mode UI controls */
+body[data-theme='light'] .chip{background:#ffffff;color:#374151;border-color:#e5e7eb}
+body[data-theme='light'] .chip.active{background:var(--accent);color:#fff;border-color:transparent}
+body[data-theme='light'] .drawer-tab{background:#f3f4f6;color:#374151;border-color:#e5e7eb}
+body[data-theme='light'] .search input{background:#ffffff;color:#0b0d12;border-color:#e5e7eb}
+body[data-theme='light'] code, body[data-theme='light'] pre{background:#f3f4f6;border-color:#e5e7eb}
+body[data-theme='light'] .tag{background:#eef2ff;color:#3730a3}
+body[data-theme='light'] .graph-panel{background:#ffffff}
+body[data-theme='light'] .hovercard{background:#ffffff;border-color:#e5e7eb}
+body[data-theme='light'] .todo-input{background:#ffffff;color:#0b0d12;border-color:#e5e7eb}
+body[data-theme='light'] .todo-add{background:#ffffff;color:#374151;border-color:#e5e7eb}
+body[data-theme='light'] .todo-item{background:#ffffff}
+body[data-theme='light'] .todo-edit{background:#ffffff;color:#0b0d12;border-color:#e5e7eb}
+body[data-theme='light'] .todo-btn{background:#ffffff;color:#374151;border-color:#e5e7eb}
+body[data-theme='light'] .todo-btn:hover{background:#f3f4f6;color:#111827}
+body[data-theme='light'] .todo-item{background:#ffffff;border-color:#e5e7eb}
+body[data-theme='light'] .todo-item:hover{background:#f9fafb}
+body[data-theme='light'] .todo-more{background:#ffffff;color:#6b7280;border-color:#e5e7eb}
+body[data-theme='light'] .todo-text[contenteditable="true"]{background:#ffffff;border-color:#e5e7eb}
+body[data-theme='light'] .todo-disclose{color:#374151}
+body[data-theme='light'] .entity-tabs{background:#f9fafb}
+body[data-theme='light'] .entity-tabs a:hover{background:#f3f4f6}
+body[data-theme='light'] .modal-close{background:#ffffff;color:#374151;border-color:#e5e7eb}
+body[data-theme='light'] #sessionEditor{background:#ffffff;color:#0b0d12;border-color:#e5e7eb}
+body[data-theme='light'] .nav-item:hover{background:none}
+body[data-theme='light'] .page-header::after{background:linear-gradient(to bottom, rgba(255,255,255,0), var(--main-bg))}

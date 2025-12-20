@@ -1,0 +1,17 @@
+{
+  "name": "dm-vault",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "start": "node server/index.js",
+    "dev": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.2"
+  }
+}

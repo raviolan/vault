@@ -1,0 +1,757 @@
+/* WYSIWYG Editor Styles */
+.inplace-wysiwyg-editor {
+    min-height: 350px;
+    border: 1px solid #ccc;
+    background: #fff;
+    padding: 1em;
+    font-size: 1.1em;
+    outline: none;
+    border-radius: 4px;
+    margin-bottom: 0.5em;
+}
+
+.wysiwyg-toolbar {
+    display: flex;
+    gap: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.wysiwyg-btn {
+    background: #f5f5f5;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    padding: 0.2em 0.7em;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.wysiwyg-btn:hover {
+    background: #e0e0e0;
+}
+
+/* UI Components and Controls */
+
+/* Search & Input */
+.search {
+    flex: 1
+}
+
+.search input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text)
+}
+
+/* Navigation & Trees */
+.tree ul {
+    list-style: none;
+    padding-left: 14px;
+    margin: 0
+}
+
+.tree li {
+    margin: 2px 0
+}
+
+/* Typography & Meta */
+.meta {
+    font-size: 15px;
+    color: var(--muted)
+}
+
+code,
+pre {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+pre {
+    padding: 12px;
+    overflow: auto
+}
+
+code {
+    padding: 2px 4px
+}
+
+h1,
+h2,
+h3,
+h4 {
+    margin-top: 1.2em
+}
+
+/* Tags & Labels */
+.tag {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 2px 6px;
+    border-radius: 12px;
+    background: #1a1f2b;
+    color: #a3b6ff;
+    border: 1px solid var(--border);
+    font-size: 15px
+}
+
+/* Backlinks */
+.backlinks a {
+    display: block
+}
+
+/* Graph Panel */
+.graph-panel {
+    height: 780px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 8px 0;
+    background: #0b0d12
+}
+
+.main-breadcrumb {
+    margin: 0 0 8px 0
+}
+
+.graph-side {
+    display: flex;
+    flex-direction: column;
+    height: 100%
+}
+
+#graphPreview {
+    flex: 1;
+    overflow: auto;
+    margin-bottom: 8px
+}
+
+#graphRecent {
+    flex: 1;
+    overflow: auto
+}
+
+.recent-item a {
+    display: block;
+    padding: 4px 0
+}
+
+/* Tooltips & Modals */
+.tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 3000;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-width: 320px;
+    padding: 6px 8px;
+    display: none;
+    color: var(--text)
+}
+
+/* Toolbar & Chips */
+.toolbar {
+    display: flex;
+    gap: 8px
+}
+
+.chip {
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--muted);
+    cursor: pointer
+}
+
+.chip.active {
+    background: var(--accent);
+    color: white;
+    border-color: transparent
+}
+
+/* Tool Tabs */
+.tool-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px
+}
+
+.tool-tab {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 4px 8px;
+    cursor: pointer
+}
+
+.tool-tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: transparent
+}
+
+.tool-view {
+    display: none
+}
+
+.tool-view.active {
+    display: block
+}
+
+.tool-pin {
+    border: 1px solid var(--border);
+    background: #10131a;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer
+}
+
+.tool-pin.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: transparent
+}
+
+/* Hovercard */
+.hovercard {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    background: #111522;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-width: 340px;
+    padding: 8px;
+    display: none
+}
+
+/* Grid & Cards */
+.session-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px
+}
+
+.card {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 10px;
+    border-radius: 8px
+}
+
+/* Weather card: more app-like layout */
+.weather-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    /* reduced gap to condense vertical spacing */
+    margin-top: 10px;
+    padding: 8px;
+    /* reduced padding to make card more compact */
+}
+
+.weather-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.weather-title {
+    font-weight: 700;
+    font-size: 14px
+}
+
+.weather-now {
+    /* Center the main block and make it more prominent */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    /* slightly tighter gap */
+    padding: 6px 10px;
+    /* make main block more condensed */
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent);
+    border-radius: 8px;
+    text-align: center;
+    width: 100%;
+}
+
+.weather-icon {
+    font-size: 56px;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    margin: 0 auto;
+}
+
+.weather-icon svg {
+    width: 88px;
+    height: 88px
+}
+
+.weather-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    /* tighten spacing between condition and meta/temp */
+    align-items: center;
+}
+
+.weather-condition {
+    font-weight: 800;
+    font-size: 18px
+}
+
+.weather-meta {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px
+}
+
+.weather-temp {
+    font-weight: 800;
+    font-size: 28px;
+    color: inherit
+}
+
+/* Ensure inner weather card elements inherit the card's computed color
+   so text and SVG icons remain readable against varied gradients. */
+.weather-card .weather-condition,
+.weather-card .weather-meta,
+.weather-card .weather-temp,
+.weather-card .weather-icon,
+.weather-card .forecast-item .f-time,
+.weather-card .forecast-item .f-temp,
+.weather-card .forecast-item .f-desc {
+    color: inherit !important;
+}
+
+.weather-card .weather-icon svg {
+    color: inherit;
+    fill: currentColor
+}
+
+.weather-forecast {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    /* keep items in a single horizontal row */
+    justify-content: center;
+    /* center the row under the main block */
+    gap: 6px;
+    /* slightly tighter gap between forecast tiles */
+    overflow-x: auto;
+    padding: 2px 8px 4px 8px;
+    /* bring tiles closer to the main block */
+}
+
+.forecast-item {
+    min-width: 64px;
+    background: var(--tile-bg, rgba(255, 255, 255, 0.22));
+    border-radius: 10px;
+    padding: 6px 6px;
+    /* slightly reduced padding */
+    text-align: center;
+    border: 1px solid var(--tile-border, rgba(0, 0, 0, 0.14));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    /* prevent items from stretching to full width */
+}
+
+.forecast-item .f-time {
+    color: var(--tile-text, #0b0b0b);
+    font-size: 12px
+}
+
+.forecast-item .f-icon svg {
+    width: 28px;
+    height: 28px
+}
+
+.forecast-item .f-temp {
+    font-weight: 800;
+    color: inherit
+}
+
+.weather-effects {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 6px
+}
+
+.effect-badge {
+    /* default stronger badge bg for improved contrast */
+    background: var(--badge-bg, rgba(255, 255, 255, 0.28));
+    color: var(--badge-color, var(--muted));
+    padding: 10px 14px;
+    /* larger padding for readability */
+    border-radius: 999px;
+    font-size: 15px;
+    /* larger font for emphasis */
+    font-weight: 600;
+    line-height: 1;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+}
+
+/* Make the chip button visually lighter in the card */
+.weather-card .chip {
+    padding: 6px 8px;
+    font-size: 13px
+}
+
+/* Tall card look */
+.weather-card {
+    border-radius: 14px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+    /* Slightly reduce brightness & saturation so gradients don't feel too intense */
+    filter: brightness(0.94) saturate(0.92);
+    transition: background 420ms ease, color 300ms ease, filter 300ms ease;
+}
+
+/* Use pseudo-element for reliable background gradient behind content */
+.weather-card {
+    position: relative;
+}
+
+.weather-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: transparent;
+    transition: background 420ms ease, opacity 300ms ease;
+}
+
+.weather-card>* {
+    position: relative;
+    z-index: 1
+}
+
+/* Condition gradients applied to pseudo-element */
+.weather-card.wc-clear::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), linear-gradient(180deg, #f6e7c9, #f1d9b0);
+}
+
+.weather-card.wc-partly::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.12)), linear-gradient(180deg, #f7efdb, #efe3c8);
+}
+
+.weather-card.wc-cloudy::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.10)), linear-gradient(180deg, #e6edf2, #cfd8de);
+}
+
+.weather-card.wc-light_rain::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.12)), linear-gradient(180deg, #d7eaf8, #c9e2f6);
+}
+
+.weather-card.wc-heavy_rain::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14)), linear-gradient(180deg, #b9d5ee, #98bddf);
+}
+
+.weather-card.wc-thunder::before {
+    background: linear-gradient(180deg, #2b333c, #162027);
+}
+
+.weather-card.wc-fog::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.10)), linear-gradient(180deg, #eef3f4, #e3e9ea);
+}
+
+.weather-card.wc-snow::before {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.18)), linear-gradient(180deg, #f0f8ff, #e1eefc);
+}
+
+/* Improve legibility with a subtle text shadow on key items */
+.weather-card .weather-condition,
+.weather-card .weather-temp,
+.weather-card .forecast-item .f-time,
+.weather-card .forecast-item .f-temp {
+    /* Remove the bright highlight so text doesn't appear washed out on light cards */
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+
+/* Card sizing: fit to left column width */
+.weather-card {
+    width: 100%;
+    box-sizing: border-box
+}
+
+/* Top meta row */
+.weather-meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    opacity: 0.95
+}
+
+/* Compact weather strip at top of page */
+.weather-strip {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.weather-strip-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.weather-strip .strip-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center
+}
+
+.weather-strip .strip-temp {
+    font-weight: 700;
+    font-size: 16px
+}
+
+.weather-strip .strip-effects {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px
+}
+
+.weather-strip .effect-badge {
+    padding: 8px 10px;
+    font-size: 14px;
+    font-weight: 600
+}
+
+/* allow condition gradients on strip too */
+.weather-strip.wc-clear {
+    background: linear-gradient(90deg, #fff2df, #ffe6c8);
+    color: #06202a
+}
+
+.weather-strip.wc-partly {
+    background: linear-gradient(90deg, #fff6e6, #fff0dd);
+    color: #06202a
+}
+
+.weather-strip.wc-cloudy {
+    background: linear-gradient(90deg, #e9eef4, #e0e8f0);
+    color: #071025
+}
+
+.weather-strip.wc-light_rain {
+    background: linear-gradient(90deg, #dbeffd, #cfe9ff);
+    color: #021328
+}
+
+.weather-strip.wc-heavy_rain {
+    background: linear-gradient(90deg, #cbdff7, #b7d6f2);
+    color: #021328
+}
+
+.weather-strip.wc-thunder {
+    background: linear-gradient(90deg, #c1c9d3, #aebac6);
+    color: #071025
+}
+
+.weather-strip.wc-fog {
+    background: linear-gradient(90deg, #eef2f3, #e2e7e8);
+    color: #071025
+}
+
+.weather-strip.wc-snow {
+    background: linear-gradient(90deg, #f3f9ff, #e8f3ff);
+    color: #06202a
+}
+
+/* Tone down strip also */
+.weather-strip {
+    filter: brightness(0.96) saturate(0.92);
+}
+
+/* Icon animations */
+.weather-icon svg {
+    width: 56px;
+    height: 56px;
+    display: block
+}
+
+.weather-icon {
+    transition: transform .35s ease;
+}
+
+.weather-rolling .weather-icon {
+    transform: rotate(8deg) scale(1.02)
+}
+
+/* Forecast styling adjustments for the tall card */
+.weather-forecast {
+    padding: 8px 0 4px 0
+}
+
+.forecast-item {
+    min-width: 72px;
+    padding: 10px 8px
+}
+
+/* Stats row */
+.weather-stats {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px
+}
+
+.stat-chip {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 6px 8px;
+    border-radius: 999px;
+    font-size: 12px
+}
+
+.star {
+    cursor: pointer;
+    color: #ffd365
+}
+
+/* To-Do UI */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0
+}
+
+.todo-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px
+}
+
+/* Todo styles moved to enhanced-todo.css */
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center
+}
+
+.modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    width: min(960px, 90vw);
+    height: min(80vh, 720px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border)
+}
+
+.modal-title {
+    font-weight: 600
+}
+
+.modal-close {
+    border: 1px solid var(--border);
+    background: #10131a;
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 4px 8px;
+    cursor: pointer
+}
+
+.modal-body {
+    flex: 1;
+    padding: 8px
+}
+
+.modal-graph {
+    height: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel)
+}
+
+#sessionEditor {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border)
+}
+
+/* Lightbox overlay */
+body.lightbox-open {
+    overflow: hidden
+}
+
+body.lightbox-open .layout {
+    filter: blur(4px) grayscale(50%)
+}
+
+.lightbox-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 2147483646;
+    cursor: zoom-out
+}
+
+.lightbox-img {
+    position: fixed;
+    z-index: 2147483647;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 96vw;
+    max-height: 96vh
+}
+
+.lightbox-img img {
+    display: block;
+    max-width: 96vw;
+    max-height: 96vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6)
+}

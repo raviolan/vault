@@ -1,0 +1,15 @@
+/* Home Page Styling */
+
+/* Home */
+.home-hero{display:block;background:linear-gradient(135deg, rgba(139,92,246,0.25), rgba(6,182,212,0.18));}
+.home-hero-inner{padding:18px}
+.home-title{margin:0 0 6px 0}
+.home-tag{margin:0 0 8px 0;color:var(--muted)}
+.home-arc{margin-top:12px}
+
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card-feature{padding:0;display:flex;flex-direction:column;overflow:hidden}
+.card-img{height:120px;background-size:cover;background-position:center}
+.card-body{padding:10px;display:flex;flex-direction:column;gap:8px}
+.card-title{font-weight:600}
+.card-text{color:var(--muted);font-size:13px}

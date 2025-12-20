@@ -1,0 +1,296 @@
+/* Sidebar Navigation */
+
+/* Sidebar nav */
+.sidebar {
+    display: block
+}
+
+.nav-breadcrumb {
+    padding: 6px 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.nav-breadcrumb .chip {
+    padding: 2px 6px
+}
+
+.nav-quick {
+    padding: 4px 0
+}
+
+.nav-quick input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text)
+}
+
+.campaign-header {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.08));
+    margin-bottom: 10px
+}
+
+.campaign-title {
+    font-weight: 700;
+    font-size: 18px
+}
+
+.nav {
+    display: block
+}
+
+.nav-sections {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: block
+}
+
+.nav-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--text);
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: background-color .15s ease
+}
+
+.nav-item:hover {
+    background: none
+}
+
+/* Color coding on hover for menu items by section */
+.left details.f-pc .nav-item:hover {
+    background-image: linear-gradient(90deg, rgba(34, 211, 238, .5) 0%, rgba(34, 211, 238, .18) 28%, rgba(34, 211, 238, 0) 70%)
+}
+
+.left details.f-npc .nav-item:hover {
+    background-image: linear-gradient(90deg, rgba(244, 114, 182, .5) 0%, rgba(244, 114, 182, .18) 28%, rgba(244, 114, 182, 0) 70%)
+}
+
+.left details.f-location .nav-item:hover {
+    background-image: linear-gradient(90deg, rgba(163, 230, 53, .5) 0%, rgba(163, 230, 53, .18) 28%, rgba(163, 230, 53, 0) 70%)
+}
+
+.left details.f-arc .nav-item:hover {
+    background-image: linear-gradient(90deg, rgba(245, 158, 11, .5) 0%, rgba(245, 158, 11, .18) 28%, rgba(245, 158, 11, 0) 70%)
+}
+
+/* Color coding on hover for folder (summary) rows - with split-click gradient */
+.left details.f-pc>summary.nav-label:hover {
+    background-image: linear-gradient(90deg, rgba(34, 211, 238, .5) 0%, rgba(34, 211, 238, .18) 28%, rgba(34, 211, 238, 0) 45%, transparent 50%, rgba(34, 211, 238, .15) 70%, rgba(34, 211, 238, .25) 100%)
+}
+
+.left details.f-npc>summary.nav-label:hover {
+    background-image: linear-gradient(90deg, rgba(244, 114, 182, .5) 0%, rgba(244, 114, 182, .18) 28%, rgba(244, 114, 182, 0) 45%, transparent 50%, rgba(244, 114, 182, .15) 70%, rgba(244, 114, 182, .25) 100%)
+}
+
+.left details.f-location>summary.nav-label:hover {
+    background-image: linear-gradient(90deg, rgba(163, 230, 53, .5) 0%, rgba(163, 230, 53, .18) 28%, rgba(163, 230, 53, 0) 45%, transparent 50%, rgba(163, 230, 53, .15) 70%, rgba(163, 230, 53, .25) 100%)
+}
+
+.left details.f-arc>summary.nav-label:hover {
+    background-image: linear-gradient(90deg, rgba(245, 158, 11, .5) 0%, rgba(245, 158, 11, .18) 28%, rgba(245, 158, 11, 0) 45%, transparent 50%, rgba(245, 158, 11, .15) 70%, rgba(245, 158, 11, .25) 100%)
+}
+
+.left details.f-other>summary.nav-label:hover {
+    background-image: linear-gradient(90deg, rgba(148, 163, 184, .3) 0%, rgba(148, 163, 184, .12) 28%, rgba(148, 163, 184, 0) 45%, transparent 50%, rgba(148, 163, 184, .15) 70%, rgba(148, 163, 184, .25) 100%)
+}
+
+.nav-icon {
+    width: 18px;
+    text-align: center;
+    opacity: .9
+}
+
+.nav-text {
+    letter-spacing: .2px
+}
+
+.nav-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: transparent
+}
+
+.nav-item.active .nav-icon {
+    opacity: 1
+}
+
+
+.nav-label {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 2px;
+    color: var(--muted);
+    position: relative;
+    transition: background 0.2s ease;
+}
+
+.nav-details>summary {
+    position: sticky;
+    top: 0;
+    background: var(--panel)
+}
+
+.nav-label .nav-icon {
+    width: 18px;
+    text-align: center
+}
+
+.nav-details>summary::marker {
+    content: ''
+}
+
+.nav-details>summary::before {
+    content: '';
+    display: none
+}
+
+.nav-details[open]>summary::before {
+    content: '';
+    display: none;
+    transform: none
+}
+
+.nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 4px
+}
+
+.nav-list>li {
+    margin: 2px 0
+}
+
+.nav-only {
+    padding: 2px 6px;
+    margin-left: auto
+}
+
+.nav-mini {
+    padding: 4px 0
+}
+
+.nav-mini-input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text)
+}
+
+/* Favorites section - modern styling matching nav items */
+
+#navFav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+#navFav .meta {
+    padding: 12px 10px;
+    color: var(--muted);
+    font-size: 13px;
+    font-style: italic;
+    text-align: center;
+}
+
+/* One row per favorite */
+#navFav .fav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    position: relative;
+    border-radius: 10px;
+    transition: all .15s ease;
+}
+
+/* The title fills the available space */
+#navFav .fav-link,
+#navFav .fav-item>a {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--text);
+    text-decoration: none;
+    transition: all .15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+}
+
+/* Star icon before favorite */
+#navFav .fav-link::before,
+#navFav .fav-item>a::before {
+    content: "★";
+    color: #fbbf24;
+    font-size: 14px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.4));
+}
+
+/* Gradient hover effect matching nav items */
+#navFav .fav-item:hover {
+    background-image: linear-gradient(90deg,
+            rgba(139, 92, 246, .5) 0%,
+            rgba(139, 92, 246, .18) 28%,
+            rgba(139, 92, 246, 0) 70%);
+}
+
+#navFav .fav-link:hover,
+#navFav .fav-item>a:hover {
+    color: var(--text);
+}
+
+/* The remove button */
+#navFav .fav-remove,
+#navFav .fav-item>button[title="Remove"] {
+    flex: 0 0 auto;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: all .2s ease;
+    font-size: 14px;
+    line-height: 1;
+    padding: 6px 8px;
+    margin-right: 4px;
+}
+
+/* Show remove button on hover */
+#navFav .fav-item:hover .fav-remove,
+#navFav .fav-item:hover>button[title="Remove"] {
+    opacity: 1;
+}
+
+/* Remove button hover state */
+#navFav .fav-remove:hover,
+#navFav .fav-item>button[title="Remove"]:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    transform: scale(1.05);
+}
