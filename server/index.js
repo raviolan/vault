@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDb, migrate, listPages as dbListPages, createPage as dbCreatePage, getPageWithBlocks as dbGetPageWithBlocks, deletePage as dbDeletePage } from './db.js';
+import { openDb, migrate, backfillSlugs, listPages as dbListPages, searchPages as dbSearchPages, getBacklinks as dbGetBacklinks, createPage as dbCreatePage, getPageWithBlocks as dbGetPageWithBlocks, getPageWithBlocksBySlug as dbGetPageWithBlocksBySlug, patchPage as dbPatchPage, deletePage as dbDeletePage, createBlock as dbCreateBlock, patchBlock as dbPatchBlock, deleteBlock as dbDeleteBlock, reorderBlocks as dbReorderBlocks } from './db.js';
 import { randomUUID } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,6 +29,7 @@ function getDataRoot() {
 
 const STATIC_DIR = resolveStaticDir();
 const DATA_DIR = getDataRoot();
+const DB_FILE_PATH = path.join(DATA_DIR, 'vault', 'vault.sqlite');
 const USER_DIR = path.join(DATA_DIR, 'user');
 
 function ensureDirs() {
@@ -98,6 +99,24 @@ async function readBody(req) {
   });
 }
 
+async function readBuffer(req, maxBytes = 100 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        reject(Object.assign(new Error('payload too large'), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 function sendJson(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(obj));
@@ -119,8 +138,16 @@ function safeJoin(root, urlPath) {
 ensureDirs();
 
 // Initialize DB + run migrations + seed optional welcome page
-const db = openDb();
+let db = openDb();
 migrate(db);
+try { backfillSlugs(db); } catch {}
+
+function reloadDb() {
+  try { db?.close?.(); } catch {}
+  db = openDb();
+  migrate(db);
+  try { backfillSlugs(db); } catch {}
+}
 try {
   const cnt = db.prepare('SELECT COUNT(*) AS n FROM pages').get().n;
   if (!cnt) {
@@ -158,14 +185,129 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (pathname === '/api/pages' && req.method === 'GET') {
-        return sendJson(res, 200, dbListPages(db));
+        sendJson(res, 200, dbListPages(db));
+        return;
       }
 
       if (pathname === '/api/pages' && req.method === 'POST') {
         const body = JSON.parse(await readBody(req) || '{}');
         if (!body.title) return sendJson(res, 400, { error: 'title required' });
         const page = dbCreatePage(db, { title: String(body.title), type: String(body.type || 'note') });
-        return sendJson(res, 201, page);
+        sendJson(res, 201, page);
+        return;
+      }
+
+      // Search pages and paragraphs
+      if (pathname === '/api/search' && req.method === 'GET') {
+        const q = new URL(req.url, `http://${req.headers.host}`).searchParams.get('q') || '';
+        const results = dbSearchPages(db, q, 30);
+        sendJson(res, 200, { q, results });
+        return;
+      }
+
+      // Meta info
+      if (pathname === '/api/meta' && req.method === 'GET') {
+        let schemaVersion = null;
+        try {
+          const row = db.prepare('SELECT filename FROM schema_migrations ORDER BY id DESC LIMIT 1').get();
+          schemaVersion = row?.filename || null;
+        } catch {}
+        sendJson(res, 200, { dataRoot: DATA_DIR, dbPath: DB_FILE_PATH, schemaVersion });
+        return;
+      }
+
+      // Export vault (SQLite)
+      if (pathname === '/api/export' && req.method === 'GET') {
+        try {
+          const exportsDir = path.join(DATA_DIR, 'vault', 'exports');
+          fs.mkdirSync(exportsDir, { recursive: true });
+          const ts = new Date();
+          const pad = (n) => String(n).padStart(2, '0');
+          const stamp = `${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`;
+          const exportPath = path.join(exportsDir, `vault-export-${stamp}.sqlite`);
+          if (typeof db.backup === 'function') {
+            await db.backup(exportPath);
+          } else {
+            try { db.pragma('wal_checkpoint(FULL)'); } catch {}
+            db.exec(`VACUUM INTO '${exportPath.replace(/'/g, "''")}'`);
+          }
+          const filename = `dm-vault-${stamp}.sqlite`;
+          res.writeHead(200, {
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': `attachment; filename="${filename}"`
+          });
+          fs.createReadStream(exportPath).pipe(res);
+        } catch (e) {
+          console.error('export failed', e);
+          sendText(res, 500, 'export failed');
+        }
+        return;
+      }
+
+      // Import vault (SQLite)
+      if (pathname === '/api/import' && req.method === 'POST') {
+        try {
+          const buf = await readBuffer(req, 100 * 1024 * 1024);
+          const vaultDir = path.join(DATA_DIR, 'vault');
+          fs.mkdirSync(vaultDir, { recursive: true });
+          const tmp = path.join(vaultDir, 'vault.sqlite.importing');
+          fs.writeFileSync(tmp, buf);
+          // swap
+          try { db?.close?.(); } catch {}
+          const backupPath = path.join(vaultDir, `vault.sqlite.bak-${Date.now()}`);
+          if (fs.existsSync(DB_FILE_PATH)) {
+            try { fs.renameSync(DB_FILE_PATH, backupPath); } catch {}
+          }
+          fs.renameSync(tmp, DB_FILE_PATH);
+          reloadDb();
+          sendJson(res, 200, { ok: true });
+        } catch (e) {
+          const status = e?.status || 500;
+          console.error('import failed', e);
+          sendJson(res, status, { error: 'import failed' });
+        }
+        return;
+      }
+
+      // Resolve legacy wiki link by title (create if missing)
+      if (pathname === '/api/pages/resolve' && req.method === 'POST') {
+        const body = JSON.parse(await readBody(req) || '{}');
+        const title = String(body.title || '').trim();
+        const type = String(body.type || 'note');
+        console.log('resolve route hit', title);
+        if (!title) return sendJson(res, 400, { error: 'title required' });
+        const row = db.prepare('SELECT id FROM pages WHERE title = ?').get(title);
+        if (row) {
+          const page = dbGetPageWithBlocks(db, row.id);
+          return sendJson(res, 200, { page, created: false });
+        }
+        const created = dbCreatePage(db, { title, type });
+        const page = dbGetPageWithBlocks(db, created.id);
+        sendJson(res, 201, { page, created: true });
+        return;
+      }
+
+      // Fetch page by slug
+      const slugMatch = pathname.match(/^\/api\/pages\/slug\/([^\/]+)$/);
+      if (slugMatch && req.method === 'GET') {
+        const slug = slugMatch[1];
+        const page = dbGetPageWithBlocksBySlug(db, slug);
+        if (!page) { sendJson(res, 404, { error: 'not found' }); return; }
+        sendJson(res, 200, page);
+        return;
+      }
+
+      // Backlinks for a page (handle before generic /api/pages/:id)
+      const backlinksMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/backlinks$/);
+      if (backlinksMatch && req.method === 'GET') {
+        const id = backlinksMatch[1];
+        // Fetch title to include in response and to validate existence
+        const page = dbGetPageWithBlocks(db, id);
+        if (!page) { sendJson(res, 404, { error: 'not found' }); return; }
+        const backlinks = dbGetBacklinks(db, id);
+        if (backlinks == null) { sendJson(res, 404, { error: 'not found' }); return; }
+        sendJson(res, 200, { pageId: id, title: page.title, backlinks: backlinks });
+        return;
       }
 
       const pageIdMatch = pathname.match(/^\/api\/pages\/([^\/]+)$/);
@@ -174,20 +316,80 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'GET') {
           const page = dbGetPageWithBlocks(db, id);
-          if (!page) return sendJson(res, 404, { error: 'not found' });
-          return sendJson(res, 200, page);
+          if (!page) { sendJson(res, 404, { error: 'not found' }); return; }
+          sendJson(res, 200, page);
+          return;
+        }
+
+        if (req.method === 'PATCH') {
+          const body = JSON.parse(await readBody(req) || '{}');
+          console.log('patch page hit', id, body);
+          const updated = dbPatchPage(db, id, { title: body.title, type: body.type, regenerateSlug: !!body.regenerateSlug });
+          if (!updated) { sendJson(res, 404, { error: 'not found' }); return; }
+          sendJson(res, 200, updated);
+          return;
         }
 
         if (req.method === 'DELETE') {
           dbDeletePage(db, id);
-          return sendJson(res, 200, { ok: true });
+          sendJson(res, 200, { ok: true });
+          return;
         }
+      }
+
+      // (backlinks handled above)
+
+      // Create block for page
+      const pageBlocksMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/blocks$/);
+      if (pageBlocksMatch && req.method === 'POST') {
+        const pageId = pageBlocksMatch[1];
+        const bodyRaw = await readBody(req);
+        let body = {};
+        try { body = JSON.parse(bodyRaw || '{}'); } catch {}
+        const { type, parentId = null, sort = 0, props = {}, content = {} } = body;
+        if (!type) return sendJson(res, 400, { error: 'type required' });
+        const block = dbCreateBlock(db, { pageId, parentId, sort: Number(sort) || 0, type: String(type), props, content });
+        sendJson(res, 201, block);
+        return;
+      }
+
+      // Patch block
+      const blockMatch = pathname.match(/^\/api\/blocks\/([^\/]+)$/);
+      if (blockMatch && req.method === 'PATCH') {
+        const blockId = blockMatch[1];
+        const bodyRaw = await readBody(req);
+        let patch = {};
+        try { patch = JSON.parse(bodyRaw || '{}'); } catch {}
+        const updated = dbPatchBlock(db, blockId, patch || {});
+        if (!updated) { sendJson(res, 404, { error: 'not found' }); return; }
+        sendJson(res, 200, updated);
+        return;
+      }
+      if (blockMatch && req.method === 'DELETE') {
+        const blockId = blockMatch[1];
+        const ok = dbDeleteBlock(db, blockId);
+        if (!ok) { sendJson(res, 404, { error: 'not found' }); return; }
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === '/api/blocks/reorder' && req.method === 'POST') {
+        const bodyRaw = await readBody(req);
+        let reqBody = {};
+        try { reqBody = JSON.parse(bodyRaw || '{}'); } catch {}
+        const pageId = reqBody.pageId;
+        const moves = Array.isArray(reqBody.moves) ? reqBody.moves.map(m => ({ id: m.id, parentId: m.parentId ?? null, sort: Number(m.sort) || 0 })) : [];
+        if (!pageId) return sendJson(res, 400, { error: 'pageId required' });
+        const out = dbReorderBlocks(db, pageId, moves);
+        sendJson(res, 200, out);
+        return;
       }
 
       // User UI state persistence
       if (pathname === '/api/user/state' && req.method === 'GET') {
         const state = readJson(path.join(USER_DIR, 'state.json'), defaultUserState());
-        return sendJson(res, 200, state ?? defaultUserState());
+        sendJson(res, 200, state ?? defaultUserState());
+        return;
       }
 
       if (pathname === '/api/user/state' && req.method === 'PUT') {
@@ -197,13 +399,23 @@ const server = http.createServer(async (req, res) => {
         const current = readJson(path.join(USER_DIR, 'state.json'), defaultUserState()) || defaultUserState();
         const next = { ...current, ...patch };
         writeJsonAtomic(path.join(USER_DIR, 'state.json'), next);
-        return sendJson(res, 200, next);
+        sendJson(res, 200, next);
+        return;
       }
 
-      return sendJson(res, 404, { error: 'unknown api route' });
+      sendJson(res, 404, { error: 'unknown api route' });
+      return;
     }
 
     // --- User data files (for per-user overrides like /user/custom.css) ---
+    if (pathname === '/user/custom.css' && req.method === 'GET') {
+      const p = path.join(USER_DIR, 'custom.css');
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
+        return fs.createReadStream(p).pipe(res);
+      }
+      return sendText(res, 200, '/* user css */', { 'Content-Type': 'text/css; charset=utf-8' });
+    }
     if (pathname.startsWith('/user/')) {
       const fsPath = safeJoin(USER_DIR, pathname.replace('/user/', ''));
       if (!fsPath) return sendText(res, 400, 'bad path');
@@ -223,7 +435,15 @@ const server = http.createServer(async (req, res) => {
       return fs.createReadStream(fsPath).pipe(res);
     }
 
-    // --- SPA fallback ---
+    // Decide if request looks like an asset (has a dot in the last path segment)
+    const looksLikeAsset = path.basename(pathname).includes('.');
+
+    // If it's an asset-like path and wasn't found, return 404 (do not SPA fallback)
+    if (looksLikeAsset) {
+      return sendText(res, 404, 'not found');
+    }
+
+    // --- SPA fallback (for route-like paths only) ---
     const indexPath = path.join(STATIC_DIR, 'index.html');
     if (fs.existsSync(indexPath)) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

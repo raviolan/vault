@@ -108,6 +108,8 @@
             <button class="chip" data-tab="notepad">Notepad</button>
             <button class="chip" data-tab="colors">Colors</button>
             <button class="chip" data-tab="todo">To-Do</button>
+            <button class="chip" data-tab="backlinks">Backlinks</button>
+            <button class="chip" data-tab="settings">Settings</button>
           </div>
 
           <section class="right-panel" data-panel="notepad">
@@ -127,6 +129,17 @@
               <button id="todoAdd" class="chip">Add</button>
             </div>
             <ul id="todoList"></ul>
+          </section>
+
+          <section class="right-panel" data-panel="backlinks" hidden>
+            <h3 class="meta">Backlinks</h3>
+            <ul id="backlinksList"></ul>
+            <p id="backlinksEmpty" class="meta" hidden>No backlinks yet</p>
+          </section>
+
+          <section class="right-panel" data-panel="settings" hidden>
+            <h3 class="meta">Settings</h3>
+            <div id="settingsPanel"></div>
           </section>
         </div>
       </div>

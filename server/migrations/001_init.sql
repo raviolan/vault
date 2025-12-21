@@ -1,6 +1,4 @@
 -- Initial vault schema
-BEGIN TRANSACTION;
-
 CREATE TABLE IF NOT EXISTS pages (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -30,6 +28,4 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   filename TEXT NOT NULL UNIQUE,
   applied_at INTEGER NOT NULL
 );
-
-COMMIT;
 
