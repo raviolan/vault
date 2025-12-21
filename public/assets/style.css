@@ -1,3 +1,20 @@
+/*
+ * DM Vault - Global Stylesheet
+ *
+ * Scope: Base resets, layout scaffolding, global components, theme variables.
+ * Conventions: Keep selectors stable; do not change order to preserve cascade.
+ *
+ * Table of Contents
+ * - Theme Picker Styles
+ * - Tokens (:root variables)
+ * - Base / Reset
+ * - Layout
+ * - Typography
+ * - Components
+ * - Utilities
+ * - Overrides
+ */
+
 /* Theme Picker Styles */
 .theme-list {
     display: flex;
@@ -63,6 +80,7 @@
 }
 
 :root {
+    /* Theme colors (existing) */
     --bg: var(--theme-color1, #0f1115);
     --panel: var(--theme-color2, #151821);
     --text: var(--theme-color4, #e5e7eb);
@@ -73,6 +91,46 @@
     --right-w: 340px;
     --left-w: 300px;
     --main-bg: var(--theme-color1, #0c1118);
+
+    /* Design tokens (added; used where identical values repeat) */
+    /* Spacing */
+    --space-1: 2px;
+    --space-2: 4px;
+    --space-3: 6px;
+    --space-4: 8px;
+    --space-5: 10px;
+    --space-6: 12px;
+    --space-7: 14px;
+    --space-8: 16px;
+    --space-9: 20px;
+    --space-10: 24px;
+
+    /* Radii */
+    --radius-1: 3px;
+    --radius-2: 4px;
+    --radius-3: 6px;
+    --radius-4: 8px;
+    --radius-5: 10px;
+    --radius-6: 12px;
+    --radius-7: 14px;
+    --round: 999px;
+
+    /* Shadows */
+    --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.12);
+    --shadow-modal: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --shadow-img: 0 12px 40px rgba(0, 0, 0, 0.6);
+    --shadow-weather: 0 6px 16px rgba(0, 0, 0, 0.28);
+
+    /* Typography */
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-md: 15px;
+    --text-lg: 16px;
+    --text-xl: 18px;
+
+    /* Surfaces (kept transparent to preserve current dark theme appearance) */
+    --surface: transparent;
 }
 
 * {
@@ -435,7 +493,7 @@ body.left-collapsed .left {
 }
 
 .meta {
-    font-size: 15px;
+    font-size: var(--text-md);
     color: var(--muted)
 }
 
@@ -444,7 +502,7 @@ pre {
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-3);
 }
 
 /* Apply theme colors to form controls and buttons */
@@ -458,8 +516,8 @@ button,
     background: transparent;
     color: var(--text);
     border: 1px solid var(--border);
-    padding: 6px 10px;
-    border-radius: 6px;
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-3);
     cursor: pointer;
 }
 

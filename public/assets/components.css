@@ -1,3 +1,25 @@
+/*
+ * DM Vault - Components Stylesheet
+ *
+ * Scope: Reusable UI components (inputs, tags, cards, tooltips, modals, weather).
+ * Conventions: Do not change selector specificity or order; tokens used for repeat values.
+ *
+ * Table of Contents
+ * - WYSIWYG Editor
+ * - Search/Input
+ * - Navigation/Trees
+ * - Typography/Meta
+ * - Tags/Labels
+ * - Graph Panel
+ * - Tooltips/Modals
+ * - Toolbar/Chips/Tabs
+ * - Hovercard
+ * - Grid/Cards
+ * - Weather
+ * - Lightbox
+ * - To-Do (delegated to enhanced-todo.css)
+ */
+
 /* WYSIWYG Editor Styles */
 .inplace-wysiwyg-editor {
     min-height: 350px;
@@ -6,7 +28,7 @@
     padding: 1em;
     font-size: 1.1em;
     outline: none;
-    border-radius: 4px;
+    border-radius: var(--radius-2);
     margin-bottom: 0.5em;
 }
 
@@ -19,7 +41,7 @@
 .wysiwyg-btn {
     background: #f5f5f5;
     border: 1px solid #bbb;
-    border-radius: 3px;
+    border-radius: var(--radius-1);
     padding: 0.2em 0.7em;
     font-size: 1em;
     cursor: pointer;
@@ -39,8 +61,8 @@
 
 .search input {
     width: 100%;
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: var(--space-4) var(--space-5);
+    border-radius: var(--radius-3);
     border: 1px solid var(--border);
     background: var(--panel);
     color: var(--text)
@@ -59,7 +81,7 @@
 
 /* Typography & Meta */
 .meta {
-    font-size: 15px;
+    font-size: var(--text-md);
     color: var(--muted)
 }
 
@@ -68,16 +90,16 @@ pre {
     background: var(--surface);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-3);
 }
 
 pre {
-    padding: 12px;
+    padding: var(--space-6);
     overflow: auto
 }
 
 code {
-    padding: 2px 4px
+    padding: var(--space-1) var(--space-2)
 }
 
 h1,
@@ -92,11 +114,11 @@ h4 {
     display: inline-block;
     margin-right: 6px;
     padding: 2px 6px;
-    border-radius: 12px;
+    border-radius: var(--radius-6);
     background: #1a1f2b;
     color: #a3b6ff;
     border: 1px solid var(--border);
-    font-size: 15px
+    font-size: var(--text-md)
 }
 
 /* Backlinks */
@@ -108,8 +130,8 @@ h4 {
 .graph-panel {
     height: 780px;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    margin: 8px 0;
+    border-radius: var(--radius-3);
+    margin: var(--space-4) 0;
     background: #0b0d12
 }
 
@@ -156,7 +178,7 @@ h4 {
 /* Toolbar & Chips */
 .toolbar {
     display: flex;
-    gap: 8px
+    gap: var(--space-4)
 }
 
 .chip {
@@ -177,8 +199,8 @@ h4 {
 /* Tool Tabs */
 .tool-tabs {
     display: flex;
-    gap: 6px;
-    margin-bottom: 8px
+    gap: var(--space-3);
+    margin-bottom: var(--space-4)
 }
 
 .tool-tab {
@@ -208,8 +230,8 @@ h4 {
     border: 1px solid var(--border);
     background: #10131a;
     color: var(--muted);
-    border-radius: 6px;
-    padding: 4px 8px;
+    border-radius: var(--radius-3);
+    padding: var(--space-2) var(--space-4);
     cursor: pointer
 }
 
@@ -226,9 +248,9 @@ h4 {
     z-index: 1000;
     background: #111522;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-3);
     max-width: 340px;
-    padding: 8px;
+    padding: var(--space-4);
     display: none
 }
 
@@ -236,24 +258,24 @@ h4 {
 .session-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 8px
+    gap: var(--space-4)
 }
 
 .card {
     border: 1px solid var(--border);
     background: var(--panel);
-    padding: 10px;
-    border-radius: 8px
+    padding: var(--space-5);
+    border-radius: var(--radius-4)
 }
 
 /* Weather card: more app-like layout */
 .weather-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-3);
     /* reduced gap to condense vertical spacing */
-    margin-top: 10px;
-    padding: 8px;
+    margin-top: var(--space-5);
+    padding: var(--space-4);
     /* reduced padding to make card more compact */
 }
 
@@ -265,7 +287,7 @@ h4 {
 
 .weather-title {
     font-weight: 700;
-    font-size: 14px
+    font-size: var(--text-lg)
 }
 
 .weather-now {
@@ -274,12 +296,12 @@ h4 {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: var(--space-3);
     /* slightly tighter gap */
-    padding: 6px 10px;
+    padding: var(--space-3) var(--space-5);
     /* make main block more condensed */
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent);
-    border-radius: 8px;
+    border-radius: var(--radius-4);
     text-align: center;
     width: 100%;
 }
@@ -291,7 +313,7 @@ h4 {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: var(--radius-6);
     background: rgba(255, 255, 255, 0.03);
     margin: 0 auto;
 }
@@ -316,7 +338,7 @@ h4 {
 
 .weather-meta {
     color: rgba(255, 255, 255, 0.9);
-    font-size: 12px
+    font-size: var(--text-xs)
 }
 
 .weather-temp {
@@ -349,32 +371,32 @@ h4 {
     /* keep items in a single horizontal row */
     justify-content: center;
     /* center the row under the main block */
-    gap: 6px;
+    gap: var(--space-3);
     /* slightly tighter gap between forecast tiles */
     overflow-x: auto;
-    padding: 2px 8px 4px 8px;
+    padding: var(--space-1) var(--space-4) var(--space-2) var(--space-4);
     /* bring tiles closer to the main block */
 }
 
 .forecast-item {
     min-width: 64px;
     background: var(--tile-bg, rgba(255, 255, 255, 0.22));
-    border-radius: 10px;
-    padding: 6px 6px;
+    border-radius: var(--radius-5);
+    padding: var(--space-3) var(--space-3);
     /* slightly reduced padding */
     text-align: center;
     border: 1px solid var(--tile-border, rgba(0, 0, 0, 0.14));
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-3);
     flex: 0 0 auto;
     /* prevent items from stretching to full width */
 }
 
 .forecast-item .f-time {
     color: var(--tile-text, #0b0b0b);
-    font-size: 12px
+    font-size: var(--text-xs)
 }
 
 .forecast-item .f-icon svg {
@@ -389,19 +411,19 @@ h4 {
 
 .weather-effects {
     display: flex;
-    gap: 8px;
+    gap: var(--space-4);
     flex-wrap: wrap;
-    padding-top: 6px
+    padding-top: var(--space-3)
 }
 
 .effect-badge {
     /* default stronger badge bg for improved contrast */
     background: var(--badge-bg, rgba(255, 255, 255, 0.28));
     color: var(--badge-color, var(--muted));
-    padding: 10px 14px;
+    padding: var(--space-5) var(--space-7);
     /* larger padding for readability */
-    border-radius: 999px;
-    font-size: 15px;
+    border-radius: var(--round);
+    font-size: var(--text-md);
     /* larger font for emphasis */
     font-weight: 600;
     line-height: 1;
@@ -410,14 +432,14 @@ h4 {
 
 /* Make the chip button visually lighter in the card */
 .weather-card .chip {
-    padding: 6px 8px;
-    font-size: 13px
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm)
 }
 
 /* Tall card look */
 .weather-card {
-    border-radius: 14px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+    border-radius: var(--radius-7);
+    box-shadow: var(--shadow-weather);
     overflow: hidden;
     /* Slightly reduce brightness & saturation so gradients don't feel too intense */
     filter: brightness(0.94) saturate(0.92);
@@ -670,8 +692,8 @@ h4 {
 .modal {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border-radius: var(--radius-6);
+    box-shadow: var(--shadow-modal);
     width: min(960px, 90vw);
     height: min(80vh, 720px);
     display: flex;
@@ -683,7 +705,7 @@ h4 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: var(--space-4) var(--space-6);
     border-bottom: 1px solid var(--border)
 }
 
@@ -695,20 +717,20 @@ h4 {
     border: 1px solid var(--border);
     background: #10131a;
     color: var(--muted);
-    border-radius: 8px;
-    padding: 4px 8px;
+    border-radius: var(--radius-4);
+    padding: var(--space-2) var(--space-4);
     cursor: pointer
 }
 
 .modal-body {
     flex: 1;
-    padding: 8px
+    padding: var(--space-4)
 }
 
 .modal-graph {
     height: 100%;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-4);
     background: var(--panel)
 }
 
@@ -752,6 +774,6 @@ body.lightbox-open .layout {
     width: auto;
     height: auto;
     object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6)
+    border-radius: var(--radius-4);
+    box-shadow: var(--shadow-img)
 }
