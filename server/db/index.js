@@ -5,4 +5,4 @@ export { listPages, createPage, getPageWithBlocks, getPageWithBlocksBySlug, patc
 export { createBlock, patchBlock, deleteBlock, reorderBlocks, normalizeSiblingSort, touchPage } from './blocks.js';
 export { searchPages, escapeLike } from './search.js';
 export { getBacklinks } from './backlinks.js';
-
+export { ensureTag, listTagsWithCounts, getPageTags, setPageTags } from './tags.js';

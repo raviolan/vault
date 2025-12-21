@@ -12,6 +12,7 @@ import { routePages } from './pages.js';
 import { routeBlocks } from './blocks.js';
 import { routeSearch } from './search.js';
 import { routeBacklinks } from './backlinks.js';
+import { routeTags } from './tags.js';
 import { routeUserState } from './userState.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -110,6 +111,7 @@ const ROUTES = [
   { name: 'pages', handle: routePages },
   { name: 'search', handle: routeSearch },
   { name: 'meta', handle: routeMeta },
+  { name: 'tags', handle: routeTags },
   { name: 'export', handle: routeExport },
   { name: 'import', handle: routeImport },
   // Backlinks must precede generic /api/pages/:id

@@ -7,7 +7,8 @@
     "build": "node scripts/build.js",
     "start": "node server/index.js",
     "dev": "npm run build && npm run start",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "verify": "npm run build && node scripts/verify.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^9.6.0"

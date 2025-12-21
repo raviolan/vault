@@ -15,7 +15,7 @@ import { serveStaticOrSpa } from './lib/static.js';
 import { routeRequest } from './routes/index.js';
 import { ensureUserDirs } from './routes/userState.js';
 import { sendText } from './lib/http.js';
-import { openDb, migrate, backfillSlugs, listPages as dbListPages, searchPages as dbSearchPages, getBacklinks as dbGetBacklinks, createPage as dbCreatePage, getPageWithBlocks as dbGetPageWithBlocks, getPageWithBlocksBySlug as dbGetPageWithBlocksBySlug, patchPage as dbPatchPage, deletePage as dbDeletePage, createBlock as dbCreateBlock, patchBlock as dbPatchBlock, deleteBlock as dbDeleteBlock, reorderBlocks as dbReorderBlocks } from './db/index.js';
+import { openDb, migrate, backfillSlugs, listPages as dbListPages, searchPages as dbSearchPages, getBacklinks as dbGetBacklinks, createPage as dbCreatePage, getPageWithBlocks as dbGetPageWithBlocks, getPageWithBlocksBySlug as dbGetPageWithBlocksBySlug, patchPage as dbPatchPage, deletePage as dbDeletePage, createBlock as dbCreateBlock, patchBlock as dbPatchBlock, deleteBlock as dbDeleteBlock, reorderBlocks as dbReorderBlocks, ensureTag as dbEnsureTag, listTagsWithCounts as dbListTagsWithCounts, getPageTags as dbGetPageTags, setPageTags as dbSetPageTags } from './db/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +89,10 @@ const server = http.createServer(async (req, res) => {
       dbPatchBlock,
       dbDeleteBlock,
       dbReorderBlocks,
+      dbEnsureTag,
+      dbListTagsWithCounts,
+      dbGetPageTags,
+      dbSetPageTags,
     };
 
     // Optional minimal request logging for /api/* endpoints

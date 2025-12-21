@@ -21,6 +21,7 @@ export async function renderPage({ match }) {
     <article class="page">
       <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
       <p class="meta">Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <div id="pageTags" class="toolbar" style="margin: 6px 0;"></div>
       <div class="page-body" id="pageBlocks"></div>
     </article>
   `;
@@ -35,6 +36,9 @@ export async function renderPage({ match }) {
 
   // Populate backlinks panel for this page
   void renderBacklinksPanel(page.id);
+
+  // Tags editor
+  void renderPageTags(page.id);
 
   // Bind delete
   const btnDelete = document.getElementById('btnDeletePage');
@@ -151,3 +155,68 @@ function bindPageTitleInput(page, input) {
   });
 }
 
+async function renderPageTags(pageId) {
+  const container = document.getElementById('pageTags');
+  if (!container) return;
+  let current = [];
+  try {
+    const { tags } = await fetchJson(`/api/pages/${encodeURIComponent(pageId)}/tags`);
+    current = Array.isArray(tags) ? tags.slice() : [];
+  } catch {}
+
+  container.innerHTML = `
+    <div id="pageTagList" style="display:inline-flex; gap: 6px; flex-wrap: wrap;"></div>
+    <input id="pageTagInput" placeholder="Add tag" style="margin-left:8px; padding:4px 6px; width: 160px;" />
+  `;
+
+  const listEl = document.getElementById('pageTagList');
+  const inputEl = document.getElementById('pageTagInput');
+
+  function renderChips() {
+    listEl.innerHTML = current.map((t, idx) => `
+      <span class="chip" data-idx="${idx}">${t} <button title="Remove" data-remove="${idx}" class="chip" style="margin-left:4px;">×</button></span>
+    `).join('');
+    listEl.querySelectorAll('button[data-remove]').forEach(btn => {
+      btn.onclick = async () => {
+        const i = Number(btn.getAttribute('data-remove'));
+        current.splice(i, 1);
+        await save();
+        renderChips();
+      };
+    });
+  }
+
+  async function save() {
+    try {
+      const resp = await fetchJson(`/api/pages/${encodeURIComponent(pageId)}/tags`, {
+        method: 'PUT',
+        body: JSON.stringify({ tags: current })
+      });
+      current = Array.isArray(resp.tags) ? resp.tags.slice() : [];
+    } catch (e) {
+      console.error('Failed to save tags', e);
+    }
+  }
+
+  inputEl.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      const v = inputEl.value.trim();
+      if (v) {
+        current.push(v);
+        inputEl.value = '';
+        await save();
+        renderChips();
+      }
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Backspace' && !inputEl.value && current.length) {
+      current.pop();
+      await save();
+      renderChips();
+      e.preventDefault();
+    }
+  });
+
+  renderChips();
+}
