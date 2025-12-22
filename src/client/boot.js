@@ -18,6 +18,8 @@ import { installWikiLinkHandler } from './features/wikiLinks.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
 import { mountLeftPanelBottom } from './surfaces/leftPanelBottom.js';
+import { mountLeftPanelWeather } from './surfaces/leftPanelWeather.js';
+import * as WeatherSettingsRoute from './routes/weatherSettings.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
@@ -58,6 +60,7 @@ export async function boot() {
   } catch {}
   bindRightPanel();
   mountLeftPanelBottom();
+  mountLeftPanelWeather();
 
   // Bind theme mode toggle (switch)
   const btnDark = document.getElementById('themeModeDark');
@@ -156,6 +159,11 @@ export async function boot() {
   route(/^\/settings\/?$/, () => {
     const outlet = document.getElementById('outlet');
     return SettingsRoute.render(outlet, {});
+  });
+  // Dedicated Weather app settings route
+  route(/^\/apps\/weather\/settings\/?$/, () => {
+    const outlet = document.getElementById('outlet');
+    return WeatherSettingsRoute.render(outlet, {});
   });
 
   await renderRoute();
