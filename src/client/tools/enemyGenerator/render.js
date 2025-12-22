@@ -44,7 +44,7 @@ export function updateFavoriteButton(favorited) {
 export function renderPreview(preRoot, data) {
   if (!preRoot) return;
   if (!data) { preRoot.innerHTML = ''; return; }
-  const { name, raceName, className, level, stats, mod, hp, ac, speed, prof, traitsHtml = '', profsHtml = '', spellsHtml = '' } = data;
+  const { name, raceName, className, level, stats, mod, hp, ac, speed, prof, traitsHtml = '', profsHtml = '', spellsHtml = '', combat } = data;
   const statRow = (k, label) => `<div><strong>${label}:</strong> ${stats[k]} (${mod[k]>=0?'+':''}${mod[k]})</div>`;
   preRoot.innerHTML = `
     <h2>${escapeHtml(name)}</h2>
@@ -66,8 +66,49 @@ export function renderPreview(preRoot, data) {
       <div>${traitsHtml || '<span class="meta">(summary)</span>'}</div>
     </div>
     ${spellsHtml ? `<div style="margin-top:8px;"><h3 class=\"meta\">Spells</h3><div>${spellsHtml}</div></div>` : ''}
+    <div style="margin-top:10px;">
+      <button id="egToggleCombat" class="chip" aria-expanded="false">Show combat details</button>
+      <div id="egCombat" hidden></div>
+    </div>
     <p class="meta" style="margin-top:8px;">AC assumptions: basic armor per class; adjust as needed.</p>
   `;
+
+  // Wire toggle and render details lazily
+  const btn = document.getElementById('egToggleCombat');
+  const panel = document.getElementById('egCombat');
+  if (btn && panel && combat) {
+    const fill = () => {
+      const html = [];
+      if (combat.actions?.length) {
+        html.push('<h4 class="meta">Actions</h4>');
+        for (const a of combat.actions) html.push(`<div class="meta"><strong>${escapeHtml(a.name)}:</strong> ${escapeHtml(a.text.replace(/^.*?:\s*/, ''))}</div>`);
+      }
+      if (combat.reactions?.length) {
+        html.push('<h4 class="meta" style="margin-top:6px;">Reactions</h4>');
+        for (const r of combat.reactions) html.push(`<div class="meta"><strong>${escapeHtml(r.name)}:</strong> ${escapeHtml(r.text)}</div>`);
+      }
+      if (combat.traits?.length) {
+        html.push('<h4 class="meta" style="margin-top:6px;">Traits</h4>');
+        for (const t of combat.traits) html.push(`<div class="meta"><strong>${escapeHtml(t.name)}:</strong> ${escapeHtml(t.text)}</div>`);
+      }
+      if (combat.spellcasting) {
+        html.push('<h4 class="meta" style="margin-top:6px;">Spellcasting</h4>');
+        html.push(`<div class="meta">${escapeHtml(combat.spellcasting.header)}</div>`);
+        for (const g of (combat.spellcasting.spellsByLevel || [])) {
+          html.push(`<div class="meta"><strong>${escapeHtml(g.levelLabel)}:</strong> ${escapeHtml((g.spells || []).join(', '))}</div>`);
+        }
+      }
+      panel.innerHTML = html.join('');
+    };
+    btn.addEventListener('click', () => {
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      const next = !expanded;
+      btn.setAttribute('aria-expanded', String(next));
+      btn.textContent = next ? 'Hide combat details' : 'Show combat details';
+      panel.toggleAttribute('hidden', !next);
+      if (next && !panel.innerHTML) fill();
+    });
+  }
 }
 
 export function setLoading(busy, text = 'Generating…') {

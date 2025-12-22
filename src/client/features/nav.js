@@ -1,5 +1,7 @@
 import { $, escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
+import { getState } from '../lib/state.js';
+import { normalizeSections } from '../lib/sections.js';
 import { TOOLS } from '../tools/index.js';
 
 let cachedPages = [];
@@ -79,6 +81,8 @@ export async function refreshNav() {
   renderNavSections(pages, navCfg);
   // Append Tools section (core tools)
   try { renderToolsSection(); } catch {}
+  // Append user sections (from user state)
+  try { renderUserSections(pages); } catch {}
 }
 
 export function renderToolsSection() {
@@ -104,4 +108,38 @@ export function renderToolsSection() {
     list.appendChild(item);
   }
   ul.appendChild(li);
+}
+
+export function renderUserSections(pages) {
+  const ul = $('#navSections');
+  if (!ul) return;
+  const st = getState();
+  const { sections } = normalizeSections(st || {});
+  if (!sections.length) return;
+  // Render each user section after existing ones
+  for (const sec of sections) {
+    const li = document.createElement('li');
+    li.className = 'nav-section';
+    li.innerHTML = `
+      <details class="nav-details" open>
+        <summary class="nav-label">
+          <span class="nav-icon">📁</span>
+          <span>${escapeHtml(sec.title || 'Section')}</span>
+        </summary>
+        <ul class="nav-list"></ul>
+      </details>
+    `;
+    const list = li.querySelector('.nav-list');
+    const pageMap = new Map(pages.map(p => [p.id, p]));
+    const items = (Array.isArray(sec.pageIds) ? sec.pageIds : []).map(id => pageMap.get(id)).filter(Boolean);
+    for (const p of items) {
+      const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+      const item = document.createElement('li');
+      item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+        <span class="nav-text">${escapeHtml(p.title)}</span>
+      </a>`;
+      list.appendChild(item);
+    }
+    ul.appendChild(li);
+  }
 }

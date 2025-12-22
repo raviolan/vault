@@ -5,6 +5,8 @@ import { assignStandardArray, buildPreview, maxSpellLevel, pickSpells } from './
 import { renderForm, renderPreview, updateFavoriteButton, setLoading } from './render.js';
 import { saveToVault } from './save.js';
 import { isFavorited, toggleFavorite } from './favorites.js';
+import { chosenWeaponsForClass } from './assumptions.js';
+import { buildCombatDetails } from './combatDetails.js';
 
 function titleCase(s) { return String(s || '').replace(/\b([a-z])/g, (m, c) => c.toUpperCase()); }
 
@@ -60,12 +62,14 @@ export async function render(outlet) {
       // Spells (if any)
       let spellsHtml = '';
       let spellsText = '';
+      let spellsPick = null;
       if (cls?.spellcasting_ability) {
         const listKey = String((cls?.name || '').split(' ')[0]).toLowerCase();
         let spellList = [];
         try { spellList = await getSpellsForList(listKey); } catch {}
         const msl = maxSpellLevel(String(cls?.slug || cls?.name || '').toLowerCase(), lvl);
         const pick = pickSpells(spellList, msl, lvl);
+        spellsPick = pick;
         if ((pick.cantrips.length + pick.spells.length) > 0) {
           const can = pick.cantrips.map(s => escapeHtml(s.name)).join(', ');
           const spl = pick.spells.map(s => `${escapeHtml(s.name)} (L${escapeHtml(String(s.level||s.level_int||''))})`).join(', ');
@@ -79,8 +83,22 @@ export async function render(outlet) {
       out.profsText = profsBits.join('; ');
       out.spellsText = spellsText;
       out.name = `${titleCase(race?.name || '')} ${titleCase(cls?.name || '')}`.trim();
-      lastGen = out;
-      renderPreview(preRoot, out);
+      // Build combat details (pure; does not affect prior fields)
+      const weapons = chosenWeaponsForClass(String(cls?.slug || cls?.name || '').toLowerCase());
+      const combat = buildCombatDetails({
+        level: lvl,
+        stats: out.stats,
+        mod: out.mod,
+        prof: out.prof,
+        classId: String(cls?.slug || cls?.name || '').toLowerCase(),
+        className: out.className,
+        raceName: out.raceName,
+        cls,
+        spellsPick,
+      }, { weapons });
+
+      lastGen = { ...out, combat };
+      renderPreview(preRoot, lastGen);
       btnSave?.removeAttribute('hidden');
     } finally {
       setLoading(false);
