@@ -34,7 +34,11 @@
     margin-bottom: 2px;
     overflow: visible;
 }
-.theme-card[data-selected="true"] { outline: 2px solid var(--accent); border-radius: 12px; }
+
+.theme-card[data-selected="true"] {
+    outline: 2px solid var(--accent);
+    border-radius: 12px;
+}
 
 .theme-swatch {
     display: flex;
@@ -249,7 +253,10 @@ body {
 }
 
 /* Each right panel section (tab) fills available space when visible */
-.right-drawer-content .right-panel[hidden] { display: none; }
+.right-drawer-content .right-panel[hidden] {
+    display: none;
+}
+
 .right-drawer-content .right-panel:not([hidden]) {
     display: flex;
     flex-direction: column;
@@ -266,7 +273,10 @@ body {
 }
 
 /* To-Do panel: list scrolls within panel */
-.right-drawer-content [data-panel='todo'] .todo-row { flex: 0 0 auto; }
+.right-drawer-content [data-panel='todo'] .todo-row {
+    flex: 0 0 auto;
+}
+
 .right-drawer-content [data-panel='todo'] #todoList {
     flex: 1 1 auto;
     min-height: 0;
@@ -957,34 +967,44 @@ body[data-theme='desert'] {
 }
 
 /* === UI POLISH (additive, conservative) === */
-:root { /* focus ring defined in components.css */ }
+:root {
+    /* focus ring defined in components.css */
+}
+
 /* Readable content metrics */
 :root {
-  --content-max: 1100px;
-  --content-gutter: clamp(16px, 4vw, 64px);
-  --content-measure: 76ch;
+    --content-max: 1100px;
+    --content-gutter: clamp(16px, 4vw, 64px);
+    --content-measure: 76ch;
 }
 
 /* Base control look and focus styles consolidated in components.css */
 
 /* Ensure .modal centers consistently even if inline styles set display */
-.modal[style*="display: block"] { display: flex !important; }
+.modal[style*="display: block"] {
+    display: flex !important;
+}
 
 /* Center and constrain main content without breaking tools */
-.main > #outlet > * {
-  max-width: var(--content-max);
-  width: 100%;
-  margin-inline: auto;
+.main>#outlet>* {
+    max-width: var(--content-max);
+    width: 100%;
+    margin-inline: auto;
 }
 
 /* Reading column width for page bodies */
 .main .page .page-body {
-  max-width: var(--content-measure);
+    max-width: var(--content-measure);
 }
 
 /* Resizer cursor UX: make it obvious they are interactive */
-.layout .resizer { cursor: pointer; }
-.layout .resizer:active { cursor: col-resize; }
+.layout .resizer {
+    cursor: pointer;
+}
+
+.layout .resizer:active {
+    cursor: col-resize;
+}
 
 /* Final theme-driven overrides removed; components inherit from UI Foundation.
    Keep icon color behavior here without !important (foundation already handles most). */
@@ -1854,15 +1874,11 @@ body[data-theme='light'] .page-header::after {
 
 /* Light theme nav hover owned by sidebar.css */
 
-.nav-icon {
-    width: 18px;
-    text-align: center;
-    opacity: .9
-}
 
-.nav-text {
-    letter-spacing: .2px
-}
+/* .nav-icon { width: 18px; text-align: center; opacity: .9 }  -- moved to sidebar.css */
+
+
+/* .nav-text { letter-spacing: .2px }  -- moved to sidebar.css */
 
 /* Active nav state owned by sidebar.css */
 
@@ -1870,15 +1886,8 @@ body[data-theme='light'] .page-header::after {
     margin: 6px 0
 }
 
-.nav-label {
-    cursor: pointer;
-    user-select: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 2px;
-    color: var(--muted)
-}
+
+/* .nav-label { ... }  -- moved to sidebar.css */
 
 .nav-details>summary {
     position: sticky;
@@ -1886,10 +1895,8 @@ body[data-theme='light'] .page-header::after {
     background: var(--panel)
 }
 
-.nav-label .nav-icon {
-    width: 18px;
-    text-align: center
-}
+
+/* .nav-label .nav-icon { ... }  -- moved to sidebar.css */
 
 .nav-details>summary::marker {
     content: ''

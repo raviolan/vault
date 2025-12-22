@@ -95,14 +95,32 @@
     --focus-ring-outer: 0 0 0 5px color-mix(in srgb, var(--accent) 12%, transparent);
 
     /* Interactive/link tokens (derived from theme) */
-    --link:           color-mix(in srgb, var(--accent) 85%, var(--text) 15%);
-    --link-hover:     color-mix(in srgb, var(--accent) 92%, var(--text) 8%);
+    --link: color-mix(in srgb, var(--accent) 85%, var(--text) 15%);
+    --link-hover: color-mix(in srgb, var(--accent) 92%, var(--text) 8%);
     --link-underline: color-mix(in srgb, var(--accent) 35%, transparent);
 
     /* Button foreground tokens */
     --btn-fg: var(--text);
     --btn-fg-muted: var(--muted);
     --btn-primary-fg: var(--on-primary, color-mix(in srgb, var(--text) 92%, var(--accent) 8%));
+}
+
+/* Light theme button and placeholder contrast fixes (token-based, no theme edits) */
+body[data-theme='light'],
+body[data-theme='auburn-linen'],
+body[data-theme='orchid-porcelain'] {
+
+    /* Force default button text to use --text for better contrast */
+    :where(button):not(.btn-primary) {
+        color: var(--text) !important;
+    }
+
+    /* Improve placeholder color and opacity for inputs/textareas */
+    :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check))::placeholder,
+    :where(textarea)::placeholder {
+        color: color-mix(in srgb, var(--text) 60%, var(--muted) 40%) !important;
+        opacity: 1 !important;
+    }
 }
 
 /* Global anchors (low specificity, theme-driven) */
@@ -113,9 +131,19 @@
     text-decoration-thickness: from-font;
 }
 
-:where(a:hover) { color: var(--link-hover); }
-:where(a:visited) { color: var(--link); }
-:where(a:focus-visible) { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+:where(a:hover) {
+    color: var(--link-hover);
+}
+
+:where(a:visited) {
+    color: var(--link);
+}
+
+:where(a:focus-visible) {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: 4px;
+}
 
 /* Base controls: inputs, selects, textareas */
 :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)),
@@ -150,7 +178,10 @@
 /* Modern focus ring: keyboard only */
 :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)),
 :where(textarea),
-:where(select) { outline: none; }
+:where(select) {
+    outline: none;
+}
+
 :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)):focus-visible,
 :where(textarea:focus-visible),
 :where(select:focus-visible) {
@@ -184,7 +215,10 @@
     background: var(--control-bg-active);
 }
 
-:where(button):focus { outline: none; }
+:where(button):focus {
+    outline: none;
+}
+
 :where(button):focus-visible {
     border-color: var(--focus-border);
     box-shadow: var(--focus-ring), var(--focus-ring-outer);
@@ -197,8 +231,14 @@
     border: 1px solid color-mix(in srgb, var(--primary, var(--accent)) 70%, var(--border));
 }
 
-:where(.btn-primary:hover) { background: var(--primary-hover, color-mix(in srgb, var(--primary, var(--accent)) 92%, var(--text) 8%)); }
-:where(.btn-primary:disabled) { opacity: .6; cursor: not-allowed; }
+:where(.btn-primary:hover) {
+    background: var(--primary-hover, color-mix(in srgb, var(--primary, var(--accent)) 92%, var(--text) 8%));
+}
+
+:where(.btn-primary:disabled) {
+    opacity: .6;
+    cursor: not-allowed;
+}
 
 :where(.btn-secondary) {
     background: var(--surface-2, var(--control-bg));
@@ -206,20 +246,32 @@
     border: 1px solid var(--control-border);
 }
 
-:where(.btn-secondary:hover) { background: var(--control-bg-hover); }
+:where(.btn-secondary:hover) {
+    background: var(--control-bg-hover);
+}
 
 /* OS color-scheme alignment for native controls */
-body { color-scheme: dark; }
+body {
+    color-scheme: dark;
+}
+
 body[data-theme='light'],
 body[data-theme='auburn-linen'],
-body[data-theme='orchid-porcelain'] { color-scheme: light; }
+body[data-theme='orchid-porcelain'] {
+    color-scheme: light;
+}
+
 body[data-theme='chinese-pearls'],
 body[data-theme='mother-of-dragons'],
-body[data-theme='desert'] { color-scheme: dark; }
+body[data-theme='desert'] {
+    color-scheme: dark;
+}
 
 /* Native checkbox/radio tinting */
 input[type="checkbox"],
-input[type="radio"] { accent-color: var(--accent); }
+input[type="radio"] {
+    accent-color: var(--accent);
+}
 
 /* Chips / pills: single source of truth */
 /* UI Components and Controls */

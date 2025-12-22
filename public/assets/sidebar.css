@@ -50,23 +50,47 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    display: block
+    display: block;
+    gap: 0;
 }
 
 .nav-item {
     display: flex;
     gap: 10px;
     align-items: center;
-    padding: 8px 10px;
-    border-radius: 10px;
+    padding: 7px 14px;
+    border-radius: 12px;
     color: var(--text);
-    text-decoration: none;
+    text-decoration: none !important;
     border: 1px solid transparent;
-    transition: background-color .15s ease
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    font-size: 15px;
+    line-height: 1.25;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: none;
+    box-sizing: border-box;
+    min-height: 36px;
+    max-width: 100%;
+    font-weight: 500;
+    outline: none;
+    user-select: none;
+    margin-bottom: 2px;
+    position: relative;
+    -webkit-text-decoration: none;
+    flex-shrink: 1;
+    flex-grow: 1;
 }
 
 .nav-item:hover {
-    background: none
+    background: var(--surface-2, color-mix(in srgb, var(--surface) 90%, var(--accent) 10%));
+    color: var(--text);
+    text-decoration: none !important;
+    box-shadow: 0 1px 4px 0 color-mix(in srgb, var(--accent) 8%, transparent);
+    outline: none;
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
 }
 
 /* Color coding on hover for menu items by section */
@@ -108,19 +132,32 @@
 }
 
 .nav-icon {
-    width: 18px;
+    width: 20px;
+    min-width: 20px;
     text-align: center;
-    opacity: .9
+    opacity: .92;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-right: 2px;
 }
 
 .nav-text {
-    letter-spacing: .2px
+    letter-spacing: .2px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .nav-item.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: transparent
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface-2, var(--surface)) 82%);
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border) 60%);
+    font-weight: 600;
+    box-shadow: 0 2px 8px 0 color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .nav-item.active .nav-icon {
@@ -133,11 +170,27 @@
     user-select: none;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 2px;
+    gap: 8px;
+    padding: 14px 14px 4px 14px;
     color: var(--muted);
+    font-size: 11.5px;
+    font-variant: small-caps;
+    letter-spacing: 0.11em;
+    font-weight: 700;
+    text-transform: uppercase;
     position: relative;
-    transition: background 0.2s ease;
+    transition: background 0.2s, color 0.2s;
+    border: none;
+    margin-top: 18px;
+    margin-bottom: 4px;
+    min-height: 22px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: none;
+    border-left: 3px solid transparent;
+    /* Divider line for all but first */
 }
 
 .nav-details>summary {
@@ -148,7 +201,17 @@
 
 .nav-label .nav-icon {
     width: 18px;
-    text-align: center
+    min-width: 18px;
+    text-align: center;
+    opacity: 0.7;
+    margin-right: 2px;
+}
+
+/* Divider for group headers */
+.nav-label:not(:first-child) {
+    border-top: 1px solid var(--ui-hairline, color-mix(in srgb, var(--border) 55%, transparent));
+    padding-top: 12px;
+    margin-top: 14px;
 }
 
 .nav-details>summary::marker {
@@ -169,11 +232,17 @@
 .nav-list {
     list-style: none;
     margin: 0;
-    padding: 0 0 0 4px
+    padding: 0 0 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
 .nav-list>li {
-    margin: 2px 0
+    margin: 0;
+    min-height: 36px;
+    display: flex;
+    align-items: stretch;
 }
 
 .nav-only {
