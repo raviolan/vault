@@ -1,12 +1,20 @@
-import { $, $$, escapeHtml } from '../lib/dom.js';
+import { $, $$ } from '../lib/dom.js';
 import { getState, updateState } from '../lib/state.js';
 import { fetchJson } from '../lib/http.js';
+import { createMiniAppHost } from '../miniapps/host.js';
+import { registerMany } from '../miniapps/registry.js';
+import { NotepadApp } from '../miniapps/notepad/app.js';
+import { TodoApp } from '../miniapps/todo/app.js';
+import { getAppState, setAppState, getUserState, patchUserState } from '../miniapps/state.js';
 
 export function bindRightPanel() {
   const toggle = $('#rightDrawerToggle');
   const drawer = $('#rightDrawer');
   const pinBtn = $('#rightDrawerPin');
   if (!toggle || !drawer) return;
+
+  // Register built-in mini apps once, keeping order stable
+  registerMany([NotepadApp, TodoApp]);
 
   // init from state
   const s = getState();
@@ -36,8 +44,26 @@ export function bindRightPanel() {
 
   const tabs = $$('.right-panel-tabs [data-tab]');
   const panels = $$('[data-panel]');
+  const host = createMiniAppHost({
+    surfaceId: 'rightPanel',
+    rootEl: drawer,
+    getCtx: () => ({
+      // Minimal context for this iteration
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: {
+        getUserState,
+        patchUserState,
+        getAppState,
+        setAppState,
+      },
+    }),
+  });
   const show = (name) => {
     for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name;
+    // Delegate to mini app host for specific tabs
+    if (name === 'notepad') host.show('notepad');
+    else if (name === 'todo') host.show('todo');
+    else host.show(null); // ensure cleanup if switching away
   };
   // initialize active tab
   show(s.rightPanelTab || 'notepad');
@@ -49,60 +75,7 @@ export function bindRightPanel() {
     if (t === 'settings') renderSettingsPanel();
   }));
 
-  // persistence
-  const notepad = $('#notepad');
-  const todoInput = $('#todoInput');
-  const todoAdd = $('#todoAdd');
-  const todoList = $('#todoList');
-
-  // initial values
-  notepad && (notepad.value = s.notepadText || '');
-  if (todoList) renderTodos(todoList, s.todoItems || []);
-
-  // debounced updates via state store
-  let notepadTimer;
-  notepad?.addEventListener('input', () => {
-    clearTimeout(notepadTimer);
-    const val = notepad.value;
-    notepadTimer = setTimeout(() => updateState({ notepadText: val }), 300);
-  });
-
-  todoAdd?.addEventListener('click', () => {
-    const text = (todoInput?.value || '').trim();
-    if (!text) return;
-    const cur = getState().todoItems || [];
-    const next = [...cur, { id: crypto.randomUUID(), text, done: false }];
-    todoInput.value = '';
-    renderTodos(todoList, next);
-    updateState({ todoItems: next });
-  });
-
-  function renderTodos(root, todos) {
-    if (!root) return;
-    root.innerHTML = '';
-    for (const t of todos) {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input type="checkbox" ${t.done ? 'checked' : ''} />
-          <span>${escapeHtml(t.text)}</span>
-        </label>
-        <button class="chip" title="Delete">×</button>
-      `;
-      const cb = li.querySelector('input');
-      const del = li.querySelector('button');
-      cb.addEventListener('change', () => {
-        t.done = cb.checked;
-        updateState({ todoItems: todos });
-      });
-      del.addEventListener('click', () => {
-        const next = (getState().todoItems || []).filter(x => x.id !== t.id);
-        renderTodos(root, next);
-        updateState({ todoItems: next });
-      });
-      root.appendChild(li);
-    }
-  }
+  // Notepad and To-Do now mount via mini app host (no direct listeners here)
 }
 
 async function renderSettingsPanel() {
@@ -147,4 +120,3 @@ async function renderSettingsPanel() {
     root.innerHTML = `<p class=\"meta\">Failed to load settings</p>`;
   }
 }
-

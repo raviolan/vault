@@ -1,0 +1,34 @@
+// Backwards-compatible user state helpers for mini apps, built on existing store.
+import { getState, updateState } from '../lib/state.js';
+
+export function getUserState() {
+  return getState();
+}
+
+export function patchUserState(partial) {
+  // Merge + persist via existing debounced mechanism
+  return updateState(partial);
+}
+
+// Namespaced app state with backwards compatibility.
+export function getAppState(appId, fallback = undefined) {
+  const s = getState() || {};
+  const apps = s.apps || {};
+  if (apps && apps[appId] !== undefined) return apps[appId];
+  // Legacy compatibility for known apps
+  if (appId === 'notepad') return s.notepadText ?? fallback;
+  if (appId === 'todo') return s.todoItems ?? fallback;
+  return fallback;
+}
+
+export function setAppState(appId, nextState) {
+  const s = getState() || {};
+  const apps = { ...(s.apps || {}) };
+  apps[appId] = nextState;
+  const patch = { apps };
+  // Maintain legacy keys for backwards compatibility
+  if (appId === 'notepad') patch.notepadText = nextState;
+  if (appId === 'todo') patch.todoItems = nextState;
+  return updateState(patch);
+}
+
