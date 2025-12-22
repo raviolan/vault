@@ -20,6 +20,8 @@ import { listThemes, getModeForThemeId } from './lib/themes.js';
 import { mountLeftPanelBottom } from './surfaces/leftPanelBottom.js';
 import { mountLeftPanelWeather } from './surfaces/leftPanelWeather.js';
 import * as WeatherSettingsRoute from './routes/weatherSettings.js';
+import * as EnemyGenerator from './tools/enemyGenerator/index.js';
+import { renderFavorites } from './features/favorites.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
@@ -134,6 +136,8 @@ export async function boot() {
   });
 
   await refreshNav();
+  // Render Favorites section (tools only for now)
+  try { renderFavorites(); } catch {}
 
   route(/^\/$/, () => {
     setBreadcrumb('Dashboard');
@@ -149,6 +153,13 @@ export async function boot() {
     setPageActionsEnabled({ canEdit: false, canDelete: false });
     const outlet = document.getElementById('outlet');
     Tags.render(outlet, {});
+  });
+  // Core tools
+  route(/^\/tools\/enemy-generator\/?$/, () => {
+    setBreadcrumb('Enemy Generator');
+    setPageActionsEnabled({ canEdit: false, canDelete: false });
+    const outlet = document.getElementById('outlet');
+    EnemyGenerator.render(outlet);
   });
   route(/^\/session\/?$/, () => {
     setBreadcrumb('Session');

@@ -1,5 +1,6 @@
 import { $, escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
+import { TOOLS } from '../tools/index.js';
 
 let cachedPages = [];
 
@@ -76,5 +77,31 @@ export function renderNavSections(pages, navCfg) {
 export async function refreshNav() {
   const [pages, navCfg] = await Promise.all([loadPages(), loadNavConfig()]);
   renderNavSections(pages, navCfg);
+  // Append Tools section (core tools)
+  try { renderToolsSection(); } catch {}
 }
 
+export function renderToolsSection() {
+  const ul = $('#navSections');
+  if (!ul) return;
+  const li = document.createElement('li');
+  li.className = 'nav-section';
+  li.innerHTML = `
+    <details class="nav-details" open>
+      <summary class="nav-label">
+        <span class="nav-icon">🧰</span>
+        <span>Tools</span>
+      </summary>
+      <ul class="nav-list"></ul>
+    </details>
+  `;
+  const list = li.querySelector('.nav-list');
+  for (const t of TOOLS) {
+    const item = document.createElement('li');
+    item.innerHTML = `<a class="nav-item" href="${t.path}" data-link>
+      <span class="nav-text">${escapeHtml(t.name)}</span>
+    </a>`;
+    list.appendChild(item);
+  }
+  ul.appendChild(li);
+}

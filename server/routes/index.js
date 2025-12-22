@@ -14,6 +14,7 @@ import { routeSearch } from './search.js';
 import { routeBacklinks } from './backlinks.js';
 import { routeTags } from './tags.js';
 import { routeUserState } from './userState.js';
+import { routeOpen5e } from './open5e.js';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -118,6 +119,8 @@ const ROUTES = [
   { name: 'backlinks', handle: routeBacklinks },
   { name: 'blocks', handle: routeBlocks },
   { name: 'userState', handle: routeUserState },
+  // Utility proxy routes (additive)
+  { name: 'open5e', handle: routeOpen5e },
 ];
 
 // Handles all known routes. Returns true if handled.
