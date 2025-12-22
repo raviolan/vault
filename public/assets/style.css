@@ -225,7 +225,8 @@ a:hover {
 .main {
     grid-area: main;
     overflow: auto;
-    padding: 40px 48px;
+    /* Horizontal padding becomes responsive gutter for readability */
+    padding: 40px var(--content-gutter, 48px);
     background: var(--main-bg)
 }
 
@@ -1042,6 +1043,56 @@ body[data-theme='desert'] {
     --highlight: #9E895F;
     --main-bg: #1E1A13;
 }
+
+/* === UI POLISH (additive, conservative) === */
+:root { --focus-ring: 0 0 0 3px rgba(139, 92, 246, 0.3); }
+/* Readable content metrics */
+:root {
+  --content-max: 1100px;
+  --content-gutter: clamp(16px, 4vw, 64px);
+  --content-measure: 76ch;
+}
+
+button.chip,
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  border-radius: 8px;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
+}
+
+button.chip:focus,
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+input,
+select,
+textarea { border-radius: 8px; }
+
+/* Ensure .modal centers consistently even if inline styles set display */
+.modal[style*="display: block"] { display: flex !important; }
+
+/* Center and constrain main content without breaking tools */
+.main > #outlet > * {
+  max-width: var(--content-max);
+  width: 100%;
+  margin-inline: auto;
+}
+
+/* Reading column width for page bodies */
+.main .page .page-body {
+  max-width: var(--content-measure);
+}
+
+/* Resizer cursor UX: make it obvious they are interactive */
+.layout .resizer { cursor: pointer; }
+.layout .resizer:active { cursor: col-resize; }
 
 /* Final theme-driven overrides to ensure components inherit palette variables */
 .tool-tab,

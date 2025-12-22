@@ -108,16 +108,12 @@ async function pickSectionAndTitle({ defaultTitle }) {
     const st = getState();
     const sections = listSections(st);
     const last = st?.toolPrefs?.enemyGenerator?.lastSectionId || '';
-    const root = document.createElement('div');
-    root.className = 'modal';
-    root.style.display = 'block';
-    root.style.position = 'fixed';
-    root.style.inset = '0';
-    root.style.background = 'rgba(0,0,0,0.4)';
-    root.style.zIndex = '1000';
+  const root = document.createElement('div');
+  root.className = 'modal';
+  root.style.display = 'flex';
 
     root.innerHTML = `
-      <div class="card" style="max-width:520px; margin: 10% auto; padding:12px; background: var(--bg-default);">
+      <div class="modal-content" style="max-width:520px;">
         <h3 class="meta">Save to Vault</h3>
         <label style="display:block; margin:6px 0;">Title
           <input id="egSaveTitle" type="text" style="width:100%;" />

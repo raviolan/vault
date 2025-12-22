@@ -22,6 +22,7 @@ import { mountLeftPanelWeather } from './surfaces/leftPanelWeather.js';
 import * as WeatherSettingsRoute from './routes/weatherSettings.js';
 import * as EnemyGenerator from './tools/enemyGenerator/index.js';
 import { renderFavorites } from './features/favorites.js';
+import { initPanels } from './features/panelControls.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
@@ -61,6 +62,8 @@ export async function boot() {
     if (navHeadline) navHeadline.textContent = navTitle;
   } catch {}
   bindRightPanel();
+  // Initialize panel sizing/collapse behavior
+  try { initPanels(); } catch {}
   mountLeftPanelBottom();
   mountLeftPanelWeather();
 
@@ -106,18 +109,7 @@ export async function boot() {
   }
   document.body.toggleAttribute('data-nav-collapsed', !!st.navCollapsed);
 
-  leftToggle?.addEventListener('click', () => {
-    const isHidden = leftDrawer?.hasAttribute('hidden');
-    if (isHidden) {
-      leftDrawer?.removeAttribute('hidden');
-      leftToggle?.setAttribute('aria-expanded', 'true');
-      updateState({ leftPanelOpen: true });
-    } else {
-      leftDrawer?.setAttribute('hidden', '');
-      leftToggle?.setAttribute('aria-expanded', 'false');
-      updateState({ leftPanelOpen: false });
-    }
-  });
+  // Keep existing collapse-all behavior
   leftCollapseToggle?.addEventListener('click', () => {
     const now = !(getState().navCollapsed);
     document.body.toggleAttribute('data-nav-collapsed', now);
