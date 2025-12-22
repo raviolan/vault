@@ -247,6 +247,39 @@ a:hover {
     min-height: 0
 }
 
+/* Right panel content should behave like a flexible column that fills height */
+.right-drawer-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* Each right panel section (tab) fills available space when visible */
+.right-drawer-content .right-panel[hidden] { display: none; }
+.right-drawer-content .right-panel:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+/* Notepad panel: textarea consumes full height for better UX */
+.right-drawer-content [data-panel='notepad'] #notepad {
+    flex: 1 1 auto;
+    height: 100%;
+    resize: none;
+    padding: var(--control-pad-y, var(--space-4)) var(--control-pad-x, var(--space-5));
+}
+
+/* To-Do panel: list scrolls within panel */
+.right-drawer-content [data-panel='todo'] .todo-row { flex: 0 0 auto; }
+.right-drawer-content [data-panel='todo'] #todoList {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
 .right-split {
     display: grid;
     grid-template-rows: var(--pane-top-h, 20%) 6px 1fr;
@@ -507,75 +540,14 @@ pre {
     border-radius: var(--radius-3);
 }
 
-/* Apply theme colors to form controls and buttons */
-button,
-.chip,
-.pane-tab,
-.todo-add,
-.bookmark-btn,
-.fav-remove,
-.theme-swatch {
-    background: transparent;
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: var(--space-3) var(--space-5);
-    border-radius: var(--radius-3);
-    cursor: pointer;
-}
-
-button:hover,
-.chip:hover,
-.pane-tab:hover,
-.theme-swatch:hover {
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.chip.active,
-.pane-tab.active {
-    background: var(--panel);
-    color: var(--text);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-}
-
-input,
-textarea,
-select,
-.todo-input,
-.collapsible-content [contenteditable],
-.wysiwyg,
-.wysiwyg * {
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--border);
-    caret-color: var(--accent);
-}
-
-input:focus,
-textarea:focus,
-select:focus,
-.todo-input:focus,
-.wysiwyg:focus {
-    outline: 2px solid rgba(0, 0, 0, 0.0);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-    /* subtle accent ring */
-}
+/* Base control/button look consolidated in components.css; keep component-specific styles below */
 
 /* Make theme swatch previews more prominent */
 .swatch-preview {
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Ensure chips / small controls use muted color when inactive */
-.chip {
-    background: transparent;
-    color: var(--muted);
-    border-radius: 6px;
-    padding: 6px 8px;
-}
-
-.chip.active {
-    color: var(--text);
-}
+/* Chips are defined in components.css UI Foundation */
 
 /* Toolbar and icon rules: make SVGs inherit color so icons follow theme */
 .toolbar,
@@ -595,21 +567,7 @@ select:focus,
     stroke: currentColor;
 }
 
-/* Search inputs */
-.search input,
-.nav-quick input,
-.todo-input,
-.nav-search input {
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--border);
-}
-
-.search input::placeholder,
-.nav-quick input::placeholder,
-.todo-input::placeholder {
-    color: var(--muted);
-}
+/* Search inputs: base .search input lives in components.css; keep specific ones below */
 
 /* Tags and small chips */
 .tag,
@@ -1045,7 +1003,7 @@ body[data-theme='desert'] {
 }
 
 /* === UI POLISH (additive, conservative) === */
-:root { --focus-ring: 0 0 0 3px rgba(139, 92, 246, 0.3); }
+:root { /* focus ring defined in components.css */ }
 /* Readable content metrics */
 :root {
   --content-max: 1100px;
@@ -1053,27 +1011,7 @@ body[data-theme='desert'] {
   --content-measure: 76ch;
 }
 
-button.chip,
-button,
-input[type="button"],
-input[type="submit"],
-input[type="reset"] {
-  border-radius: 8px;
-  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
-}
-
-button.chip:focus,
-button:focus,
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-input,
-select,
-textarea { border-radius: 8px; }
+/* Base control look and focus styles consolidated in components.css */
 
 /* Ensure .modal centers consistently even if inline styles set display */
 .modal[style*="display: block"] { display: flex !important; }
@@ -1112,7 +1050,7 @@ textarea { border-radius: 8px; }
     border-color: var(--border) !important;
 }
 
-/* Ensure top toolbar chips use theme text color (override earlier .chip muted value) */
+/* Ensure top toolbar chips use theme text color */
 .toolbar .chip,
 .top .chip {
     color: var(--text) !important;
@@ -1185,20 +1123,7 @@ body[data-theme='light'] .todo-btn:hover {
     flex-shrink: 0
 }
 
-.chip {
-    padding: 4px 8px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--panel);
-    color: var(--muted);
-    cursor: pointer;
-}
-
-.chip.active {
-    background: var(--accent);
-    color: white;
-    border-color: transparent
-}
+/* Chip base moved to components.css */
 
 .hovercard {
     position: fixed;
@@ -1780,73 +1705,7 @@ main.main>section[id].collapsed .section-content {
     margin-top: 8px
 }
 
-/* Connections modal */
-.modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 1100;
-    display: flex;
-    align-items: center;
-    justify-content: center
-}
-
-.modal {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    width: min(960px, 90vw);
-    height: min(80vh, 720px);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden
-}
-
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border)
-}
-
-.modal-title {
-    font-weight: 600
-}
-
-.modal-close {
-    border: 1px solid var(--border);
-    background: #10131a;
-    color: var(--muted);
-    border-radius: 8px;
-    padding: 4px 8px;
-    cursor: pointer
-}
-
-body[data-theme='light'] .modal-close {
-    background: #ffffff;
-    color: #374151;
-    border-color: #e5e7eb
-}
-
-.modal-body {
-    flex: 1;
-    padding: 8px
-}
-
-.modal-graph {
-    height: 100%;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel)
-}
-
-#sessionEditor {
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--border)
-}
+/* Connections modal primitives consolidated in components.css */
 
 body[data-theme='light'] #sessionEditor {
     background: #ffffff;

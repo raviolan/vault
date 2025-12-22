@@ -77,40 +77,10 @@
     margin-top: 20px;
 }
 
-.btn-primary,
-.btn-secondary {
+/* Button variants inherit look from UI Foundation; keep equal width here */
+.form-actions .btn-primary,
+.form-actions .btn-secondary {
     flex: 1;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-primary {
-    background: rgba(139, 92, 246, 0.8);
-    color: white;
-}
-
-.btn-primary:hover {
-    background: rgba(139, 92, 246, 1);
-}
-
-.btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn-secondary {
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-    background: var(--panel);
 }
 
 #createPageStatus {
@@ -202,57 +172,4 @@
     margin-top: 28px;
 }
 
-/* Dramatically enhanced focus styles for keyboard navigation */
-.btn-primary,
-.btn-secondary {
-    position: relative;
-    transition: all 0.15s ease;
-}
-
-.btn-primary:focus,
-.btn-secondary:focus {
-    outline: none;
-    transform: scale(1.05);
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.3), 0 8px 20px rgba(0, 0, 0, 0.2);
-    z-index: 10;
-}
-
-.btn-primary:focus {
-    background: rgba(139, 92, 246, 1);
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.4), 0 8px 20px rgba(139, 92, 246, 0.3);
-}
-
-.btn-secondary:focus {
-    background: var(--panel);
-    border-color: rgba(139, 92, 246, 0.5);
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2), 0 8px 20px rgba(0, 0, 0, 0.2);
-}
-
-/* Add focus indicator icon */
-.btn-primary:focus::before,
-.btn-secondary:focus::before {
-    content: '→ ';
-    opacity: 1;
-    animation: focusPulse 1s ease infinite;
-}
-
-@keyframes focusPulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-/* Hover states remain subtle when not focused */
-.btn-primary:hover:not(:focus) {
-    transform: translateY(-1px);
-}
-
-.btn-secondary:hover:not(:focus) {
-    transform: translateY(-1px);
-}
+/* Focus and hover states provided by UI Foundation (focus-visible ring, subtle hover) */

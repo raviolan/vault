@@ -28,7 +28,13 @@ export function setAppState(appId, nextState) {
   const patch = { apps };
   // Maintain legacy keys for backwards compatibility
   if (appId === 'notepad') patch.notepadText = nextState;
-  if (appId === 'todo') patch.todoItems = nextState;
+  if (appId === 'todo') {
+    // If we moved to structured state { items, showCompleted }, provide a compatible legacy array
+    if (nextState && Array.isArray(nextState.items)) {
+      patch.todoItems = nextState.items.map(it => ({ text: it.text, done: !!it.done }));
+    } else {
+      patch.todoItems = nextState;
+    }
+  }
   return updateState(patch);
 }
-

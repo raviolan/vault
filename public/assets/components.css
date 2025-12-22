@@ -52,6 +52,134 @@
     background: #e0e0e0;
 }
 
+/* UI FOUNDATION: controls + buttons + focus
+ * Source of truth for base form controls and buttons
+ * - Low-specificity via :where(...) to avoid selector wars
+ * - Derives from existing theme tokens (see style.css/theme.css)
+ */
+
+/* Control tokens (derived, minimal) */
+:root {
+    /* Backgrounds */
+    --control-bg: var(--panel);
+    --control-bg-2: var(--surface-2, color-mix(in srgb, var(--control-bg) 92%, var(--text) 8%));
+    --control-bg-hover: color-mix(in srgb, var(--accent) 8%, var(--control-bg));
+    --control-bg-active: color-mix(in srgb, var(--accent) 12%, var(--control-bg));
+    /* Borders & text */
+    --control-border: var(--border);
+    --control-text: var(--text);
+    --control-muted: var(--muted);
+    /* Shape & spacing */
+    --control-radius: var(--radius-4, 10px);
+    --control-pad-y: var(--space-3, 8px);
+    --control-pad-x: var(--space-4, 10px);
+    /* Focus */
+    --focus-border: color-mix(in srgb, var(--accent) 60%, var(--border));
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 26%, transparent);
+    --focus-ring-outer: 0 0 0 5px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Base controls: inputs, selects, textareas */
+:where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)),
+:where(textarea),
+:where(select) {
+    background: var(--control-bg);
+    color: var(--control-text);
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    padding: var(--control-pad-y) var(--control-pad-x);
+    caret-color: var(--accent);
+    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check))::placeholder,
+:where(textarea)::placeholder {
+    color: var(--control-muted);
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check):hover),
+:where(textarea:hover),
+:where(select:hover) {
+    background: var(--control-bg-hover);
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check):active),
+:where(textarea:active),
+:where(select:active) {
+    background: var(--control-bg-active);
+}
+
+/* Modern focus ring: keyboard only */
+:where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)),
+:where(textarea),
+:where(select) { outline: none; }
+:where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)):focus-visible,
+:where(textarea:focus-visible),
+:where(select:focus-visible) {
+    border-color: var(--focus-border);
+    box-shadow: var(--focus-ring), var(--focus-ring-outer);
+}
+
+/* Ensure native dropdowns follow theme */
+:where(select) {
+    background-color: var(--control-bg);
+    color: var(--control-text);
+    border-color: var(--control-border);
+}
+
+/* Base buttons (keep minimal to avoid stomping specialized icon buttons) */
+:where(button):not(.theme-swatch):not(.wysiwyg-btn):not(.modal-close):not(.todo-disclose):not(.todo-chevron):not(.fav-remove) {
+    background: var(--control-bg);
+    color: var(--control-text);
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    padding: var(--control-pad-y) var(--control-pad-x);
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, border-color .15s ease, transform .05s ease;
+}
+
+:where(button):not(.theme-swatch):not(.wysiwyg-btn):not(.modal-close):not(.todo-disclose):not(.todo-chevron):not(.fav-remove):hover {
+    background: var(--control-bg-hover);
+}
+
+:where(button):not(.theme-swatch):not(.wysiwyg-btn):not(.modal-close):not(.todo-disclose):not(.todo-chevron):not(.fav-remove):active {
+    background: var(--control-bg-active);
+}
+
+:where(button):focus { outline: none; }
+:where(button):focus-visible {
+    border-color: var(--focus-border);
+    box-shadow: var(--focus-ring), var(--focus-ring-outer);
+}
+
+/* Button variants: align all usages (including modal actions) */
+:where(.btn-primary) {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid transparent;
+}
+
+:where(.btn-primary:hover) { background: color-mix(in srgb, var(--accent) 92%, #000); }
+:where(.btn-primary:disabled) { opacity: .6; cursor: not-allowed; }
+
+:where(.btn-secondary) {
+    background: var(--control-bg);
+    color: var(--control-text);
+    border: 1px solid var(--control-border);
+}
+
+:where(.btn-secondary:hover) { background: var(--control-bg-hover); }
+
+/* OS color-scheme alignment for native controls */
+body { color-scheme: dark; }
+body[data-theme='light'],
+body[data-theme='auburn-linen'],
+body[data-theme='orchid-porcelain'] { color-scheme: light; }
+body[data-theme='chinese-pearls'],
+body[data-theme='mother-of-dragons'],
+body[data-theme='desert'] { color-scheme: dark; }
+
+/* Chips / pills: single source of truth */
 /* UI Components and Controls */
 
 /* Search & Input */
@@ -689,7 +817,7 @@ h4 {
     justify-content: center
 }
 
-.modal {
+.modal-backdrop .modal {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-6);
@@ -701,7 +829,7 @@ h4 {
     overflow: hidden
 }
 
-.modal-header {
+.modal-backdrop .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -709,11 +837,11 @@ h4 {
     border-bottom: 1px solid var(--border)
 }
 
-.modal-title {
+.modal-backdrop .modal-title {
     font-weight: 600
 }
 
-.modal-close {
+.modal-backdrop .modal-close {
     border: 1px solid var(--border);
     background: #10131a;
     color: var(--muted);
@@ -722,12 +850,12 @@ h4 {
     cursor: pointer
 }
 
-.modal-body {
+.modal-backdrop .modal-body {
     flex: 1;
     padding: var(--space-4)
 }
 
-.modal-graph {
+.modal-backdrop .modal-graph {
     height: 100%;
     border: 1px solid var(--border);
     border-radius: var(--radius-4);
