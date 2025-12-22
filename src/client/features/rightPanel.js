@@ -44,6 +44,18 @@ export function bindRightPanel() {
 
   const tabs = $$('.right-panel-tabs [data-tab]');
   const panels = $$('[data-panel]');
+  // Respect mini app visibility settings
+  const hidden = new Set(Array.isArray(getState().miniAppsHidden) ? getState().miniAppsHidden : []);
+  for (const btn of tabs) {
+    const t = btn.getAttribute('data-tab');
+    if (t === 'notepad' && hidden.has('notepad')) btn.style.display = 'none';
+    if (t === 'todo' && hidden.has('todo')) btn.style.display = 'none';
+  }
+  for (const p of panels) {
+    const name = p.getAttribute('data-panel');
+    if (name === 'notepad' && hidden.has('notepad')) p.hidden = true;
+    if (name === 'todo' && hidden.has('todo')) p.hidden = true;
+  }
   const host = createMiniAppHost({
     surfaceId: 'rightPanel',
     rootEl: drawer,
@@ -59,14 +71,22 @@ export function bindRightPanel() {
     }),
   });
   const show = (name) => {
-    for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name;
+    const isHidden = (name === 'notepad' && hidden.has('notepad')) || (name === 'todo' && hidden.has('todo'));
+    for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name || isHidden;
     // Delegate to mini app host for specific tabs
-    if (name === 'notepad') host.show('notepad');
-    else if (name === 'todo') host.show('todo');
+    if (name === 'notepad' && !hidden.has('notepad')) host.show('notepad');
+    else if (name === 'todo' && !hidden.has('todo')) host.show('todo');
     else host.show(null); // ensure cleanup if switching away
   };
   // initialize active tab
-  show(s.rightPanelTab || 'notepad');
+  let initial = s.rightPanelTab || 'notepad';
+  if ((initial === 'notepad' && hidden.has('notepad')) || (initial === 'todo' && hidden.has('todo'))) {
+    // fallback to first visible tab in current order
+    const order = ['notepad', 'colors', 'todo', 'backlinks', 'settings'];
+    initial = order.find(t => !((t === 'notepad' && hidden.has('notepad')) || (t === 'todo' && hidden.has('todo')))) || 'backlinks';
+    updateState({ rightPanelTab: initial });
+  }
+  show(initial);
   if ((s.rightPanelTab || 'notepad') === 'settings') renderSettingsPanel();
   tabs.forEach(btn => btn.addEventListener('click', () => {
     const t = btn.getAttribute('data-tab');

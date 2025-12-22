@@ -17,3 +17,13 @@ export function getAppliedTheme() {
   return el?.dataset?.theme || 'dark';
 }
 
+export function applyThemeId(themeId) {
+  return applyTheme(themeId);
+}
+
+export function applyThemeMode(mode, userState) {
+  const st = userState || {};
+  const m = mode === 'light' ? 'light' : 'dark';
+  const id = m === 'light' ? (st.defaultLightThemeId || 'light') : (st.defaultDarkThemeId || 'dark');
+  return applyThemeId(id);
+}

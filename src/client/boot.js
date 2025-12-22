@@ -15,7 +15,8 @@ import { bindModalBasics, openCreateModal, createPageFromModal } from './feature
 import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
-import { applyTheme } from './lib/theme.js';
+import { applyTheme, applyThemeMode } from './lib/theme.js';
+import { listThemes, getModeForThemeId } from './lib/themes.js';
 import { mountLeftPanelBottom } from './surfaces/leftPanelBottom.js';
 
 export async function boot() {
@@ -30,10 +31,24 @@ export async function boot() {
   bindModalBasics('createPageModal');
   bindModalBasics('deletePageModal');
   await loadState();
-  // Apply saved theme and labels on boot
+  // Apply saved theme and labels on boot, with backwards-compatible migration to themeMode/defaults
   try {
     const st = getState();
-    if (st && st.theme) applyTheme(st.theme);
+    if (st) {
+      if (st.themeMode && (st.defaultLightThemeId || st.defaultDarkThemeId)) {
+        applyThemeMode(st.themeMode, st);
+      } else if (st.theme) {
+        const mode = getModeForThemeId(st.theme);
+        const patch = {
+          themeMode: mode,
+          defaultLightThemeId: mode === 'light' ? st.theme : (st.defaultLightThemeId || 'light'),
+          defaultDarkThemeId: mode === 'dark' ? st.theme : (st.defaultDarkThemeId || 'dark'),
+        };
+        // Persist migration without clobbering; keep old theme key
+        updateState(patch);
+        applyThemeMode(patch.themeMode, { ...st, ...patch });
+      }
+    }
     const brand = st?.brandLabel || 'Hembränt';
     const navTitle = st?.navHeadline || 'Feywild Adventures';
     const brandLink = document.querySelector('.top .toolbar a.chip[data-link][href="/"]');
@@ -43,6 +58,35 @@ export async function boot() {
   } catch {}
   bindRightPanel();
   mountLeftPanelBottom();
+
+  // Bind theme mode toggle (switch)
+  const btnDark = document.getElementById('themeModeDark');
+  const btnLight = document.getElementById('themeModeLight');
+  const syncSwitch = () => {
+    const st = getState();
+    const isLight = st.themeMode === 'light';
+    if (btnDark) {
+      btnDark.setAttribute('aria-pressed', String(!isLight));
+      btnDark.classList.toggle('active', !isLight);
+    }
+    if (btnLight) {
+      btnLight.setAttribute('aria-pressed', String(isLight));
+      btnLight.classList.toggle('active', isLight);
+    }
+  };
+  if (btnDark && btnLight) {
+    syncSwitch();
+    btnDark.addEventListener('click', () => {
+      updateState({ themeMode: 'dark' });
+      applyThemeMode('dark', getState());
+      syncSwitch();
+    });
+    btnLight.addEventListener('click', () => {
+      updateState({ themeMode: 'light' });
+      applyThemeMode('light', getState());
+      syncSwitch();
+    });
+  }
 
   const leftDrawer = $('#leftDrawer');
   const leftToggle = $('#leftDrawerToggle');
