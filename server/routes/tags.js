@@ -16,7 +16,8 @@ export function routeTags(req, res, ctx) {
   const pageTagsMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/tags$/);
   if (pageTagsMatch) {
     const pageId = pageTagsMatch[1];
-    const exists = !!ctx.db.prepare('SELECT 1 FROM pages WHERE id = ?').get(pageId);
+    // Do not infer existence from tag rows; check pages table directly
+    const exists = !!ctx.db.prepare('SELECT 1 FROM pages WHERE id = ? LIMIT 1').get(pageId);
     if (!exists) { notFound(res); return true; }
 
     if (req.method === 'GET') {
@@ -38,4 +39,3 @@ export function routeTags(req, res, ctx) {
 
   return false;
 }
-

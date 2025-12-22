@@ -142,6 +142,14 @@ async function run() {
       const { json } = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: tagTitle, type: 'note' }) });
       tagPageId = json.page.id;
     }
+    process.stdout.write('[I0] GET /api/pages/:id/tags on new page returns [] ... ');
+    {
+      const { res, json, text } = await fetchJson(`/api/pages/${encodeURIComponent(tagPageId)}/tags`);
+      assert(res.ok, `expected 200, got ${res.status} — ${text}`);
+      assert(json && json.pageId === tagPageId && Array.isArray(json.tags), 'bad page tags shape');
+      assert(json.tags.length === 0, 'expected empty tags on new page');
+    }
+    console.log('OK');
     process.stdout.write('[I1] PUT /api/pages/:id/tags (NPC, session) ... ');
     {
       const { res, json, text } = await fetchJson(`/api/pages/${encodeURIComponent(tagPageId)}/tags`, {

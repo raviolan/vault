@@ -5,6 +5,7 @@ import { setBreadcrumb, setPageActionsEnabled } from './lib/ui.js';
 import * as Dashboard from './routes/dashboard.js';
 import * as Tags from './routes/tags.js';
 import * as Session from './routes/session.js';
+import * as SettingsRoute from './routes/settings.js';
 import { renderPage, renderPageBySlug } from './routes/pages.js';
 import { renderNotFound } from './routes/system.js';
 import { installSearchPreview } from './features/searchPreview.js';
@@ -14,6 +15,8 @@ import { bindModalBasics, openCreateModal, createPageFromModal } from './feature
 import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
+import { applyTheme } from './lib/theme.js';
+import { mountLeftPanelBottom } from './surfaces/leftPanelBottom.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
@@ -27,7 +30,19 @@ export async function boot() {
   bindModalBasics('createPageModal');
   bindModalBasics('deletePageModal');
   await loadState();
+  // Apply saved theme and labels on boot
+  try {
+    const st = getState();
+    if (st && st.theme) applyTheme(st.theme);
+    const brand = st?.brandLabel || 'Hembränt';
+    const navTitle = st?.navHeadline || 'Feywild Adventures';
+    const brandLink = document.querySelector('.top .toolbar a.chip[data-link][href="/"]');
+    if (brandLink) brandLink.textContent = brand;
+    const navHeadline = document.querySelector('.campaign-title');
+    if (navHeadline) navHeadline.textContent = navTitle;
+  } catch {}
   bindRightPanel();
+  mountLeftPanelBottom();
 
   const leftDrawer = $('#leftDrawer');
   const leftToggle = $('#leftDrawerToggle');
@@ -93,6 +108,10 @@ export async function boot() {
     setPageActionsEnabled({ canEdit: false, canDelete: false });
     const outlet = document.getElementById('outlet');
     Session.render(outlet, {});
+  });
+  route(/^\/settings\/?$/, () => {
+    const outlet = document.getElementById('outlet');
+    return SettingsRoute.render(outlet, {});
   });
 
   await renderRoute();

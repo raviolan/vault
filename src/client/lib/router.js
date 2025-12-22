@@ -1,6 +1,7 @@
 // Simple SPA router and link interceptor
 const routes = [];
 let fallbackHandler = null;
+let currentCleanup = null; // optional cleanup returned by last route
 
 export function route(pattern, handler) { routes.push({ pattern, handler }); }
 
@@ -14,10 +15,22 @@ export async function renderRoute() {
   const path = window.location.pathname;
   for (const r of routes) {
     const m = path.match(r.pattern);
-    if (m) return r.handler({ path, params: m.groups || {}, match: m });
+    if (m) {
+      // run previous cleanup if any
+      try { if (typeof currentCleanup === 'function') currentCleanup(); } catch {}
+      currentCleanup = null;
+      const out = await r.handler({ path, params: m.groups || {}, match: m });
+      if (typeof out === 'function') currentCleanup = out;
+      return;
+    }
   }
   if (typeof fallbackHandler === 'function') {
-    return fallbackHandler();
+    // run previous cleanup if any
+    try { if (typeof currentCleanup === 'function') currentCleanup(); } catch {}
+    currentCleanup = null;
+    const out = await fallbackHandler();
+    if (typeof out === 'function') currentCleanup = out;
+    return;
   }
 }
 

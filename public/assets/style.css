@@ -961,6 +961,87 @@ body[data-theme='light'] .todo-add {
     border-color: #e5e7eb
 }
 
+/* Additional themes (CSS variable overrides) */
+body[data-theme='auburn-linen'] {
+    --bg: #FBF5F0;
+    --panel: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-2: #F6EDEA;
+    --border: #E7D4D0;
+    --text: #1E1416;
+    --muted: #5C4B4F;
+    --accent: #6C4A78;
+    --primary: #8F2D1B;
+    --primary-hover: #A63621;
+    --on-primary: #FFFFFF;
+    --highlight: #F2D2A5;
+    --main-bg: #FBF5F0;
+}
+
+body[data-theme='orchid-porcelain'] {
+    --bg: #FFF7FB;
+    --panel: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-2: #F3EAF2;
+    --border: #E6D3E2;
+    --text: #1B1218;
+    --muted: #5A4B55;
+    --accent: #C34A8A;
+    --primary: #7E2A62;
+    --primary-hover: #8E3270;
+    --on-primary: #FFFFFF;
+    --highlight: #FFE3F1;
+    --main-bg: #FFF7FB;
+}
+
+body[data-theme='chinese-pearls'] {
+    --bg: #111424;
+    --panel: #171A2F;
+    --surface: #171A2F;
+    --surface-2: #1D2140;
+    --border: #2E3470;
+    --text: #F6F3FF;
+    --muted: #D8D4E8;
+    --accent: #AA74A0;
+    --primary: #4A55B3;
+    --primary-hover: #5A64C4;
+    --on-primary: #FFFFFF;
+    --highlight: #E2C99E;
+    --main-bg: #111424;
+}
+
+body[data-theme='mother-of-dragons'] {
+    --bg: #070A14;
+    --panel: #0E1326;
+    --surface: #0E1326;
+    --surface-2: #141B33;
+    --border: #242E55;
+    --text: #FDF3EB;
+    --muted: #D3C9C6;
+    --accent: #932549;
+    --primary: #5B2A63;
+    --primary-hover: #6B3475;
+    --on-primary: #FFFFFF;
+    --highlight: #E2C99E;
+    --main-bg: #070A14;
+}
+
+body[data-theme='desert'] {
+    --bg: #1E1A13;
+    --panel: #272116;
+    --surface: #272116;
+    --surface-2: #312A1C;
+    --border: #433825;
+    --text: #FBF6EE;
+    --muted: #D9D0C4;
+    --accent: #ECC481;
+    --primary: #A24D31;
+    --primary-hover: #B35A3B;
+    --on-primary: #FFFFFF;
+    --highlight: #9E895F;
+    --main-bg: #1E1A13;
+}
+
 /* Final theme-driven overrides to ensure components inherit palette variables */
 .tool-tab,
 .tool-pin,
