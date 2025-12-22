@@ -52,24 +52,14 @@
     font-weight: 500;
 }
 
+/* Inputs/selects inherit look from UI Foundation; keep sizing only */
 .form-group input,
 .form-group select {
     width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
     font-family: inherit;
 }
 
-.form-group input:focus,
-.form-group select:focus {
-    outline: none;
-    border-color: rgba(139, 92, 246, 0.6);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-}
+/* Focus states provided by UI Foundation */
 
 .form-actions {
     display: flex;

@@ -150,14 +150,7 @@ body {
     font: 18px/1.65 system-ui, Segoe UI, Roboto, Inter, Helvetica, Arial
 }
 
-a {
-    color: var(--link);
-    text-decoration: none
-}
-
-a:hover {
-    text-decoration: underline
-}
+/* Anchor look owned by UI Foundation in components.css */
 
 .layout {
     display: grid;
@@ -508,14 +501,7 @@ body.left-collapsed .left {
     min-width: 400px
 }
 
-.search input {
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--text)
-}
+/* Search input base owned by components.css UI Foundation */
 
 .tree ul {
     list-style: none;
@@ -865,29 +851,7 @@ body[data-theme='light'] .tag-planning {
 }
 
 /* Light mode UI controls */
-body[data-theme='light'] .chip {
-    background: #ffffff;
-    color: #374151;
-    border-color: #e5e7eb
-}
-
-body[data-theme='light'] .chip.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: transparent
-}
-
-body[data-theme='light'] .drawer-tab {
-    background: #f3f4f6;
-    color: #374151;
-    border-color: #e5e7eb
-}
-
-body[data-theme='light'] .search input {
-    background: #ffffff;
-    color: #0b0d12;
-    border-color: #e5e7eb
-}
+/* Light mode chip/search overrides centralized in theme.css */
 
 body[data-theme='light'] code,
 body[data-theme='light'] pre {
@@ -909,17 +873,7 @@ body[data-theme='light'] .hovercard {
     border-color: #e5e7eb
 }
 
-body[data-theme='light'] .todo-input {
-    background: #ffffff;
-    color: #0b0d12;
-    border-color: #e5e7eb
-}
-
-body[data-theme='light'] .todo-add {
-    background: #ffffff;
-    color: #374151;
-    border-color: #e5e7eb
-}
+/* Light mode todo overrides centralized in theme.css */
 
 /* Additional themes (CSS variable overrides) */
 body[data-theme='auburn-linen'] {
@@ -1032,68 +986,13 @@ body[data-theme='desert'] {
 .layout .resizer { cursor: pointer; }
 .layout .resizer:active { cursor: col-resize; }
 
-/* Final theme-driven overrides to ensure components inherit palette variables */
-.tool-tab,
-.tool-pin,
-.tool-tab,
-.tool-pin,
-.delete-page-btn,
-.right .drawer-handle .chip,
-.left .drawer-handle .chip,
-.todo-add,
-.todo-input,
-.graph-panel,
-.card,
-.components {
-    background: var(--panel) !important;
-    color: var(--text) !important;
-    border-color: var(--border) !important;
-}
-
-/* Ensure top toolbar chips use theme text color */
-.toolbar .chip,
-.top .chip {
-    color: var(--text) !important;
-    background: transparent !important;
-    border-color: var(--border) !important;
-}
-
-.tool-tab {
-    background: var(--panel) !important;
-    color: var(--muted) !important;
-}
-
-.tool-tab.active,
-.tool-pin.active,
-.chip.active {
-    background: var(--accent) !important;
-    color: var(--text) !important;
-    border-color: transparent !important;
-}
-
-.todo-input {
-    background: var(--panel) !important;
-    color: var(--text) !important;
-    border-color: var(--border) !important;
-}
-
-.todo-add {
-    background: var(--panel) !important;
-    color: var(--muted) !important;
-    border-color: var(--border) !important;
-}
-
-.todo-add:hover {
-    background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-    color: var(--text) !important;
-}
-
-/* Make sure toolbar icons use currentColor */
+/* Final theme-driven overrides removed; components inherit from UI Foundation.
+   Keep icon color behavior here without !important (foundation already handles most). */
 .toolbar svg,
 .drawer-handle svg,
 .chip svg {
-    fill: currentColor !important;
-    stroke: currentColor !important;
+    fill: currentColor;
+    stroke: currentColor;
 }
 
 body[data-theme='light'] .todo-item {
@@ -1910,26 +1809,7 @@ body[data-theme='light'] .page-header::after {
     display: block
 }
 
-.nav-item {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    padding: 8px 10px;
-    border-radius: 10px;
-    color: var(--text);
-    text-decoration: none;
-    border: 1px solid transparent;
-    transition: background-color .15s ease
-}
-
-.nav-item:hover {
-    background: none
-}
-
-/* Color coding on hover for menu items by section */
-.left details.f-pc .nav-item:hover {
-    background-image: linear-gradient(90deg, rgba(34, 211, 238, .5) 0%, rgba(34, 211, 238, .18) 28%, rgba(34, 211, 238, 0) 70%)
-}
+/* Nav item primitives owned by sidebar.css */
 
 /* Resizers for side panels */
 .resizer {
@@ -1953,17 +1833,7 @@ body[data-theme='light'] .page-header::after {
     background: rgba(255, 255, 255, 0.06)
 }
 
-.left details.f-npc .nav-item:hover {
-    background-image: linear-gradient(90deg, rgba(244, 114, 182, .5) 0%, rgba(244, 114, 182, .18) 28%, rgba(244, 114, 182, 0) 70%)
-}
-
-.left details.f-location .nav-item:hover {
-    background-image: linear-gradient(90deg, rgba(163, 230, 53, .5) 0%, rgba(163, 230, 53, .18) 28%, rgba(163, 230, 53, 0) 70%)
-}
-
-.left details.f-arc .nav-item:hover {
-    background-image: linear-gradient(90deg, rgba(245, 158, 11, .5) 0%, rgba(245, 158, 11, .18) 28%, rgba(245, 158, 11, 0) 70%)
-}
+/* Section hover gradients owned by sidebar.css */
 
 /* Color coding on hover for folder (summary) rows */
 .left details.f-pc>summary.nav-label:hover {
@@ -1982,9 +1852,7 @@ body[data-theme='light'] .page-header::after {
     background-image: linear-gradient(90deg, rgba(245, 158, 11, .5) 0%, rgba(245, 158, 11, .18) 28%, rgba(245, 158, 11, 0) 70%)
 }
 
-body[data-theme='light'] .nav-item:hover {
-    background: none
-}
+/* Light theme nav hover owned by sidebar.css */
 
 .nav-icon {
     width: 18px;
@@ -1996,15 +1864,7 @@ body[data-theme='light'] .nav-item:hover {
     letter-spacing: .2px
 }
 
-.nav-item.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: transparent
-}
-
-.nav-item.active .nav-icon {
-    opacity: 1
-}
+/* Active nav state owned by sidebar.css */
 
 .nav-details {
     margin: 6px 0

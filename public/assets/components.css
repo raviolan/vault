@@ -56,28 +56,66 @@
  * Source of truth for base form controls and buttons
  * - Low-specificity via :where(...) to avoid selector wars
  * - Derives from existing theme tokens (see style.css/theme.css)
+ *
+ * Audit summary (new owners & deconflicts):
+ * - Primitives owner: public/assets/components.css (inputs, selects, textareas, buttons, chips)
+ * - Duplicates removed/narrowed:
+ *   - Global .chip/.search/.nav-item/.tool-tab overrides pruned from style.css
+ *   - Modal form field look delegated to foundation (modal.css keeps layout only)
+ * - Hardcoded colors: replaced with theme vars or derived tokens below
+ * - Themes preserved: color-scheme set to match light/dark themes; no DOM or API changes
  */
 
 /* Control tokens (derived, minimal) */
 :root {
-    /* Backgrounds */
-    --control-bg: var(--panel);
-    --control-bg-2: var(--surface-2, color-mix(in srgb, var(--control-bg) 92%, var(--text) 8%));
-    --control-bg-hover: color-mix(in srgb, var(--accent) 8%, var(--control-bg));
-    --control-bg-active: color-mix(in srgb, var(--accent) 12%, var(--control-bg));
-    /* Borders & text */
-    --control-border: var(--border);
+    /* UI Foundation tokens (Apple-ish, calm) */
+    --ui-radius: var(--radius-6, 12px);
+    --ui-hairline: color-mix(in srgb, var(--border) 55%, transparent);
+    --ui-control-bg: var(--surface, var(--panel));
+    --ui-control-bg-hover: color-mix(in srgb, var(--surface-2, var(--ui-control-bg)) 12%, var(--ui-control-bg));
+    --ui-control-bg-active: color-mix(in srgb, var(--surface-2, var(--ui-control-bg)) 18%, var(--ui-control-bg));
+    --ui-control-border: var(--ui-hairline);
+    --ui-focus: color-mix(in srgb, var(--accent) 22%, transparent);
+    --ui-shadow-1: var(--shadow-2, 0 2px 6px rgba(0, 0, 0, 0.16));
+    --ui-row-hover: color-mix(in srgb, var(--accent) 6%, transparent);
+
+    /* Back-compat mappings for existing rules in this file */
+    --control-bg: var(--ui-control-bg);
+    --control-bg-2: var(--surface-2, color-mix(in srgb, var(--ui-control-bg) 92%, var(--text) 8%));
+    --control-bg-hover: var(--ui-control-bg-hover);
+    --control-bg-active: var(--ui-control-bg-active);
+    --control-border: var(--ui-control-border);
     --control-text: var(--text);
     --control-muted: var(--muted);
-    /* Shape & spacing */
-    --control-radius: var(--radius-4, 10px);
+    --control-radius: var(--ui-radius);
     --control-pad-y: var(--space-3, 8px);
     --control-pad-x: var(--space-4, 10px);
-    /* Focus */
     --focus-border: color-mix(in srgb, var(--accent) 60%, var(--border));
-    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 26%, transparent);
+    --focus-ring: 0 0 0 3px var(--ui-focus);
     --focus-ring-outer: 0 0 0 5px color-mix(in srgb, var(--accent) 12%, transparent);
+
+    /* Interactive/link tokens (derived from theme) */
+    --link:           color-mix(in srgb, var(--accent) 85%, var(--text) 15%);
+    --link-hover:     color-mix(in srgb, var(--accent) 92%, var(--text) 8%);
+    --link-underline: color-mix(in srgb, var(--accent) 35%, transparent);
+
+    /* Button foreground tokens */
+    --btn-fg: var(--text);
+    --btn-fg-muted: var(--muted);
+    --btn-primary-fg: var(--on-primary, color-mix(in srgb, var(--text) 92%, var(--accent) 8%));
 }
+
+/* Global anchors (low specificity, theme-driven) */
+:where(a) {
+    color: var(--link);
+    text-decoration-color: var(--link-underline);
+    text-underline-offset: 2px;
+    text-decoration-thickness: from-font;
+}
+
+:where(a:hover) { color: var(--link-hover); }
+:where(a:visited) { color: var(--link); }
+:where(a:focus-visible) { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 
 /* Base controls: inputs, selects, textareas */
 :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)),
@@ -129,8 +167,8 @@
 
 /* Base buttons (keep minimal to avoid stomping specialized icon buttons) */
 :where(button):not(.theme-swatch):not(.wysiwyg-btn):not(.modal-close):not(.todo-disclose):not(.todo-chevron):not(.fav-remove) {
-    background: var(--control-bg);
-    color: var(--control-text);
+    background: var(--control-bg-2, var(--ui-control-bg));
+    color: var(--btn-fg);
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius);
     padding: var(--control-pad-y) var(--control-pad-x);
@@ -154,17 +192,17 @@
 
 /* Button variants: align all usages (including modal actions) */
 :where(.btn-primary) {
-    background: var(--accent);
-    color: #fff;
-    border: 1px solid transparent;
+    background: var(--primary, var(--accent));
+    color: var(--btn-primary-fg);
+    border: 1px solid color-mix(in srgb, var(--primary, var(--accent)) 70%, var(--border));
 }
 
-:where(.btn-primary:hover) { background: color-mix(in srgb, var(--accent) 92%, #000); }
+:where(.btn-primary:hover) { background: var(--primary-hover, color-mix(in srgb, var(--primary, var(--accent)) 92%, var(--text) 8%)); }
 :where(.btn-primary:disabled) { opacity: .6; cursor: not-allowed; }
 
 :where(.btn-secondary) {
-    background: var(--control-bg);
-    color: var(--control-text);
+    background: var(--surface-2, var(--control-bg));
+    color: var(--btn-fg);
     border: 1px solid var(--control-border);
 }
 
@@ -178,6 +216,10 @@ body[data-theme='orchid-porcelain'] { color-scheme: light; }
 body[data-theme='chinese-pearls'],
 body[data-theme='mother-of-dragons'],
 body[data-theme='desert'] { color-scheme: dark; }
+
+/* Native checkbox/radio tinting */
+input[type="checkbox"],
+input[type="radio"] { accent-color: var(--accent); }
 
 /* Chips / pills: single source of truth */
 /* UI Components and Controls */
@@ -311,9 +353,9 @@ h4 {
 
 .chip {
     padding: 4px 8px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--panel);
+    border: 1px solid var(--ui-hairline);
+    border-radius: var(--radius-6);
+    background: var(--ui-control-bg);
     color: var(--muted);
     cursor: pointer
 }
@@ -332,8 +374,8 @@ h4 {
 }
 
 .tool-tab {
-    border: 1px solid var(--border);
-    background: var(--panel);
+    border: 1px solid var(--ui-hairline);
+    background: var(--ui-control-bg);
     color: var(--muted);
     border-radius: 8px;
     padding: 4px 8px;
@@ -842,8 +884,8 @@ h4 {
 }
 
 .modal-backdrop .modal-close {
-    border: 1px solid var(--border);
-    background: #10131a;
+    border: 1px solid var(--ui-hairline);
+    background: var(--ui-control-bg);
     color: var(--muted);
     border-radius: var(--radius-4);
     padding: var(--space-2) var(--space-4);
