@@ -190,13 +190,66 @@
     text-overflow: ellipsis;
     background: none;
     border-left: 3px solid transparent;
-    /* Divider line for all but first */
+}
+
+/* Compact collapsed spacing without affecting expanded readability */
+.nav-details:not([open]) > summary.nav-label {
+    margin-top: 8px;
+    margin-bottom: 2px;
+    padding-top: 10px;
+    padding-bottom: 6px;
 }
 
 .nav-details>summary {
     position: sticky;
     top: 0;
     background: var(--panel)
+}
+
+/* Positioning context so .nav-open-link (now sibling of summary) can overlay header */
+.nav-details { position: relative; }
+
+/* Per-section accent mapping via data-section (RGB for consistent gradient) */
+.left details[data-section="characters"] { --section-rgb: 34, 211, 238; }
+.left details[data-section="npcs"] { --section-rgb: 244, 114, 182; }
+.left details[data-section="world"] { --section-rgb: 163, 230, 53; }
+.left details[data-section="arcs"] { --section-rgb: 245, 158, 11; }
+.left details[data-section="campaign"] { --section-rgb: 148, 163, 184; }
+.left details[data-section="tools"] { --section-rgb: 148, 163, 184; }
+.left details[data-section="other"] { --section-rgb: 148, 163, 184; }
+
+/* Reliable hover gradient for folder summary and items */
+.left details[data-section] > summary.nav-label:hover {
+    background-image: linear-gradient(90deg,
+            rgba(var(--section-rgb, 148, 163, 184), 0.45) 0%,
+            rgba(var(--section-rgb, 148, 163, 184), 0.18) 28%,
+            rgba(var(--section-rgb, 148, 163, 184), 0) 70%);
+}
+.left details[data-section] .nav-item:hover {
+    background-image: linear-gradient(90deg,
+            rgba(var(--section-rgb, 148, 163, 184), 0.45) 0%,
+            rgba(var(--section-rgb, 148, 163, 184), 0.18) 28%,
+            rgba(var(--section-rgb, 148, 163, 184), 0) 70%);
+}
+
+/* Right-side landing link inside header (split click zones) */
+.nav-open-link {
+    position: absolute;
+    right: 8px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 6px 0 10px;
+    color: var(--muted);
+    text-decoration: none !important;
+    border-radius: 8px;
+    opacity: .92;
+    z-index: 2;
+}
+.nav-open-link:hover {
+    color: var(--text);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--section-accent, var(--accent)) 18%, transparent) 0%, transparent 95%);
 }
 
 .nav-label .nav-icon {
@@ -228,6 +281,51 @@
     display: none;
     transform: none
 }
+
+/* --- Sidebar spacing + grouping normalization --- */
+/* A) Tight, predictable stack spacing for sections */
+/* Remove margins from section blocks and headers; control spacing via siblings */
+.left .nav-details { margin: 0; }
+.left .nav-details > summary.nav-label { margin: 0; padding: 8px 10px; }
+
+/* Kill legacy divider spacing on headers inside the left nav */
+.left .nav-label:not(:first-child) { border-top: none; margin-top: 0; padding-top: 0; }
+
+/* Single source of vertical spacing between sections */
+.left .nav-details + .nav-details { margin-top: 6px; }
+/* Slightly tighter spacing when both neighbors are collapsed */
+.left .nav-details:not([open]) + .nav-details:not([open]) { margin-top: 4px; }
+
+/* B) Visual grouping for expanded sections */
+.left .nav-details[open] {
+  border-radius: 12px;
+  padding: 4px;
+  background: rgba(var(--section-rgb, 148, 163, 184), 0.06);
+  border: 1px solid rgba(var(--section-rgb, 148, 163, 184), 0.14);
+}
+
+.left .nav-details[open] > summary.nav-label {
+  background-color: rgba(var(--section-rgb, 148, 163, 184), 0.08);
+  border-radius: 10px;
+}
+
+/* Connect child items to their section with indent */
+.left .nav-details[open] .nav-item {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(var(--section-rgb, 148, 163, 184), 0.22);
+}
+
+/* --- Slightly larger sidebar typography --- */
+/* Increase sizes subtly without changing layout/behavior */
+.left .nav-item { font-size: 17px; }
+.left .nav-label { font-size: 13px; }
+#navFav .meta { font-size: 15px; }
+#navFav .fav-link,
+#navFav .fav-item > a { font-size: 16px; }
+
+/* Remove left rail on expanded children per request */
+.left .nav-details[open] .nav-item { border-left: 0; }
 
 .nav-list {
     list-style: none;

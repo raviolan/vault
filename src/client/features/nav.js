@@ -1,4 +1,5 @@
 import { $, escapeHtml } from '../lib/dom.js';
+import { navigate } from '../lib/router.js';
 import { fetchJson } from '../lib/http.js';
 import { getState } from '../lib/state.js';
 import { normalizeSections } from '../lib/sections.js';
@@ -34,6 +35,17 @@ export function sectionForType(type) {
   }
 }
 
+function sectionKey(label) {
+  const key = String(label || '').toLowerCase();
+  if (key.includes('npc')) return 'npcs';
+  if (key.includes('world') || key.includes('location')) return 'world';
+  if (key.includes('arc')) return 'arcs';
+  if (key.includes('tool')) return 'tools';
+  if (key.includes('campaign')) return 'campaign';
+  if (key.includes('char')) return 'characters';
+  return 'other';
+}
+
 export function renderNavSections(pages, navCfg) {
   const ul = $('#navSections');
   if (!ul) return;
@@ -51,15 +63,17 @@ export function renderNavSections(pages, navCfg) {
   for (const sec of sections) {
     const label = sec.label;
     const items = (bySection.get(label) || []).slice().sort((a,b) => a.title.localeCompare(b.title));
+    const key = sectionKey(label);
 
     const li = document.createElement('li');
     li.className = 'nav-section';
     li.innerHTML = `
-      <details class="nav-details" open>
-        <summary class="nav-label">
+      <details class="nav-details" data-section="${escapeHtml(key)}" open>
+        <summary class="nav-label nav-section-header">
           <span class="nav-icon">${escapeHtml(sec.icon || '')}</span>
           <span>${escapeHtml(label)}</span>
         </summary>
+        <a class="nav-open-link" href="/section/${encodeURIComponent(key)}" data-link title="Open ${escapeHtml(label)}">↗</a>
         <ul class="nav-list"></ul>
       </details>
     `;
@@ -72,6 +86,14 @@ export function renderNavSections(pages, navCfg) {
       </a>`;
       list.appendChild(item);
     }
+    // Prevent summary toggle when clicking the landing link
+    const openLink = li.querySelector('.nav-open-link');
+    if (openLink) openLink.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const href = openLink.getAttribute('href');
+      if (href) navigate(href);
+    });
     ul.appendChild(li);
   }
 }
@@ -79,7 +101,7 @@ export function renderNavSections(pages, navCfg) {
 export async function refreshNav() {
   const [pages, navCfg] = await Promise.all([loadPages(), loadNavConfig()]);
   renderNavSections(pages, navCfg);
-  // Append Tools section (core tools)
+  // Append Tools items into existing Tools section (avoid duplicate)
   try { renderToolsSection(); } catch {}
   // Append user sections (from user state)
   try { renderUserSections(pages); } catch {}
@@ -88,18 +110,25 @@ export async function refreshNav() {
 export function renderToolsSection() {
   const ul = $('#navSections');
   if (!ul) return;
-  const li = document.createElement('li');
-  li.className = 'nav-section';
-  li.innerHTML = `
-    <details class="nav-details" open>
-      <summary class="nav-label">
-        <span class="nav-icon">🧰</span>
-        <span>Tools</span>
-      </summary>
-      <ul class="nav-list"></ul>
-    </details>
-  `;
-  const list = li.querySelector('.nav-list');
+  // Find an existing Tools section rendered from nav config; if not present, create a plain one (no emoji)
+  let toolsDetails = ul.querySelector('details.nav-details[data-section="tools"]');
+  if (!toolsDetails) {
+    const li = document.createElement('li');
+    li.className = 'nav-section';
+    li.innerHTML = `
+      <details class="nav-details" data-section="tools" open>
+        <summary class="nav-label nav-section-header">
+          <span class="nav-icon"></span>
+          <span>Tools</span>
+        </summary>
+        <a class="nav-open-link" href="/section/tools" data-link title="Open Tools">↗</a>
+        <ul class="nav-list"></ul>
+      </details>
+    `;
+    ul.appendChild(li);
+    toolsDetails = li.querySelector('details.nav-details[data-section="tools"]');
+  }
+  const list = toolsDetails?.querySelector('.nav-list');
   for (const t of TOOLS) {
     const item = document.createElement('li');
     item.innerHTML = `<a class="nav-item" href="${t.path}" data-link>
@@ -107,7 +136,6 @@ export function renderToolsSection() {
     </a>`;
     list.appendChild(item);
   }
-  ul.appendChild(li);
 }
 
 export function renderUserSections(pages) {
@@ -118,11 +146,14 @@ export function renderUserSections(pages) {
   if (!sections.length) return;
   // Render each user section after existing ones
   for (const sec of sections) {
+    // Skip the special ENEMIES section from sidebar
+    const title = String(sec.title || '').trim();
+    if (title.toLowerCase() === 'enemies') continue;
     const li = document.createElement('li');
     li.className = 'nav-section';
     li.innerHTML = `
       <details class="nav-details" open>
-        <summary class="nav-label">
+        <summary class="nav-label nav-section-header">
           <span class="nav-icon">📁</span>
           <span>${escapeHtml(sec.title || 'Section')}</span>
         </summary>

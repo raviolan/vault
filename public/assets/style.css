@@ -252,6 +252,19 @@ body {
     min-height: 0;
 }
 
+/* Right panel tabs: add spacing and allow wrapping */
+.right-drawer-content .right-panel-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    row-gap: 6px;
+    padding: 6px 6px 10px 6px;
+}
+.right-drawer-content .right-panel-tabs .chip {
+    padding: 6px 10px;
+    line-height: 1.1;
+}
+
 /* Each right panel section (tab) fills available space when visible */
 .right-drawer-content .right-panel[hidden] {
     display: none;
@@ -281,6 +294,22 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+}
+
+/* To-Do header spacing + compact toolbar */
+.right-drawer-content [data-panel='todo'] h3.meta { margin: 0 0 6px 0; }
+.right-drawer-content [data-panel='todo'] #todoToggleCompleted {
+    margin: 0 0 8px 0 !important;
+}
+/* Add row: input grows, consistent gap */
+.right-drawer-content [data-panel='todo'] > .todo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.right-drawer-content [data-panel='todo'] > .todo-row > input {
+    flex: 1 1 auto;
 }
 
 .right-split {

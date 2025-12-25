@@ -6,6 +6,7 @@ import * as Dashboard from './routes/dashboard.js';
 import * as Tags from './routes/tags.js';
 import * as Session from './routes/session.js';
 import * as SettingsRoute from './routes/settings.js';
+import * as SectionRoute from './routes/section.js';
 import { renderPage, renderPageBySlug } from './routes/pages.js';
 import { renderNotFound } from './routes/system.js';
 import { installSearchPreview } from './features/searchPreview.js';
@@ -162,6 +163,11 @@ export async function boot() {
   route(/^\/settings\/?$/, () => {
     const outlet = document.getElementById('outlet');
     return SettingsRoute.render(outlet, {});
+  });
+  route(/^\/section\/([^\/]+)\/?$/, (ctx) => {
+    const outlet = document.getElementById('outlet');
+    const key = ctx.match?.[1] || '';
+    return SectionRoute.render(outlet, { key });
   });
   // Dedicated Weather app settings route
   route(/^\/apps\/weather\/settings\/?$/, () => {
