@@ -118,8 +118,14 @@ body[data-theme='orchid-porcelain'] {
     /* Improve placeholder color and opacity for inputs/textareas */
     :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check))::placeholder,
     :where(textarea)::placeholder {
-        color: color-mix(in srgb, var(--text) 72%, var(--muted) 28%) !important;
+        color: color-mix(in srgb, var(--text) 85%, var(--muted) 15%) !important;
         opacity: 1 !important;
+    }
+
+    /* Ensure input text uses full contrast in light themes */
+    :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check)),
+    :where(textarea) {
+        color: var(--text) !important;
     }
 
     /* Make Notepad placeholder more legible in light themes */
@@ -140,6 +146,20 @@ body[data-theme='orchid-porcelain'] {
     #settingsPanel input,
     #settingsRouteRoot input {
         color: var(--text) !important;
+    }
+
+    /* Strengthen select/dropdown readability in light themes */
+    :where(select) {
+        color: var(--text) !important;
+        background: var(--control-bg) !important;
+        border-color: var(--control-border) !important;
+    }
+    :where(select) option {
+        color: var(--text) !important;
+        background: var(--control-bg) !important;
+    }
+    :where(select) option[disabled] {
+        color: color-mix(in srgb, var(--text) 85%, var(--muted) 15%) !important;
     }
 }
 

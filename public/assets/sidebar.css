@@ -218,7 +218,14 @@
 .left details[data-section="tools"] { --section-rgb: 148, 163, 184; }
 .left details[data-section="other"] { --section-rgb: 148, 163, 184; }
 
-/* Reliable hover gradient for folder summary and items */
+/* Persistent left-side color marker on section headers */
+.left details[data-section] > summary.nav-label {
+    border-left-color: rgba(var(--section-rgb, 148, 163, 184), 0.85);
+    border-left-width: 4px;
+    border-left-style: solid;
+}
+
+/* Section header hover: show gradient while keeping the left marker */
 .left details[data-section] > summary.nav-label:hover {
     background-image: linear-gradient(90deg,
             rgba(var(--section-rgb, 148, 163, 184), 0.45) 0%,
@@ -232,25 +239,19 @@
             rgba(var(--section-rgb, 148, 163, 184), 0) 70%);
 }
 
-/* Right-side landing link inside header (split click zones) */
+/* Right-half clickable overlay inside the header for landing page */
 .nav-open-link {
     position: absolute;
-    right: 8px;
     top: 0;
     bottom: 0;
-    display: flex;
-    align-items: center;
-    padding: 0 6px 0 10px;
-    color: var(--muted);
+    left: 50%;
+    right: 0;
+    display: block;
+    color: transparent; /* remove visible arrow/icon */
     text-decoration: none !important;
-    border-radius: 8px;
-    opacity: .92;
     z-index: 2;
 }
-.nav-open-link:hover {
-    color: var(--text);
-    background: linear-gradient(90deg, color-mix(in srgb, var(--section-accent, var(--accent)) 18%, transparent) 0%, transparent 95%);
-}
+.nav-open-link:hover { background: none; }
 
 .nav-label .nav-icon {
     width: 18px;

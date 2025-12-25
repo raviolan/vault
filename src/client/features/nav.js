@@ -2,6 +2,7 @@ import { $, escapeHtml } from '../lib/dom.js';
 import { navigate } from '../lib/router.js';
 import { fetchJson } from '../lib/http.js';
 import { getState } from '../lib/state.js';
+import { getNavGroupsForSection } from './navGroups.js';
 import { normalizeSections } from '../lib/sections.js';
 import { TOOLS } from '../tools/index.js';
 
@@ -72,19 +73,79 @@ export function renderNavSections(pages, navCfg) {
         <summary class="nav-label nav-section-header">
           <span class="nav-icon">${escapeHtml(sec.icon || '')}</span>
           <span>${escapeHtml(label)}</span>
+          <a class="nav-open-link" href="/section/${encodeURIComponent(key)}" data-link title="Open ${escapeHtml(label)}" aria-label="Open ${escapeHtml(label)}"></a>
         </summary>
-        <a class="nav-open-link" href="/section/${encodeURIComponent(key)}" data-link title="Open ${escapeHtml(label)}">↗</a>
         <ul class="nav-list"></ul>
       </details>
     `;
     const list = li.querySelector('.nav-list');
-    for (const p of items) {
-      const item = document.createElement('li');
-      const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
-      item.innerHTML = `<a class="nav-item" href="${href}" data-link>
-        <span class="nav-text">${escapeHtml(p.title)}</span>
-      </a>`;
-      list.appendChild(item);
+    // If user has groups for this section, render grouped subsections
+    const { groups, pageToGroup } = getNavGroupsForSection(key);
+    const hasGroups = Array.isArray(groups) && groups.length > 0;
+    if (hasGroups) {
+      // Group pages by groupId, keep original sort order from items
+      const byGroup = new Map(groups.map(g => [g.id, []]));
+      const ungrouped = [];
+      for (const p of items) {
+        const gid = pageToGroup && pageToGroup[p.id] ? pageToGroup[p.id] : null;
+        if (gid && byGroup.has(gid)) byGroup.get(gid).push(p);
+        else ungrouped.push(p);
+      }
+      // Render each group as nested details
+      for (const g of groups) {
+        const gi = document.createElement('li');
+        const count = (byGroup.get(g.id) || []).length;
+        gi.innerHTML = `
+          <details class="nav-details" open>
+            <summary class="nav-label">
+              <span>${escapeHtml(g.name || 'Group')}</span>
+              <span class="meta" style="margin-left:auto;">${count}</span>
+            </summary>
+            <ul class="nav-list"></ul>
+          </details>
+        `;
+        const glist = gi.querySelector('.nav-list');
+        for (const p of (byGroup.get(g.id) || [])) {
+          const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+          const item = document.createElement('li');
+          item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+            <span class="nav-text">${escapeHtml(p.title)}</span>
+          </a>`;
+          glist.appendChild(item);
+        }
+        list.appendChild(gi);
+      }
+      // Ungrouped at bottom (collapsible, default open)
+      const ui = document.createElement('li');
+      ui.innerHTML = `
+        <details class="nav-details" open>
+          <summary class="nav-label">
+            <span>Ungrouped</span>
+            <span class="meta" style="margin-left:auto;">${ungrouped.length}</span>
+          </summary>
+          <ul class="nav-list"></ul>
+        </details>
+      `;
+      const ulist = ui.querySelector('.nav-list');
+      for (const p of ungrouped) {
+        const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+        const item = document.createElement('li');
+        item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+          <span class="nav-text">${escapeHtml(p.title)}</span>
+        </a>`;
+        ulist.appendChild(item);
+      }
+      list.appendChild(ui);
+    } else {
+      // Default rendering (no groups)
+      for (const p of items) {
+        const item = document.createElement('li');
+        const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+        item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+          <span class="nav-text">${escapeHtml(p.title)}</span>
+        </a>`;
+        list.appendChild(item);
+      }
     }
     // Prevent summary toggle when clicking the landing link
     const openLink = li.querySelector('.nav-open-link');
@@ -120,8 +181,8 @@ export function renderToolsSection() {
         <summary class="nav-label nav-section-header">
           <span class="nav-icon"></span>
           <span>Tools</span>
+          <a class="nav-open-link" href="/section/tools" data-link title="Open Tools" aria-label="Open Tools"></a>
         </summary>
-        <a class="nav-open-link" href="/section/tools" data-link title="Open Tools">↗</a>
         <ul class="nav-list"></ul>
       </details>
     `;
