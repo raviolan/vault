@@ -227,6 +227,29 @@ body {
     background: var(--main-bg)
 }
 
+/* Edit-mode: ensure the main scroll container can actually scroll fully
+   by allowing it to shrink within the grid and adding comfortable bottom padding. */
+body[data-mode='edit'] .main {
+    /* Allow grid child to shrink so overflow can scroll */
+    min-height: 0;
+    /* Prefer explicit vertical scroll property */
+    overflow-y: auto;
+    /* Smooth scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Space after the last block so it doesn't feel cut off */
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Editor add-controls footer */
+body[data-mode='edit'] .editor-add-controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+}
+body[data-mode='edit'] .editor-add-controls .chip {
+    padding: 6px 10px;
+}
+
 .right {
     grid-area: right;
     overflow-y: auto;
@@ -1094,6 +1117,13 @@ body[data-mode='edit'] .main>#outlet>* {
     margin-inline: auto;
 }
 
+/* Edit-mode: prevent intermediate wrappers from imposing min-content height
+   which can clamp overflow. */
+body[data-mode='edit'] .main > #outlet,
+body[data-mode='edit'] .main > #outlet > * {
+    min-height: 0;
+}
+
 /* Reading column width for page bodies (edit-mode only) */
 body[data-mode='edit'] .main .page .page-body {
     max-width: var(--content-measure);
@@ -1191,7 +1221,7 @@ body[data-mode='edit'] .page .page-edit-meta-footer {
     margin: 10px auto 0;
 }
 
-body[data-mode='edit'] .page .page-body p {
+.page .page-body p {
     margin: 0 0 0.9em 0;
     white-space: pre-wrap;
     word-break: break-word;

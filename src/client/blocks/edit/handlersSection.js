@@ -16,6 +16,24 @@ export function bindSectionTitleHandlers({ page, block, inputEl }) {
     const { renderBlocksEdit } = await import('./render.js');
     const { focusBlockInput } = await import('./focus.js');
 
+    // Option/Alt+Enter — explicit sibling after this section (paragraph or new section with Shift)
+    if ((e.key === 'Enter') && e.altKey && !e.ctrlKey && !e.metaKey && !e.repeat) {
+      e.preventDefault();
+      const isSection = !!e.shiftKey;
+      const payload = isSection
+        ? { type: 'section', parentId: block.parentId ?? null, sort: Number(block.sort || 0) + 1, props: { collapsed: false }, content: { title: '' } }
+        : { type: 'paragraph', parentId: block.parentId ?? null, sort: Number(block.sort || 0) + 1, props: {}, content: { text: '' } };
+      try {
+        const created = await apiCreateBlock(page.id, payload);
+        setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+        await refreshBlocksFromServer(page.id);
+        const container = document.getElementById('pageBlocks');
+        renderBlocksEdit(container, page, getCurrentPageBlocks());
+        focusBlockInput(created.id);
+      } catch (err) { console.error('Failed to add sibling from section title', err); }
+      return;
+    }
+
     if (e.key === 'Enter' && !(e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
       e.preventDefault();
       const kids = getCurrentPageBlocks().filter(x => (x.parentId || null) === block.id).sort((a, c) => a.sort - c.sort);

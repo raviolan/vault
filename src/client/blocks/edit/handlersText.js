@@ -120,14 +120,31 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
     if (e.key === 'Escape') { hideSlashMenuPublic(); return; }
     // Bold/Italic shortcuts
     if (handleFormatShortcutKeydown(e, inputEl)) return;
-    if (e.key === 'Enter' && !(e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
-      if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
-        e.preventDefault();
-        const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: block.parentId ?? null, sort: Number(block.sort || 0) + 1, props: {}, content: { text: '' } });
+
+    // Option/Alt + Enter — explicit new block after current
+    if ((e.key === 'Enter') && e.altKey && !e.ctrlKey && !e.metaKey && !e.repeat) {
+      e.preventDefault();
+      const isSection = !!e.shiftKey; // Option+Shift+Enter => create Section
+      const payload = isSection
+        ? { type: 'section', parentId: block.parentId ?? null, sort: Number(block.sort || 0) + 1, props: { collapsed: false }, content: { title: '' } }
+        : { type: 'paragraph', parentId: block.parentId ?? null, sort: Number(block.sort || 0) + 1, props: {}, content: { text: '' } };
+      try {
+        const created = await apiCreateBlock(page.id, payload);
         setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
         render();
-        focus(created.id);
+        focus(created.id); // For section, focuses the title input
         await refreshBlocksFromServer(page.id);
+      } catch (err) {
+        console.error('Failed to create block via Option+Enter', err);
+      }
+      return;
+    }
+
+    // Plain Enter on textarea — insert newline inside current block (do not split)
+    if (e.key === 'Enter' && !(e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
+      if (inputEl.tagName === 'TEXTAREA') {
+        // Allow default newline insertion; autosize will grow height
+        return;
       }
     } else if (e.key === 'Backspace' && (inputEl.value || '').trim() === '') {
       if (block.type === 'paragraph') {

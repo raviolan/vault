@@ -11,7 +11,8 @@ export function autosizeTextarea(el) {
     try {
       el.style.height = `${el.scrollHeight}px`;
     } finally {
-      el.style.overflowY = prevOverflow || 'hidden';
+      // Restore to prior value or allow native scroll if constrained
+      el.style.overflowY = prevOverflow || 'auto';
     }
   });
 }
@@ -28,4 +29,3 @@ export function bindAutosizeTextarea(el) {
     try { el.removeEventListener('paste', handler); } catch {}
   };
 }
-

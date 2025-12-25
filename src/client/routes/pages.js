@@ -4,6 +4,7 @@ import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { renderBlocksEdit } from '../blocks/edit.js';
 import { setUiMode } from '../lib/uiMode.js';
+import { autosizeTextarea } from '../lib/autosizeTextarea.js';
 import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
 import { openDeleteModal } from '../features/modals.js';
 import { renderBacklinksPanel } from '../features/backlinks.js';
@@ -52,17 +53,77 @@ export async function renderPage({ match }) {
       const cheat = document.createElement('div');
       cheat.className = 'page-cheatsheet';
       cheat.innerHTML = `
-        <div class="meta">Cheat Sheet — #Tags (e.g. #tavern #npc), [[Wikilinks]] (e.g. [[Bent Willow Tavern]]), Ctrl+Enter saves & exits</div>
+        <div class="meta">Cheat Sheet — #Tags (e.g. #tavern #npc), [[Wikilinks]] (e.g. [[Bent Willow Tavern]]), Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>
       `;
       editorWrap.appendChild(cheat);
       if (tagsEl) editorWrap.appendChild(tagsEl);
       const bodyEl = article.querySelector('#pageBlocks');
       if (bodyEl) editorWrap.appendChild(bodyEl);
+      // Add editor add-controls footer (edit-mode only)
+      const controls = document.createElement('div');
+      controls.className = 'editor-add-controls';
+      controls.innerHTML = `
+        <button type="button" class="chip" id="btnAddBlock">+ Add block (⌥⏎)</button>
+        <button type="button" class="chip" id="btnAddSection">+ Section (⌥⇧⏎)</button>
+      `;
+      editorWrap.appendChild(controls);
+      // Bind add buttons
+      const getFocusedContext = () => {
+        const active = document.activeElement;
+        const blockEl = active?.closest?.('.block[data-block-id]');
+        if (blockEl) {
+          const id = blockEl.getAttribute('data-block-id');
+          const all = getCurrentPageBlocks();
+          const cur = all.find(x => String(x.id) === String(id));
+          if (cur) return { parentId: cur.parentId ?? null, sort: Number(cur.sort || 0) };
+        }
+        // Fallback: append to end of top-level
+        const roots = (getCurrentPageBlocks() || []).filter(x => (x.parentId || null) === null).sort((a,b) => a.sort - b.sort);
+        const last = roots[roots.length - 1] || null;
+        return { parentId: null, sort: last ? Number(last.sort || 0) : -1 };
+      };
+      const doCreate = async (type) => {
+        try {
+          const { apiCreateBlock, refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
+          const { renderBlocksEdit } = await import('../blocks/edit/render.js');
+          const { focusBlockInput } = await import('../blocks/edit/focus.js');
+          const ctx = getFocusedContext();
+          const payload = (type === 'section')
+            ? { type: 'section', parentId: ctx.parentId, sort: ctx.sort + 1, props: { collapsed: false }, content: { title: '' } }
+            : { type: 'paragraph', parentId: ctx.parentId, sort: ctx.sort + 1, props: {}, content: { text: '' } };
+          const created = await apiCreateBlock(page.id, payload);
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+          await refreshBlocksFromServer(page.id);
+          renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+          focusBlockInput(created.id);
+        } catch (e) { console.error('Failed to create block from add-controls', e); }
+      };
+      const btnAddBlock = controls.querySelector('#btnAddBlock');
+      const btnAddSection = controls.querySelector('#btnAddSection');
+      if (btnAddBlock) btnAddBlock.addEventListener('click', () => void doCreate('paragraph'));
+      if (btnAddSection) btnAddSection.addEventListener('click', () => void doCreate('section'));
       // Move meta to bottom as footer (outside card)
       if (metaEl) {
         metaEl.classList.add('page-edit-meta-footer');
         editorWrap.after(metaEl);
       }
+    } catch {}
+
+    // One-time autosize pass for all textareas, and keep them in sync on resize
+    try {
+      const autoAll = () => {
+        if (document.body.dataset.mode !== 'edit') return;
+        document.querySelectorAll('textarea.block-input').forEach((el) => {
+          try { autosizeTextarea(el); } catch {}
+        });
+      };
+      // Run after DOM settles
+      requestAnimationFrame(autoAll);
+      // Install and remember a resize handler for cleanup
+      const onResize = () => autoAll();
+      window.addEventListener('resize', onResize);
+      // Attach a marker for cleanup on route change
+      outlet.__editResizeHandler = onResize;
     } catch {}
   } else {
     setUiMode(null);
@@ -104,7 +165,17 @@ export async function renderPage({ match }) {
   }
 
   // Cleanup on route change: ensure we exit edit mode styles/indicator
-  return () => { try { setUiMode(null); } catch {} try { unmountSaveIndicator(); } catch {} };
+  return () => {
+    try { setUiMode(null); } catch {}
+    try { unmountSaveIndicator(); } catch {}
+    // Cleanup autosize resize handler if present
+    try {
+      if (outlet.__editResizeHandler) {
+        window.removeEventListener('resize', outlet.__editResizeHandler);
+        delete outlet.__editResizeHandler;
+      }
+    } catch {}
+  };
 }
 
 export async function renderPageBySlug({ match }) {
@@ -142,11 +213,66 @@ export async function renderPageBySlug({ match }) {
       if (titleEl) editorWrap.appendChild(titleEl);
       const cheat = document.createElement('div');
       cheat.className = 'page-cheatsheet';
-      cheat.innerHTML = `<div class="meta">Cheat Sheet — #Tags, [[Wikilinks]], Ctrl+Enter saves & exits</div>`;
+      cheat.innerHTML = `<div class="meta">Cheat Sheet — #Tags, [[Wikilinks]], Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>`;
       editorWrap.appendChild(cheat);
       const bodyEl = article.querySelector('#pageBlocks');
       if (bodyEl) editorWrap.appendChild(bodyEl);
+      // Add editor add-controls footer (edit-mode only) for slug route
+      const controls = document.createElement('div');
+      controls.className = 'editor-add-controls';
+      controls.innerHTML = `
+        <button type="button" class="chip" id="btnAddBlock">+ Add block (⌥⏎)</button>
+        <button type="button" class="chip" id="btnAddSection">+ Section (⌥⇧⏎)</button>
+      `;
+      editorWrap.appendChild(controls);
+      const getFocusedContext = () => {
+        const active = document.activeElement;
+        const blockEl = active?.closest?.('.block[data-block-id]');
+        if (blockEl) {
+          const id = blockEl.getAttribute('data-block-id');
+          const all = getCurrentPageBlocks();
+          const cur = all.find(x => String(x.id) === String(id));
+          if (cur) return { parentId: cur.parentId ?? null, sort: Number(cur.sort || 0) };
+        }
+        const roots = (getCurrentPageBlocks() || []).filter(x => (x.parentId || null) === null).sort((a,b) => a.sort - b.sort);
+        const last = roots[roots.length - 1] || null;
+        return { parentId: null, sort: last ? Number(last.sort || 0) : -1 };
+      };
+      const doCreate = async (type) => {
+        try {
+          const { apiCreateBlock, refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
+          const { renderBlocksEdit } = await import('../blocks/edit/render.js');
+          const { focusBlockInput } = await import('../blocks/edit/focus.js');
+          const ctx = getFocusedContext();
+          const payload = (type === 'section')
+            ? { type: 'section', parentId: ctx.parentId, sort: ctx.sort + 1, props: { collapsed: false }, content: { title: '' } }
+            : { type: 'paragraph', parentId: ctx.parentId, sort: ctx.sort + 1, props: {}, content: { text: '' } };
+          const created = await apiCreateBlock(page.id, payload);
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+          await refreshBlocksFromServer(page.id);
+          renderBlocksEdit(bodyEl, page, getCurrentPageBlocks());
+          focusBlockInput(created.id);
+        } catch (e) { console.error('Failed to create block from add-controls', e); }
+      };
+      const btnAddBlock = controls.querySelector('#btnAddBlock');
+      const btnAddSection = controls.querySelector('#btnAddSection');
+      if (btnAddBlock) btnAddBlock.addEventListener('click', () => void doCreate('paragraph'));
+      if (btnAddSection) btnAddSection.addEventListener('click', () => void doCreate('section'));
       if (metaEl) { metaEl.classList.add('page-edit-meta-footer'); editorWrap.after(metaEl); }
+    } catch {}
+
+    // One-time autosize pass and resize handler as in id route
+    try {
+      const autoAll = () => {
+        if (document.body.dataset.mode !== 'edit') return;
+        document.querySelectorAll('textarea.block-input').forEach((el) => {
+          try { autosizeTextarea(el); } catch {}
+        });
+      };
+      requestAnimationFrame(autoAll);
+      const onResize = () => autoAll();
+      window.addEventListener('resize', onResize);
+      outlet.__editResizeHandler = onResize;
     } catch {}
   } else {
     setUiMode(null);
@@ -185,7 +311,16 @@ export async function renderPageBySlug({ match }) {
   void renderBacklinksPanel(page.id);
 
   // Cleanup on route change
-  return () => { try { setUiMode(null); } catch {} try { unmountSaveIndicator(); } catch {} };
+  return () => {
+    try { setUiMode(null); } catch {}
+    try { unmountSaveIndicator(); } catch {}
+    try {
+      if (outlet.__editResizeHandler) {
+        window.removeEventListener('resize', outlet.__editResizeHandler);
+        delete outlet.__editResizeHandler;
+      }
+    } catch {}
+  };
 }
 
 export function enablePageTitleEdit(page) {
