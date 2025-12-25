@@ -364,6 +364,7 @@ code {
     padding: var(--space-1) var(--space-2)
 }
 
+/* Base type scale for components (light touch; defer page overrides) */
 h1,
 h2,
 h3,

@@ -20,10 +20,12 @@ export async function renderPage({ match }) {
   const outlet = document.getElementById('outlet');
   if (!outlet) return;
 
+  const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
+  const typeLabel = TYPE_LABELS[page.type] || page.type;
   outlet.innerHTML = `
     <article class="page">
       <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
-      <p class="meta">Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <p class="meta">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
       <div id="pageTags" class="toolbar" style="margin: 6px 0;"></div>
       <div class="page-body" id="pageBlocks"></div>
     </article>
@@ -188,10 +190,12 @@ export async function renderPageBySlug({ match }) {
   const outlet = document.getElementById('outlet');
   if (!outlet) return;
 
+  const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
+  const typeLabel = TYPE_LABELS[page.type] || page.type;
   outlet.innerHTML = `
     <article class="page">
       <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
-      <p class="meta">Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <p class="meta">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
       <div class="page-body" id="pageBlocks"></div>
     </article>
   `;
@@ -347,6 +351,7 @@ export function enablePageTitleEdit(page) {
     const types = [
       { v: 'note', t: 'Note' },
       { v: 'npc', t: 'NPC' },
+      { v: 'character', t: 'Character' },
       { v: 'location', t: 'Location' },
       { v: 'arc', t: 'Arc' },
       { v: 'tool', t: 'Tool' },

@@ -1,6 +1,9 @@
 import { sendJson, readBody } from '../lib/http.js';
 import { badRequest, notFound } from '../lib/errors.js';
 
+// Centralized allowlist for page types
+const ALLOWED_TYPES = new Set(['note', 'npc', 'character', 'location', 'arc', 'tool']);
+
 export function routePages(req, res, ctx) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname } = url;
@@ -16,7 +19,9 @@ export function routePages(req, res, ctx) {
     return (async () => {
       const body = JSON.parse(await readBody(req) || '{}');
       if (!body.title) return badRequest(res, 'title required'), true;
-      const page = ctx.dbCreatePage(ctx.db, { title: String(body.title), type: String(body.type || 'note') });
+      const type = String(body.type || 'note');
+      if (!ALLOWED_TYPES.has(type)) { badRequest(res, 'invalid type'); return true; }
+      const page = ctx.dbCreatePage(ctx.db, { title: String(body.title), type });
       sendJson(res, 201, page);
       return true;
     })();
@@ -29,6 +34,7 @@ export function routePages(req, res, ctx) {
       const title = String(body.title || '').trim();
       const type = String(body.type || 'note');
       if (!title) return badRequest(res, 'title required'), true;
+      if (!ALLOWED_TYPES.has(type)) { badRequest(res, 'invalid type'); return true; }
       const row = ctx.db.prepare('SELECT id FROM pages WHERE title = ?').get(title);
       if (row) {
         const page = ctx.dbGetPageWithBlocks(ctx.db, row.id);
@@ -68,8 +74,7 @@ export function routePages(req, res, ctx) {
         // Validate optional type field if provided
         if (body.type !== undefined) {
           const t = String(body.type);
-          const allowed = new Set(['note', 'npc', 'location', 'arc', 'tool']);
-          if (!allowed.has(t)) { badRequest(res, 'invalid type'); return true; }
+          if (!ALLOWED_TYPES.has(t)) { badRequest(res, 'invalid type'); return true; }
         }
         const updated = ctx.dbPatchPage(ctx.db, id, { title: body.title, type: body.type, regenerateSlug: !!body.regenerateSlug });
         if (!updated) { notFound(res); return true; }
