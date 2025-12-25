@@ -6,6 +6,7 @@ import { registerMany } from '../miniapps/registry.js';
 import { NotepadApp } from '../miniapps/notepad/app.js';
 import { TodoApp } from '../miniapps/todo/app.js';
 import { getAppState, setAppState, getUserState, patchUserState } from '../miniapps/state.js';
+import { initRightPanelSplit } from './rightPanelSplit.js';
 
 export function bindRightPanel() {
   const toggle = $('#rightDrawerToggle');
@@ -56,27 +57,65 @@ export function bindRightPanel() {
     if (name === 'notepad' && hidden.has('notepad')) p.hidden = true;
     if (name === 'todo' && hidden.has('todo')) p.hidden = true;
   }
-  const host = createMiniAppHost({
-    surfaceId: 'rightPanel',
+  // Two hosts so Notepad and To-Do can co-exist in split mode
+  const notepadHost = createMiniAppHost({
+    surfaceId: 'rightPanelNotepad',
     rootEl: drawer,
     getCtx: () => ({
-      // Minimal context for this iteration
       pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
-      userState: {
-        getUserState,
-        patchUserState,
-        getAppState,
-        setAppState,
-      },
+      userState: { getUserState, patchUserState, getAppState, setAppState },
     }),
   });
+  const todoHost = createMiniAppHost({
+    surfaceId: 'rightPanelTodo',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+    }),
+  });
+
+  const drawerContent = drawer; // use attribute on this element to signal split mode
+
+  const showNotesSplit = ({ focus } = {}) => {
+    // Respect app visibility settings
+    const notepadHidden = hidden.has('notepad');
+    const todoHidden = hidden.has('todo');
+    // Toggle panels: show both Notepad and To-Do; hide others
+    for (const p of panels) {
+      const name = p.getAttribute('data-panel');
+      if (name === 'notepad') p.hidden = !!notepadHidden;
+      else if (name === 'todo') p.hidden = !!todoHidden;
+      else p.hidden = true;
+    }
+    // Mark split mode for CSS
+    if (!notepadHidden && !todoHidden) drawerContent.setAttribute('data-notes-split', 'true');
+    else drawerContent.removeAttribute('data-notes-split');
+    // Mount both apps
+    if (!notepadHidden) notepadHost.show('notepad'); else notepadHost.show(null);
+    if (!todoHidden) todoHost.show('todo'); else todoHost.show(null);
+    // Ensure split behavior is initialized once
+    try { initRightPanelSplit({ getUserState, patchUserState }); } catch {}
+    // Optional focus
+    if (focus === 'notepad') {
+      setTimeout(() => document.getElementById('notepad')?.focus(), 0);
+    } else if (focus === 'todo') {
+      setTimeout(() => document.getElementById('todoInput')?.focus(), 0);
+    }
+  };
+
   const show = (name) => {
-    const isHidden = (name === 'notepad' && hidden.has('notepad')) || (name === 'todo' && hidden.has('todo'));
-    for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name || isHidden;
-    // Delegate to mini app host for specific tabs
-    if (name === 'notepad' && !hidden.has('notepad')) host.show('notepad');
-    else if (name === 'todo' && !hidden.has('todo')) host.show('todo');
-    else host.show(null); // ensure cleanup if switching away
+    // Notes tabs map to split view
+    if (name === 'notepad' || name === 'todo') {
+      showNotesSplit({ focus: name });
+      return;
+    }
+    // Non-note tabs: hide both note panels, unmount hosts, show selected panel
+    drawerContent.removeAttribute('data-notes-split');
+    for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name;
+    notepadHost.show(null);
+    todoHost.show(null);
+    if (name === 'settings') renderSettingsPanel();
   };
   // initialize active tab
   let initial = s.rightPanelTab || 'notepad';
@@ -87,7 +126,6 @@ export function bindRightPanel() {
     updateState({ rightPanelTab: initial });
   }
   show(initial);
-  if ((s.rightPanelTab || 'notepad') === 'settings') renderSettingsPanel();
   tabs.forEach(btn => btn.addEventListener('click', () => {
     const t = btn.getAttribute('data-tab');
     show(t);
@@ -95,7 +133,7 @@ export function bindRightPanel() {
     if (t === 'settings') renderSettingsPanel();
   }));
 
-  // Notepad and To-Do now mount via mini app host (no direct listeners here)
+  // Notepad and To-Do now mount via mini app hosts (supports split mode)
 }
 
 async function renderSettingsPanel() {

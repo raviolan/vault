@@ -277,6 +277,79 @@ body {
     flex: 1 1 auto;
 }
 
+/* Split view: Notepad (top ~40%), To-Do (bottom ~60%) */
+.right-drawer-content[data-notes-split='true'] .right-panel[data-panel='notepad'] {
+    flex: 0 0 auto;
+    min-height: 160px;
+    overflow: hidden;
+}
+.right-drawer-content[data-notes-split='true'] .right-panel[data-panel='todo'] {
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+.right-drawer-content[data-notes-split='true'] #rightNotepadSlot {
+    /* height set inline by JS; ensure it governs layout */
+}
+.right-drawer-content[data-notes-split='true'] .right-panel[data-panel='notepad'] #notepad {
+    width: 100%;
+    height: 100%;
+    resize: none;
+}
+.right-drawer-content[data-notes-split='true'] .right-panel[data-panel='todo'] #todoList {
+    overflow: auto;
+}
+
+/* Split handle styles */
+#rightSplitHandle {
+    position: relative;
+    height: 10px;
+    cursor: row-resize;
+}
+#rightSplitHandle::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: var(--border);
+    border-radius: 2px;
+}
+#rightSplitHandle::after {
+    content: '⋮';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+    color: var(--muted);
+    line-height: 1;
+    font-size: 14px;
+    opacity: .9;
+}
+#rightSplitHandle:hover,
+#rightSplitHandle:focus-visible {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    outline: none;
+}
+
+/* During drag, hint row-resize cursor globally to feel snappier */
+body.dragging-right-split {
+    cursor: row-resize !important;
+    user-select: none !important;
+}
+
+/* During drag, disable transitions so height updates track pointer immediately */
+body.dragging-right-split #rightNotepadSlot,
+body.dragging-right-split textarea#notepad {
+    transition: none !important;
+}
+
+/* Hint to the browser that #rightNotepadSlot height changes frequently */
+#rightNotepadSlot {
+    will-change: height;
+}
+
 /* Notepad panel: textarea consumes full height for better UX */
 .right-drawer-content [data-panel='notepad'] #notepad {
     flex: 1 1 auto;

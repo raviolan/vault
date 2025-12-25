@@ -286,7 +286,7 @@
 /* A) Tight, predictable stack spacing for sections */
 /* Remove margins from section blocks and headers; control spacing via siblings */
 .left .nav-details { margin: 0; }
-.left .nav-details > summary.nav-label { margin: 0; padding: 8px 10px; }
+.left .nav-details > summary.nav-label { margin: 0; padding: 12px 12px; }
 
 /* Kill legacy divider spacing on headers inside the left nav */
 .left .nav-label:not(:first-child) { border-top: none; margin-top: 0; padding-top: 0; }
@@ -319,10 +319,10 @@
 /* --- Slightly larger sidebar typography --- */
 /* Increase sizes subtly without changing layout/behavior */
 .left .nav-item { font-size: 17px; }
-.left .nav-label { font-size: 13px; }
+.left .nav-label { font-size: 16px; }
 #navFav .meta { font-size: 15px; }
 #navFav .fav-link,
-#navFav .fav-item > a { font-size: 16px; }
+#navFav .fav-item > a { font-size: 17px; }
 
 /* Remove left rail on expanded children per request */
 .left .nav-details[open] .nav-item { border-left: 0; }
@@ -393,29 +393,11 @@
 #navFav .fav-item>a {
     flex: 1 1 auto;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    color: var(--text);
-    text-decoration: none;
-    transition: all .15s ease;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 14px;
 }
 
-/* Star icon before favorite */
+/* Remove legacy star prefix to match other sections */
 #navFav .fav-link::before,
-#navFav .fav-item>a::before {
-    content: "★";
-    color: #fbbf24;
-    font-size: 14px;
-    flex-shrink: 0;
-    filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.4));
-}
+#navFav .fav-item>a::before { content: none !important; }
 
 /* Gradient hover effect matching nav items */
 #navFav .fav-item:hover {
@@ -460,4 +442,41 @@
     border-color: rgba(239, 68, 68, 0.3);
     color: #ef4444;
     transform: scale(1.05);
+}
+
+/* --- Scoped Favorites row styling (pages and tools) --- */
+#navFav .favorites-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#navFav .favorites-row > a {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#navFav .favorites-row > .fav-remove {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid transparent;
+    margin-right: 4px;
+}
+
+#navFav .favorites-row:hover .fav-remove,
+#navFav .fav-remove:focus-visible {
+    opacity: 1;
+}
+
+#navFav .fav-remove:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: 2px;
 }

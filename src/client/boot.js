@@ -1,6 +1,6 @@
 import { $, $$ } from './lib/dom.js';
 import { loadState, getState, updateState } from './lib/state.js';
-import { route, installLinkInterceptor, renderRoute, setFallback } from './lib/router.js';
+import { route, installLinkInterceptor, renderRoute, setFallback, navigate } from './lib/router.js';
 import { setBreadcrumb, setPageActionsEnabled } from './lib/ui.js';
 import * as Dashboard from './routes/dashboard.js';
 import * as Tags from './routes/tags.js';
@@ -24,6 +24,8 @@ import * as WeatherSettingsRoute from './routes/weatherSettings.js';
 import * as EnemyGenerator from './tools/enemyGenerator/index.js';
 import { renderFavorites } from './features/favorites.js';
 import { initPanels } from './features/panelControls.js';
+import { initGlobalShortcuts } from './features/shortcuts.js';
+import { getUserState, patchUserState } from './miniapps/state.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
@@ -67,6 +69,8 @@ export async function boot() {
   try { initPanels(); } catch {}
   mountLeftPanelBottom();
   mountLeftPanelWeather();
+  // Global shortcuts (document-level)
+  try { initGlobalShortcuts({ navigate, patchUserState, getUserState }); } catch {}
 
   // Bind theme mode toggle (switch)
   const btnDark = document.getElementById('themeModeDark');

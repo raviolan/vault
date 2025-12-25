@@ -220,3 +220,32 @@ async function renderPageTags(pageId) {
 
   renderChips();
 }
+
+// Save and exit editing: flush debounced block patches, persist title if editing,
+// then exit edit mode using the same path as clicking the Done button.
+export async function saveAndExitEditing() {
+  const btnEdit = document.getElementById('btnEditPage');
+  if (!btnEdit) return;
+  const isEditing = (btnEdit.textContent || '').trim().toLowerCase() === 'done';
+  if (!isEditing) return;
+
+  // Persist current title immediately if title input is active
+  const input = document.getElementById('pageTitleInput');
+  if (input) {
+    const newTitle = input.value;
+    // Try to infer page id from current URL (/page/:id or /p/:slug -> PATCH only when id route)
+    // We patch title optimistically via existing endpoint if possible; otherwise let debounce finalize later.
+    try {
+      const m = window.location.pathname.match(/^\/page\/([^/]+)$/);
+      if (m) {
+        await fetchJson(`/api/pages/${encodeURIComponent(m[1])}`, { method: 'PATCH', body: JSON.stringify({ title: newTitle }) });
+      }
+    } catch (e) { console.error('Failed immediate title save', e); }
+  }
+
+  // Flush debounced block patches if available
+  try { await import('../blocks/edit/state.js').then(m => m.flushDebouncedPatches && m.flushDebouncedPatches()); } catch {}
+
+  // Exit edit mode by reusing the existing button handler
+  try { btnEdit.click(); } catch {}
+}

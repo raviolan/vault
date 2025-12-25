@@ -50,7 +50,6 @@
       <div class="drawer" aria-label="Navigation">
         <div class="drawer-handle">
           <button id="leftDrawerToggle" class="chip" aria-expanded="true" aria-controls="leftDrawer">Nav</button>
-          <button id="leftDrawerPin" class="chip" aria-pressed="true">Pin</button>
           <button id="leftCollapseExpand" class="chip" title="Collapse/Expand All">Collapse all</button>
         </div>
 
@@ -116,7 +115,6 @@
       <div class="right-drawer" aria-label="Side panel">
         <div class="right-drawer-handle">
           <button id="rightDrawerToggle" class="chip" aria-expanded="false">Tools</button>
-          <button id="rightDrawerPin" class="chip" aria-pressed="false">Pin</button>
         </div>
 
         <div id="rightDrawer" class="right-drawer-content" hidden>
@@ -130,7 +128,9 @@
 
           <section class="right-panel" data-panel="notepad">
             <h3 class="meta">Notepad</h3>
-            <textarea id="notepad" placeholder="Notes live in your local vault..."></textarea>
+            <div id="rightNotepadSlot">
+              <textarea id="notepad" placeholder="Notes live in your local vault..."></textarea>
+            </div>
           </section>
 
           <section class="right-panel" data-panel="colors" hidden>
@@ -138,13 +138,17 @@
             <p class="meta">(wired up later)</p>
           </section>
 
+          <div id="rightSplitHandle" role="separator" aria-orientation="horizontal" tabindex="0"></div>
+
           <section class="right-panel" data-panel="todo" hidden>
             <h3 class="meta">To-Do</h3>
-            <div class="todo-row">
-              <input id="todoInput" placeholder="Add a task" />
-              <button id="todoAdd" class="chip">Add</button>
+            <div id="rightTodoSlot">
+              <div class="todo-row">
+                <input id="todoInput" placeholder="Add a task" />
+                <button id="todoAdd" class="chip">Add</button>
+              </div>
+              <ul id="todoList"></ul>
             </div>
-            <ul id="todoList"></ul>
           </section>
 
           <section class="right-panel" data-panel="backlinks" hidden>

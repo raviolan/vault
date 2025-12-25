@@ -118,8 +118,28 @@ body[data-theme='orchid-porcelain'] {
     /* Improve placeholder color and opacity for inputs/textareas */
     :where(input:not([type="checkbox"]):not([type="radio"]):not(.todo-check))::placeholder,
     :where(textarea)::placeholder {
-        color: color-mix(in srgb, var(--text) 60%, var(--muted) 40%) !important;
+        color: color-mix(in srgb, var(--text) 72%, var(--muted) 28%) !important;
         opacity: 1 !important;
+    }
+
+    /* Make Notepad placeholder more legible in light themes */
+    .right-drawer-content [data-panel='notepad'] #notepad::placeholder {
+        color: color-mix(in srgb, var(--text) 78%, var(--muted) 22%) !important;
+    }
+
+    /* Ensure Notepad text itself is high-contrast in light themes */
+    .right-drawer-content [data-panel='notepad'] #notepad {
+        color: #0b0d12 !important;
+    }
+
+    /* Strengthen Settings labels and inputs in light themes */
+    #settingsPanel .meta,
+    #settingsRouteRoot .meta {
+        color: color-mix(in srgb, var(--text) 78%, var(--muted) 22%) !important;
+    }
+    #settingsPanel input,
+    #settingsRouteRoot input {
+        color: var(--text) !important;
     }
 }
 

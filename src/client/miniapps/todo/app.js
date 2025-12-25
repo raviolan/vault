@@ -49,17 +49,20 @@ export const TodoApp = {
       if (!todoSection) return;
       const h = todoSection.querySelector('h3.meta');
       if (!h) return;
-      if (toggleBtn) return;
-      toggleBtn = document.createElement('button');
-      toggleBtn.className = 'chip';
-      toggleBtn.style.marginLeft = '8px';
-      toggleBtn.id = 'todoToggleCompleted';
-      toggleBtn.addEventListener('click', () => {
-        state.showCompleted = !state.showCompleted;
-        render();
-        persist();
-      });
-      h.insertAdjacentElement('afterend', toggleBtn);
+      // Reuse existing toggle if present to avoid duplicates across mounts
+      toggleBtn = todoSection.querySelector('#todoToggleCompleted') || document.getElementById('todoToggleCompleted') || null;
+      if (!toggleBtn) {
+        toggleBtn = document.createElement('button');
+        toggleBtn.className = 'chip';
+        toggleBtn.style.marginLeft = '8px';
+        toggleBtn.id = 'todoToggleCompleted';
+        toggleBtn.addEventListener('click', () => {
+          state.showCompleted = !state.showCompleted;
+          render();
+          persist();
+        });
+        h.insertAdjacentElement('afterend', toggleBtn);
+      }
       updateToggleLabel();
     };
 
