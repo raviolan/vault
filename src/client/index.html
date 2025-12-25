@@ -120,7 +120,7 @@
         <div id="rightDrawer" class="right-drawer-content" hidden>
           <div class="right-panel-tabs">
             <button class="chip" data-tab="notepad">Notepad</button>
-            <button class="chip" data-tab="colors">Colors</button>
+            <button class="chip" data-tab="conditions">Conditions</button>
             <button class="chip" data-tab="todo">To-Do</button>
             <button class="chip" data-tab="backlinks">Backlinks</button>
             <button class="chip" data-tab="settings">Settings</button>
@@ -133,9 +133,11 @@
             </div>
           </section>
 
-          <section class="right-panel" data-panel="colors" hidden>
-            <h3 class="meta">Colors</h3>
-            <p class="meta">(wired up later)</p>
+          <section class="right-panel" data-panel="conditions" hidden>
+            <h3 class="meta">Conditions</h3>
+            <div id="rightConditionsSlot">
+              <p class="meta">Loading…</p>
+            </div>
           </section>
 
           <div id="rightSplitHandle" role="separator" aria-orientation="horizontal" tabindex="0"></div>

@@ -339,6 +339,25 @@ body[data-mode='edit'] .editor-add-controls .chip {
     background: var(--border);
     border-radius: 2px;
 }
+
+/* Conditions list */
+.cond-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-4);
+    background: var(--panel);
+    padding: var(--space-3) var(--space-4);
+    margin: 0 0 var(--space-3) 0;
+}
+.cond-item summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+.cond-item summary::-webkit-details-marker { display: none; }
+.cond-desc {
+    margin-top: var(--space-3);
+    white-space: pre-wrap;
+    color: var(--text);
+}
 #rightSplitHandle::after {
     content: '⋮';
     position: absolute;

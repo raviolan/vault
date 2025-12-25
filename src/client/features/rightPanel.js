@@ -5,6 +5,7 @@ import { createMiniAppHost } from '../miniapps/host.js';
 import { registerMany } from '../miniapps/registry.js';
 import { NotepadApp } from '../miniapps/notepad/app.js';
 import { TodoApp } from '../miniapps/todo/app.js';
+import { ConditionsApp } from '../miniapps/conditions/app.js';
 import { getAppState, setAppState, getUserState, patchUserState } from '../miniapps/state.js';
 import { initRightPanelSplit } from './rightPanelSplit.js';
 
@@ -15,7 +16,7 @@ export function bindRightPanel() {
   if (!toggle || !drawer) return;
 
   // Register built-in mini apps once, keeping order stable
-  registerMany([NotepadApp, TodoApp]);
+  registerMany([NotepadApp, TodoApp, ConditionsApp]);
 
   // init from state
   const s = getState();
@@ -75,6 +76,15 @@ export function bindRightPanel() {
     }),
   });
 
+  const conditionsHost = createMiniAppHost({
+    surfaceId: 'rightPanelConditions',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+    }),
+  });
+
   const drawerContent = drawer; // use attribute on this element to signal split mode
 
   const showNotesSplit = ({ focus } = {}) => {
@@ -94,6 +104,8 @@ export function bindRightPanel() {
     // Mount both apps
     if (!notepadHidden) notepadHost.show('notepad'); else notepadHost.show(null);
     if (!todoHidden) todoHost.show('todo'); else todoHost.show(null);
+    // Ensure other hosts are unmounted in split view
+    conditionsHost.show(null);
     // Ensure split behavior is initialized once
     try { initRightPanelSplit({ getUserState, patchUserState }); } catch {}
     // Optional focus
@@ -115,13 +127,15 @@ export function bindRightPanel() {
     for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name;
     notepadHost.show(null);
     todoHost.show(null);
+    conditionsHost.show(null);
+    if (name === 'conditions') conditionsHost.show('conditions');
     if (name === 'settings') renderSettingsPanel();
   };
   // initialize active tab
   let initial = s.rightPanelTab || 'notepad';
   if ((initial === 'notepad' && hidden.has('notepad')) || (initial === 'todo' && hidden.has('todo'))) {
     // fallback to first visible tab in current order
-    const order = ['notepad', 'colors', 'todo', 'backlinks', 'settings'];
+    const order = ['notepad', 'conditions', 'todo', 'backlinks', 'settings'];
     initial = order.find(t => !((t === 'notepad' && hidden.has('notepad')) || (t === 'todo' && hidden.has('todo')))) || 'backlinks';
     updateState({ rightPanelTab: initial });
   }
