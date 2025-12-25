@@ -197,6 +197,52 @@ export function enablePageTitleEdit(page) {
   input.value = page.title || '';
   h1.replaceWith(input);
   bindPageTitleInput(page, input);
+
+  // Insert Type control (edit mode only), placed near title
+  try {
+    const wrap = document.createElement('div');
+    wrap.id = 'pageTypeControl';
+    wrap.style.margin = '6px 0';
+    // Keep label and select simple; do not modify existing hooks/classes
+    const label = document.createElement('label');
+    label.textContent = 'Type ';
+    const sel = document.createElement('select');
+    sel.name = 'pageType';
+    sel.id = 'pageTypeSelect';
+    const types = [
+      { v: 'note', t: 'Note' },
+      { v: 'npc', t: 'NPC' },
+      { v: 'location', t: 'Location' },
+      { v: 'arc', t: 'Arc' },
+      { v: 'tool', t: 'Tool' },
+    ];
+    for (const opt of types) {
+      const o = document.createElement('option');
+      o.value = opt.v; o.textContent = opt.t;
+      if ((page.type || 'note') === opt.v) o.selected = true;
+      sel.appendChild(o);
+    }
+    label.appendChild(sel);
+    wrap.appendChild(label);
+    input.after(wrap);
+
+    sel.addEventListener('change', async () => {
+      const newType = sel.value;
+      try {
+        const updated = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}`, { method: 'PATCH', body: JSON.stringify({ type: newType }) });
+        // Reflect updated type in local page and meta display
+        page.type = updated.type || newType;
+        const meta = document.querySelector('article.page p.meta');
+        if (meta) {
+          const updatedAt = (updated.updatedAt || updated.createdAt || '').toString();
+          meta.innerHTML = `Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(updatedAt)}`;
+        }
+        try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+      } catch (e) {
+        console.error('Failed to update type', e);
+      }
+    });
+  } catch {}
 }
 
 export function disablePageTitleEdit(page) {
@@ -206,6 +252,11 @@ export function disablePageTitleEdit(page) {
   h1.id = 'pageTitleView';
   h1.textContent = input.value || page.title || '';
   input.replaceWith(h1);
+  // Remove Type control when exiting edit mode
+  try {
+    const typeCtl = document.getElementById('pageTypeControl');
+    if (typeCtl) typeCtl.remove();
+  } catch {}
 }
 
 function bindPageTitleInput(page, input) {

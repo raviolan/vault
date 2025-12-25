@@ -95,6 +95,20 @@ async function run() {
     }
     console.log('OK');
 
+    // C2) Type change via PATCH reflects in list
+    process.stdout.write('[C2] PATCH /api/pages/:id type to npc ... ');
+    {
+      const { json: p } = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: 'Type Change ' + Date.now(), type: 'note' }) });
+      const pid = p.page.id;
+      const { res: pr, json: pj, text: pt } = await fetchJson(`/api/pages/${encodeURIComponent(pid)}`, { method: 'PATCH', body: JSON.stringify({ type: 'npc' }) });
+      assert(pr.ok, `expected 200, got ${pr.status} — ${pt}`);
+      assert(pj && pj.type === 'npc', 'type did not update on PATCH response');
+      const { json: list } = await fetchJson('/api/pages');
+      const found = Array.isArray(list) && list.find(x => x.id === pid);
+      assert(found && found.type === 'npc', 'type not reflected in GET /api/pages');
+    }
+    console.log('OK');
+
     // (tags tests moved later after creating a dedicated page)
 
     // Create Page via resolve (Swedish letters)
@@ -112,6 +126,30 @@ async function run() {
       pageId = page.id;
       assert(page.title === titleSwe, 'title mismatch');
       assert(!/[åäöÅÄÖ]/.test(page.slug), 'slug contains Å/Ä/Ö');
+    }
+    console.log('OK');
+
+    // J) Newly created wikilink keeps [[Title]] (no [[page:...]] in stored text)
+    process.stdout.write('[J] Wikilink create keeps [[Title]] in block ... ');
+    {
+      const tMain = 'Verify Link Host ' + Math.random().toString(36).slice(2,8);
+      const tNew = 'Verify Linked Page ' + Math.random().toString(36).slice(2,8);
+      const { json: host } = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: tMain, type: 'note' }) });
+      const hostId = host.page.id;
+      // Insert a block with [[Title]] form
+      const { json: blk } = await fetchJson(`/api/pages/${encodeURIComponent(hostId)}/blocks`, { method: 'POST', body: JSON.stringify({ type: 'paragraph', content: { text: `Start [[${tNew}]] End` } }) });
+      assert(blk && blk.id, 'failed to create block for wikilink test');
+      // Create the referenced page (simulating dialog create)
+      const { res: cr, json: created, text: ctext } = await fetchJson('/api/pages', { method: 'POST', body: JSON.stringify({ title: tNew, type: 'note' }) });
+      assert(cr.status === 201, `expected 201, got ${cr.status} — ${ctext}`);
+      assert(created && created.id, 'created page missing id');
+      // Read back the host page blocks and ensure text does not contain [[page:
+      const { json: hostAfter } = await fetchJson(`/api/pages/${encodeURIComponent(hostId)}`);
+      const blkAfter = (hostAfter.blocks || []).find(b => b.id === blk.id);
+      const text = JSON.parse(blkAfter.contentJson || '{}').text || '';
+      assert(/\[\[[^\]]+\]\]/.test(text), 'block missing wikilink token');
+      assert(!/\[\[page:/.test(text), 'block contains [[page: id token after creation');
+      assert(text.includes(`[[${tNew}]]`), 'block does not contain [[Title]] form');
     }
     console.log('OK');
 

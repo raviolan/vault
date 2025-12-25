@@ -17,7 +17,8 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       const level = Math.min(3, Math.max(1, Number(props.level || 2)));
       const tag = level === 1 ? 'h1' : (level === 2 ? 'h2' : 'h3');
       const el = document.createElement(tag);
-      el.textContent = content.text || '';
+      const txt = String(content.text || '');
+      el.appendChild(buildWikiTextNodes(txt, n.id));
       return el;
     }
     if (n.type === 'paragraph') {
@@ -73,4 +74,3 @@ export function renderBlocksReadOnly(rootEl, blocks) {
 
   for (const n of tree) rootEl.appendChild(makeNode(n, 0));
 }
-

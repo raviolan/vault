@@ -66,5 +66,14 @@ export async function render(container, ctx = {}) {
   }
 
   filter?.addEventListener('input', () => renderList(filter.value));
-  renderList('');
+  // Support deep-linking via ?tag=<name>
+  const usp = new URLSearchParams(window.location.search || '');
+  const initialTag = usp.get('tag');
+  if (initialTag) {
+    filter.value = initialTag;
+    renderList(initialTag);
+    await showPagesForTag(initialTag);
+  } else {
+    renderList('');
+  }
 }

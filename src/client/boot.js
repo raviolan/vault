@@ -38,6 +38,7 @@ export async function boot() {
   installCommandPalette();
   bindModalBasics('createPageModal');
   bindModalBasics('deletePageModal');
+  bindModalBasics('wikilinkCreateModal');
   await loadState();
   // Apply saved theme and labels on boot, with backwards-compatible migration to themeMode/defaults
   try {

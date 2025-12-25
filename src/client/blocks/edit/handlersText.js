@@ -5,6 +5,7 @@ import { refreshBlocksFromServer } from './apiBridge.js';
 import { hideSlashMenuPublic, maybeHandleSlashMenu, isSlashMenuFor } from './slashMenu.js';
 import { indentBlock, outdentBlock, moveBlockWithinSiblings } from './reorder.js';
 import { markDirty } from './state.js';
+import { handleFormatShortcutKeydown } from '../../lib/formatShortcuts.js';
 
 export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat, render, focus }) {
   inputEl.addEventListener('input', () => {
@@ -117,6 +118,8 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
 
   inputEl.addEventListener('keydown', async (e) => {
     if (e.key === 'Escape') { hideSlashMenuPublic(); return; }
+    // Bold/Italic shortcuts
+    if (handleFormatShortcutKeydown(e, inputEl)) return;
     if (e.key === 'Enter' && !(e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
       if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
         e.preventDefault();

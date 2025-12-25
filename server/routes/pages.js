@@ -65,6 +65,12 @@ export function routePages(req, res, ctx) {
     if (req.method === 'PATCH') {
       return (async () => {
         const body = JSON.parse(await readBody(req) || '{}');
+        // Validate optional type field if provided
+        if (body.type !== undefined) {
+          const t = String(body.type);
+          const allowed = new Set(['note', 'npc', 'location', 'arc', 'tool']);
+          if (!allowed.has(t)) { badRequest(res, 'invalid type'); return true; }
+        }
         const updated = ctx.dbPatchPage(ctx.db, id, { title: body.title, type: body.type, regenerateSlug: !!body.regenerateSlug });
         if (!updated) { notFound(res); return true; }
         sendJson(res, 200, updated);

@@ -217,6 +217,26 @@
     </div>
   </div>
 
+  <div class="modal" id="wikilinkCreateModal" tabindex="-1" aria-modal="true" style="display:none;">
+    <div class="modal-content">
+      <h2>Create new page for this wikilink?</h2>
+      <p>Wikilink: <strong class="wikilink-title-label"></strong></p>
+      <label>Type
+        <select name="wikiCreateType">
+          <option value="note">Note</option>
+          <option value="npc">NPC</option>
+          <option value="location">Location</option>
+          <option value="arc">Arc</option>
+          <option value="tool">Tool</option>
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="modal-cancel">Cancel</button>
+        <button type="button" class="modal-confirm">Create</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/app.js"></script>
 </body>
 
