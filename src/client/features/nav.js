@@ -1,7 +1,7 @@
 import { $, escapeHtml } from '../lib/dom.js';
 import { navigate } from '../lib/router.js';
 import { fetchJson } from '../lib/http.js';
-import { getState } from '../lib/state.js';
+import { getState, updateState } from '../lib/state.js';
 import { getNavGroupsForSection } from './navGroups.js';
 import { normalizeSections } from '../lib/sections.js';
 import { TOOLS } from '../tools/index.js';
@@ -79,6 +79,25 @@ export function renderNavSections(pages, navCfg) {
       </details>
     `;
     const list = li.querySelector('.nav-list');
+    const details = li.querySelector('details.nav-details');
+    // Restore persisted open/closed state for this section
+    try {
+      const st = getState();
+      const openMap = st?.navOpenSections || {};
+      if (Object.prototype.hasOwnProperty.call(openMap, key)) {
+        if (openMap[key]) details.setAttribute('open', '');
+        else details.removeAttribute('open');
+      }
+    } catch {}
+    // Persist on toggle
+    details?.addEventListener('toggle', () => {
+      try {
+        const st = getState();
+        const openMap = { ...(st?.navOpenSections || {}) };
+        openMap[key] = details.open;
+        updateState({ navOpenSections: openMap });
+      } catch {}
+    });
     // If user has groups for this section, render grouped subsections
     const { groups, pageToGroup } = getNavGroupsForSection(key);
     const hasGroups = Array.isArray(groups) && groups.length > 0;
@@ -188,6 +207,23 @@ export function renderToolsSection() {
     `;
     ul.appendChild(li);
     toolsDetails = li.querySelector('details.nav-details[data-section="tools"]');
+    // Restore/persist open state for Tools
+    try {
+      const st = getState();
+      const openMap = st?.navOpenSections || {};
+      if (Object.prototype.hasOwnProperty.call(openMap, 'tools')) {
+        if (openMap['tools']) toolsDetails.setAttribute('open', '');
+        else toolsDetails.removeAttribute('open');
+      }
+    } catch {}
+    toolsDetails?.addEventListener('toggle', () => {
+      try {
+        const st = getState();
+        const openMap = { ...(st?.navOpenSections || {}) };
+        openMap['tools'] = toolsDetails.open;
+        updateState({ navOpenSections: openMap });
+      } catch {}
+    });
   }
   const list = toolsDetails?.querySelector('.nav-list');
   for (const t of TOOLS) {
@@ -221,6 +257,25 @@ export function renderUserSections(pages) {
         <ul class="nav-list"></ul>
       </details>
     `;
+    // Persist open/closed state for this user section using a stable key
+    const details = li.querySelector('details.nav-details');
+    const key = 'user:' + (String(sec.title || 'Section').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section');
+    try {
+      const st2 = getState();
+      const openMap = st2?.navOpenSections || {};
+      if (Object.prototype.hasOwnProperty.call(openMap, key)) {
+        if (openMap[key]) details.setAttribute('open', '');
+        else details.removeAttribute('open');
+      }
+    } catch {}
+    details?.addEventListener('toggle', () => {
+      try {
+        const st2 = getState();
+        const openMap = { ...(st2?.navOpenSections || {}) };
+        openMap[key] = details.open;
+        updateState({ navOpenSections: openMap });
+      } catch {}
+    });
     const list = li.querySelector('.nav-list');
     const pageMap = new Map(pages.map(p => [p.id, p]));
     const items = (Array.isArray(sec.pageIds) ? sec.pageIds : []).map(id => pageMap.get(id)).filter(Boolean);

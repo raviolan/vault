@@ -1087,17 +1087,131 @@ body[data-theme='desert'] {
     display: flex !important;
 }
 
-/* Center and constrain main content without breaking tools */
-.main>#outlet>* {
+/* Center and constrain main content (edit-mode only) */
+body[data-mode='edit'] .main>#outlet>* {
     max-width: var(--content-max);
     width: 100%;
     margin-inline: auto;
 }
 
-/* Reading column width for page bodies */
-.main .page .page-body {
+/* Reading column width for page bodies (edit-mode only) */
+body[data-mode='edit'] .main .page .page-body {
     max-width: var(--content-measure);
 }
+
+/* Edit-mode canvas and readability (scoped) */
+body[data-mode='edit'] .page .page-editor {
+    max-width: clamp(640px, 72ch, 960px);
+    margin-inline: auto;
+    padding: 20px 24px 28px;
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: var(--radius-5);
+    box-shadow: var(--shadow-1);
+}
+
+body[data-mode='edit'] .page .page-body {
+    max-width: 76ch;
+    line-height: 1.7;
+    margin-top: 12px;
+}
+
+/* Title input: modern, larger, clear focus */
+body[data-mode='edit'] #pageTitleInput.page-title-input {
+    width: 100%;
+    font-size: clamp(24px, 3.2vw, 34px);
+    font-weight: 600;
+    line-height: 1.2;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid transparent;
+    border-radius: var(--radius-3);
+    padding: 4px 2px;
+}
+body[data-mode='edit'] #pageTitleInput.page-title-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* Block inputs (paragraphs/headings) */
+body[data-mode='edit'] .block .block-input {
+    width: 100%;
+    min-height: 24px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: var(--radius-3);
+    padding: var(--space-5) var(--space-6);
+}
+body[data-mode='edit'] .block .block-input.paragraph {
+    line-height: 1.6;
+    font-size: var(--text-lg);
+    resize: none;
+}
+/* Only when a single block exists (blank canvas), give it a tall starting height */
+body[data-mode='edit'] .page .page-body > .block:only-child .block-input.paragraph {
+    min-height: 64vh;
+}
+body[data-mode='edit'] .block .block-input.heading {
+    font-weight: 600;
+    font-size: clamp(18px, 2.2vw, 22px);
+}
+body[data-mode='edit'] .block .block-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Tags input (compact, consistent) */
+body[data-mode='edit'] #pageTagInput {
+    height: 30px;
+    padding: 4px 8px;
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: var(--radius-3);
+}
+body[data-mode='edit'] #pageTagInput:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Optional unobtrusive hint under body; CSS-only so no markup changes */
+/* Cheat sheet strip under title */
+body[data-mode='edit'] .page .page-cheatsheet {
+    margin: 4px 0 10px;
+    padding: 6px 8px;
+    border: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: var(--radius-3);
+    background: color-mix(in srgb, var(--panel) 30%, transparent);
+}
+
+/* Meta footer positioning */
+body[data-mode='edit'] .page .page-edit-meta-footer {
+    max-width: clamp(640px, 72ch, 960px);
+    margin: 10px auto 0;
+}
+
+body[data-mode='edit'] .page .page-body p {
+    margin: 0 0 0.9em 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    hyphens: auto;
+    tab-size: 2;
+    letter-spacing: 0.01em;
+}
+
+body[data-mode='edit'] .page .page-body h1,
+body[data-mode='edit'] .page .page-body h2,
+body[data-mode='edit'] .page .page-body h3 {
+    line-height: 1.25;
+    letter-spacing: 0.1px;
+}
+
+body[data-mode='edit'] .page .page-body h1 { margin-top: 1.6em; margin-bottom: 0.5em; }
+body[data-mode='edit'] .page .page-body h2 { margin-top: 1.4em; margin-bottom: 0.45em; }
+body[data-mode='edit'] .page .page-body h3 { margin-top: 1.2em; margin-bottom: 0.4em; }
+
+body[data-mode='edit'] .page .page-body code { font-size: 0.95em; }
 
 /* Resizer cursor UX: make it obvious they are interactive */
 .layout .resizer {
@@ -1115,6 +1229,46 @@ body[data-theme='desert'] {
 .chip svg {
     fill: currentColor;
     stroke: currentColor;
+}
+
+/* Save status indicator (edit mode only; mounted via JS) */
+body[data-mode='edit'] .save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+    color: var(--muted);
+    font-size: var(--text-md);
+}
+
+body[data-mode='edit'] .save-status .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+body[data-mode='edit'] .save-status[data-status='saving'] { color: var(--accent); }
+body[data-mode='edit'] .save-status[data-status='saving'] .dot {
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+body[data-mode='edit'] .save-status[data-status='dirty'] { color: var(--accent); }
+body[data-mode='edit'] .save-status[data-status='dirty'] .dot { background: var(--accent); animation: none; }
+
+body[data-mode='edit'] .save-status[data-status='saved'] { color: var(--muted); }
+body[data-mode='edit'] .save-status[data-status='saved'] .dot { background: var(--muted); animation: none; }
+
+/* Keep error readable without hardcoding colors; reuse accent for emphasis */
+body[data-mode='edit'] .save-status[data-status='error'] { color: var(--accent); }
+body[data-mode='edit'] .save-status[data-status='error'] .dot { background: var(--accent); animation: none; }
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+    70% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
 }
 
 body[data-theme='light'] .todo-item {

@@ -3,9 +3,11 @@ import { fetchJson } from '../lib/http.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { renderBlocksEdit } from '../blocks/edit.js';
+import { setUiMode } from '../lib/uiMode.js';
 import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
 import { openDeleteModal } from '../features/modals.js';
 import { renderBacklinksPanel } from '../features/backlinks.js';
+import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndicator.js';
 
 export async function renderPage({ match }) {
   const id = match[1];
@@ -28,10 +30,44 @@ export async function renderPage({ match }) {
   const blocksRoot = document.getElementById('pageBlocks');
   setCurrentPageBlocks(page.blocks || []);
   if (isEditingPage(page.id)) {
+    setUiMode('edit');
     enablePageTitleEdit(page);
     renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+    // Show save status indicator while editing
+    try { mountSaveIndicator(); } catch {}
+
+    // Restructure edit layout: wrap editor fields, move meta to bottom, insert cheat sheet
+    try {
+      const article = outlet.querySelector('article.page');
+      const titleEl = article.querySelector('#pageTitleInput');
+      const metaEl = article.querySelector('p.meta');
+      const tagsEl = article.querySelector('#pageTags');
+      const editorWrap = document.createElement('div');
+      editorWrap.className = 'page-editor';
+      // Insert wrapper before the first editor element
+      if (titleEl) titleEl.before(editorWrap);
+      // Move elements into wrapper
+      if (titleEl) editorWrap.appendChild(titleEl);
+      // Cheat sheet strip under title
+      const cheat = document.createElement('div');
+      cheat.className = 'page-cheatsheet';
+      cheat.innerHTML = `
+        <div class="meta">Cheat Sheet — #Tags (e.g. #tavern #npc), [[Wikilinks]] (e.g. [[Bent Willow Tavern]]), Ctrl+Enter saves & exits</div>
+      `;
+      editorWrap.appendChild(cheat);
+      if (tagsEl) editorWrap.appendChild(tagsEl);
+      const bodyEl = article.querySelector('#pageBlocks');
+      if (bodyEl) editorWrap.appendChild(bodyEl);
+      // Move meta to bottom as footer (outside card)
+      if (metaEl) {
+        metaEl.classList.add('page-edit-meta-footer');
+        editorWrap.after(metaEl);
+      }
+    } catch {}
   } else {
+    setUiMode(null);
     renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+    try { unmountSaveIndicator(); } catch {}
   }
 
   // Populate backlinks panel for this page
@@ -54,14 +90,21 @@ export async function renderPage({ match }) {
       setEditModeForPage(page.id, now);
       btnEdit.textContent = now ? 'Done' : 'Edit';
       if (now) {
+        setUiMode('edit');
         enablePageTitleEdit(page);
         renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+        try { mountSaveIndicator(); } catch {}
       } else {
+        setUiMode(null);
         disablePageTitleEdit(page);
         renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+        try { unmountSaveIndicator(); } catch {}
       }
     };
   }
+
+  // Cleanup on route change: ensure we exit edit mode styles/indicator
+  return () => { try { setUiMode(null); } catch {} try { unmountSaveIndicator(); } catch {} };
 }
 
 export async function renderPageBySlug({ match }) {
@@ -84,10 +127,31 @@ export async function renderPageBySlug({ match }) {
   const blocksRoot = document.getElementById('pageBlocks');
   setCurrentPageBlocks(page.blocks || []);
   if (isEditingPage(page.id)) {
+    setUiMode('edit');
     enablePageTitleEdit(page);
     renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+    try { mountSaveIndicator(); } catch {}
+    // Restructure edit layout in slug route as well
+    try {
+      const article = outlet.querySelector('article.page');
+      const titleEl = article.querySelector('#pageTitleInput');
+      const metaEl = article.querySelector('p.meta');
+      const editorWrap = document.createElement('div');
+      editorWrap.className = 'page-editor';
+      if (titleEl) titleEl.before(editorWrap);
+      if (titleEl) editorWrap.appendChild(titleEl);
+      const cheat = document.createElement('div');
+      cheat.className = 'page-cheatsheet';
+      cheat.innerHTML = `<div class="meta">Cheat Sheet — #Tags, [[Wikilinks]], Ctrl+Enter saves & exits</div>`;
+      editorWrap.appendChild(cheat);
+      const bodyEl = article.querySelector('#pageBlocks');
+      if (bodyEl) editorWrap.appendChild(bodyEl);
+      if (metaEl) { metaEl.classList.add('page-edit-meta-footer'); editorWrap.after(metaEl); }
+    } catch {}
   } else {
+    setUiMode(null);
     renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+    try { unmountSaveIndicator(); } catch {}
   }
 
   // Bind delete
@@ -104,17 +168,24 @@ export async function renderPageBySlug({ match }) {
       setEditModeForPage(page.id, now);
       btnEdit.textContent = now ? 'Done' : 'Edit';
       if (now) {
+        setUiMode('edit');
         enablePageTitleEdit(page);
         renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+        try { mountSaveIndicator(); } catch {}
       } else {
+        setUiMode(null);
         disablePageTitleEdit(page);
         renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+        try { unmountSaveIndicator(); } catch {}
       }
     };
   }
 
   // Backlinks
   void renderBacklinksPanel(page.id);
+
+  // Cleanup on route change
+  return () => { try { setUiMode(null); } catch {} try { unmountSaveIndicator(); } catch {} };
 }
 
 export function enablePageTitleEdit(page) {

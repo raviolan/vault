@@ -136,6 +136,28 @@ export async function boot() {
   // Render Favorites section (tools only for now)
   try { renderFavorites(); } catch {}
 
+  // Persist expanded/collapsed state for Favorites section
+  try {
+    const favDetails = document.getElementById('navFav')?.closest('details.nav-details');
+    if (favDetails) {
+      const st2 = getState();
+      const openMap = st2?.navOpenSections || {};
+      const favKey = 'favorites';
+      if (Object.prototype.hasOwnProperty.call(openMap, favKey)) {
+        if (openMap[favKey]) favDetails.setAttribute('open', '');
+        else favDetails.removeAttribute('open');
+      }
+      favDetails.addEventListener('toggle', () => {
+        try {
+          const st3 = getState();
+          const map = { ...(st3?.navOpenSections || {}) };
+          map[favKey] = favDetails.open;
+          updateState({ navOpenSections: map });
+        } catch {}
+      });
+    }
+  } catch {}
+
   route(/^\/$/, () => {
     setBreadcrumb('Dashboard');
     setPageActionsEnabled({ canEdit: false, canDelete: false });

@@ -3,6 +3,7 @@ import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.
 import { bindTextInputHandlers } from './handlersText.js';
 import { bindSectionTitleHandlers, bindSectionHeaderControls } from './handlersSection.js';
 import { focusBlockInput } from './focus.js';
+import { bindAutosizeTextarea } from '../../lib/autosizeTextarea.js';
 
 function parseBlock(b) {
   return { ...b, props: parseMaybeJson(b.propsJson), content: parseMaybeJson(b.contentJson) };
@@ -27,6 +28,8 @@ export function renderBlocksEdit(rootEl, page, blocks) {
     });
     rootEl.innerHTML = '';
     rootEl.appendChild(empty.firstElementChild);
+    // Autosize and focus initial canvas input
+    try { bindAutosizeTextarea(ta); } catch {}
     setTimeout(() => ta.focus(), 0);
     return;
   }
@@ -64,6 +67,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       ta.placeholder = 'Write something...';
       wrap.appendChild(ta);
       bindTextInputHandlers({ page, block: b, inputEl: ta, orderedBlocksFlat, render, focus });
+      try { bindAutosizeTextarea(ta); } catch {}
     } else if (b.type === 'divider') {
       const hr = document.createElement('hr');
       wrap.appendChild(hr);

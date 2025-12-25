@@ -1,4 +1,5 @@
 // Simple SPA router and link interceptor
+import { setUiMode } from './uiMode.js';
 const routes = [];
 let fallbackHandler = null;
 let currentCleanup = null; // optional cleanup returned by last route
@@ -13,6 +14,8 @@ export function navigate(path) {
 
 export async function renderRoute() {
   const path = window.location.pathname;
+  // Defensive: clear UI mode before rendering any route; edit pages will re-enable.
+  try { setUiMode(null); } catch {}
   for (const r of routes) {
     const m = path.match(r.pattern);
     if (m) {
