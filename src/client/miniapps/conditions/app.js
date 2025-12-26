@@ -1,5 +1,5 @@
 import { fetchJson } from '../../lib/http.js';
-import { escapeHtml } from '../../lib/dom.js';
+import { getAppState, setAppState } from '../../miniapps/state.js';
 
 const APP_ID = 'conditions';
 
@@ -59,22 +59,34 @@ function renderDescBlocks(descText) {
   return root;
 }
 
+function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
+
 export const ConditionsApp = {
   id: APP_ID,
   title: 'Conditions',
   surfaces: ['rightPanel'],
-  mount(rootEl) {
-    const slot = (rootEl || document).querySelector('#rightConditionsSlot');
+  mount(rootEl, ctx) {
+    const slot = (ctx?.mountEl) || (rootEl || document).querySelector('#rightConditionsSlot');
     if (!slot) return () => {};
 
     let cancelled = false;
     slot.innerHTML = '<p class="meta">Loading…</p>';
+
+    // Restore state
+    let state = (() => {
+      const s = getAppState(APP_ID, { open: {}, scrollTop: 0 });
+      if (s && typeof s === 'object') return { open: (s.open || {}), scrollTop: Number(s.scrollTop) || 0 };
+      return { open: {}, scrollTop: 0 };
+    })();
+    const persist = debounce(() => setAppState(APP_ID, state), 150);
 
     getConditionsOnce()
       .then(list => {
         if (cancelled) return;
         const container = document.createElement('div');
         container.setAttribute('id', 'conditionsList');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
 
         list
           .slice()
@@ -82,6 +94,7 @@ export const ConditionsApp = {
           .forEach(item => {
             const details = document.createElement('details');
             details.className = 'cond-item';
+            details.dataset.slug = item.slug || '';
 
             const summary = document.createElement('summary');
             summary.textContent = item.name || item.slug || 'Condition';
@@ -94,18 +107,45 @@ export const ConditionsApp = {
             details.appendChild(desc);
 
             container.appendChild(details);
+
+            // Restore open state
+            if (state.open && state.open[item.slug]) details.open = true;
+
+            // Track changes
+            details.addEventListener('toggle', () => {
+              const slug = item.slug;
+              if (slug) {
+                state.open = { ...(state.open || {}) };
+                if (details.open) state.open[slug] = true; else delete state.open[slug];
+                persist();
+              }
+            });
           });
 
         slot.innerHTML = '';
+        // Ensure slot can scroll when used as a mount area
+        try { slot.style.overflow = 'auto'; slot.style.minHeight = '0'; } catch {}
         slot.appendChild(container);
+
+        // Restore scroll position if available
+        if (state.scrollTop > 0) {
+          try { slot.scrollTop = state.scrollTop; } catch {}
+        }
       })
       .catch(() => {
         if (cancelled) return;
         slot.innerHTML = '<p class="meta">Failed to load conditions</p>';
       });
 
-    return () => { cancelled = true; };
+    const onScroll = () => {
+      try { state.scrollTop = slot.scrollTop || 0; persist(); } catch {}
+    };
+    slot.addEventListener('scroll', onScroll);
+
+    return () => {
+      cancelled = true;
+      slot.removeEventListener('scroll', onScroll);
+    };
   },
   unmount() {},
 };
-

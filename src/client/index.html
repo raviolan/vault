@@ -119,17 +119,57 @@
 
         <div id="rightDrawer" class="right-drawer-content" hidden>
           <div class="right-panel-tabs">
-            <button class="chip" data-tab="notepad">Notepad</button>
-            <button class="chip" data-tab="conditions">Conditions</button>
-            <button class="chip" data-tab="todo">To-Do</button>
-            <button class="chip" data-tab="backlinks">Backlinks</button>
-            <button class="chip" data-tab="settings">Settings</button>
+            <!-- Deprecated: legacy tab buttons kept for JS hooks; hidden for new picker UX -->
+            <button class="chip" data-tab="notepad" hidden>Notepad</button>
+            <button class="chip" data-tab="conditions" hidden>Conditions</button>
+            <button class="chip" data-tab="todo" hidden>To-Do</button>
+            <button class="chip" data-tab="backlinks" hidden>Backlinks</button>
+            <button class="chip" data-tab="settings" hidden>Settings</button>
+            <button id="rightSplitToggle" class="chip" aria-pressed="false" title="Split view" hidden>Split</button>
+            <!-- Close is the only visible control in this row -->
+            <button id="rightDrawerClose" class="chip" title="Close">Close</button>
+          </div>
+
+          <div id="rightSplitPicker" class="right-split-picker">
+            <span class="meta">Mode</span>
+            <select id="rightPanelModeSelect">
+              <option value="single">Single</option>
+              <option value="split">Split</option>
+            </select>
+
+            <div id="rightSingleGroup" style="display:flex;gap:8px;align-items:center;">
+              <span class="meta">Panel</span>
+              <select id="rightPanelSingleSelect">
+                <option value="notepad">Notepad</option>
+                <option value="conditions">Conditions</option>
+                <option value="todo">To-Do</option>
+                <option value="backlinks">Backlinks</option>
+                <option value="settings">Settings</option>
+              </select>
+            </div>
+
+            <div id="rightSplitGroup" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span class="meta">Top</span>
+              <select id="rightSplitTopSelect">
+                <option value="notepad">Notepad</option>
+                <option value="todo">To-Do</option>
+                <option value="conditions">Conditions</option>
+              </select>
+              <span class="meta">Bottom</span>
+              <select id="rightSplitBottomSelect">
+                <option value="notepad">Notepad</option>
+                <option value="todo">To-Do</option>
+                <option value="conditions">Conditions</option>
+              </select>
+              <button id="rightSplitSwap" class="chip" type="button" title="Swap">⇅</button>
+            </div>
           </div>
 
           <section class="right-panel" data-panel="notepad">
             <h3 class="meta">Notepad</h3>
             <div id="rightNotepadSlot">
               <textarea id="notepad" placeholder="Notes live in your local vault..."></textarea>
+              <div id="rightNotepadMount" class="split-mount" hidden></div>
             </div>
           </section>
 
@@ -145,11 +185,14 @@
           <section class="right-panel" data-panel="todo" hidden>
             <h3 class="meta">To-Do</h3>
             <div id="rightTodoSlot">
-              <div class="todo-row">
-                <input id="todoInput" placeholder="Add a task" />
-                <button id="todoAdd" class="chip">Add</button>
+              <div id="todoNative">
+                <div class="todo-row">
+                  <input id="todoInput" placeholder="Add a task" />
+                  <button id="todoAdd" class="chip">Add</button>
+                </div>
+                <ul id="todoList"></ul>
               </div>
-              <ul id="todoList"></ul>
+              <div id="rightTodoMount" class="split-mount" hidden></div>
             </div>
           </section>
 

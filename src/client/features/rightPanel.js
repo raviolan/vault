@@ -46,6 +46,16 @@ export function bindRightPanel() {
 
   const tabs = $$('.right-panel-tabs [data-tab]');
   const panels = $$('[data-panel]');
+  const closeBtn = document.getElementById('rightDrawerClose');
+  const splitToggle = document.getElementById('rightSplitToggle');
+  const splitPicker = document.getElementById('rightSplitPicker');
+  const splitTopSelect = document.getElementById('rightSplitTopSelect');
+  const splitBottomSelect = document.getElementById('rightSplitBottomSelect');
+  const splitSwapBtn = document.getElementById('rightSplitSwap');
+  const modeSelect = document.getElementById('rightPanelModeSelect');
+  const singleSelect = document.getElementById('rightPanelSingleSelect');
+  const singleGroup = document.getElementById('rightSingleGroup');
+  const splitGroup = document.getElementById('rightSplitGroup');
   // Respect mini app visibility settings
   const hidden = new Set(Array.isArray(getState().miniAppsHidden) ? getState().miniAppsHidden : []);
   for (const btn of tabs) {
@@ -85,7 +95,133 @@ export function bindRightPanel() {
     }),
   });
 
+  // Split-mode Conditions hosts (mount into top/bottom mounts)
+  const conditionsTopHost = createMiniAppHost({
+    surfaceId: 'rightPanelConditionsTop',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightNotepadMount'),
+    }),
+  });
+  const conditionsBottomHost = createMiniAppHost({
+    surfaceId: 'rightPanelConditionsBottom',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightTodoMount'),
+    }),
+  });
+
   const drawerContent = drawer; // use attribute on this element to signal split mode
+
+  function setPanelHeadersDefault() {
+    const np = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
+    const tp = drawer.querySelector(".right-panel[data-panel='todo'] h3.meta");
+    if (np) np.textContent = 'Notepad';
+    if (tp) tp.textContent = 'To-Do';
+  }
+
+  function readSplitConfig() {
+    const st = getState() || {};
+    let top = st.rightSplitTopApp || 'notepad';
+    let bottom = st.rightSplitBottomApp || 'todo';
+    const ALLOWED = new Set(['notepad', 'todo', 'conditions']);
+    if (!ALLOWED.has(top)) top = 'notepad';
+    if (!ALLOWED.has(bottom)) bottom = 'todo';
+    if (top === bottom) {
+      if (top !== 'todo') bottom = 'todo'; else bottom = 'notepad';
+    }
+    if (top !== st.rightSplitTopApp || bottom !== st.rightSplitBottomApp) {
+      updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
+    }
+    return { top, bottom };
+  }
+
+  function applySplitUI({ top, bottom }) {
+    if (splitPicker) splitPicker.hidden = false;
+    if (splitToggle) splitToggle.setAttribute('aria-pressed', 'true');
+    if (splitTopSelect) splitTopSelect.value = top;
+    if (splitBottomSelect) splitBottomSelect.value = bottom;
+    if (modeSelect) modeSelect.value = 'split';
+    if (singleGroup) singleGroup.style.display = 'none';
+    if (splitGroup) splitGroup.style.display = 'flex';
+    drawerContent.setAttribute('data-notes-split', 'true');
+  }
+
+  function mountSplitApps({ top, bottom }) {
+    // Show only notepad and todo panels; hide others
+    for (const p of panels) {
+      const name = p.getAttribute('data-panel');
+      if (name === 'notepad' || name === 'todo') p.hidden = false; else p.hidden = true;
+    }
+    // Update headers
+    const npH = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
+    const tdH = drawer.querySelector(".right-panel[data-panel='todo'] h3.meta");
+    const labelFor = (v) => v === 'notepad' ? 'Notepad' : (v === 'todo' ? 'To-Do' : 'Conditions');
+    if (npH) npH.textContent = labelFor(top);
+    if (tdH) tdH.textContent = labelFor(bottom);
+
+    const textarea = drawer.querySelector('#notepad');
+    const topMount = drawer.querySelector('#rightNotepadMount');
+    const todoNative = drawer.querySelector('#todoNative');
+    const bottomMount = drawer.querySelector('#rightTodoMount');
+    const todoSlot = drawer.querySelector('#rightTodoSlot');
+    const notepadSlot = drawer.querySelector('#rightNotepadSlot');
+
+    // Reset visibility and unmount apps first
+    if (topMount) topMount.hidden = true;
+    if (bottomMount) bottomMount.hidden = true;
+    if (textarea) textarea.hidden = true;
+    if (todoNative) todoNative.hidden = true;
+    notepadHost.show(null);
+    todoHost.show(null);
+    conditionsTopHost.show(null);
+    conditionsBottomHost.show(null);
+
+    // Top slot
+    if (top === 'notepad') {
+      if (textarea && notepadSlot && textarea.parentElement !== notepadSlot) notepadSlot.appendChild(textarea);
+      if (textarea) textarea.hidden = false;
+      notepadHost.show('notepad');
+    } else if (top === 'todo') {
+      if (todoNative && topMount && todoNative.parentElement !== topMount) topMount.appendChild(todoNative);
+      if (topMount) topMount.hidden = false;
+      if (todoNative) todoNative.hidden = false;
+      todoHost.show('todo');
+    } else if (top === 'conditions') {
+      if (topMount) topMount.hidden = false;
+      conditionsTopHost.show('conditions');
+    }
+    // Bottom slot
+    if (bottom === 'notepad') {
+      if (textarea && bottomMount && textarea.parentElement !== bottomMount) bottomMount.appendChild(textarea);
+      if (bottomMount) bottomMount.hidden = false;
+      if (textarea) textarea.hidden = false;
+      notepadHost.show('notepad');
+    } else if (bottom === 'todo') {
+      if (todoNative && todoSlot && todoNative.parentElement !== todoSlot) todoSlot.insertBefore(todoNative, todoSlot.firstChild);
+      if (todoNative) todoNative.hidden = false;
+      todoHost.show('todo');
+    } else if (bottom === 'conditions') {
+      if (bottomMount) bottomMount.hidden = false;
+      conditionsBottomHost.show('conditions');
+    }
+
+    // Unmount single conditions host in split mode
+    conditionsHost.show(null);
+
+    // Ensure split behavior is initialized once
+    try { initRightPanelSplit({ getUserState, patchUserState }); } catch {}
+  }
+
+  function showSplit() {
+    const cfg = readSplitConfig();
+    applySplitUI(cfg);
+    mountSplitApps(cfg);
+  }
 
   const showNotesSplit = ({ focus } = {}) => {
     // Respect app visibility settings
@@ -117,17 +253,27 @@ export function bindRightPanel() {
   };
 
   const show = (name) => {
-    // Notes tabs map to split view
+    // Notes tabs map to split view when split toggle is active
     if (name === 'notepad' || name === 'todo') {
-      showNotesSplit({ focus: name });
+      if ((getState() || {}).rightPanelSplitActive) { showSplit(); return; }
+      // Single-note view
+      drawerContent.removeAttribute('data-notes-split');
+      setPanelHeadersDefault();
+      for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name;
+      notepadHost.show(name === 'notepad' ? 'notepad' : null);
+      todoHost.show(name === 'todo' ? 'todo' : null);
+      conditionsHost.show(null);
       return;
     }
     // Non-note tabs: hide both note panels, unmount hosts, show selected panel
     drawerContent.removeAttribute('data-notes-split');
     for (const p of panels) p.hidden = p.getAttribute('data-panel') !== name;
+    setPanelHeadersDefault();
     notepadHost.show(null);
     todoHost.show(null);
     conditionsHost.show(null);
+    conditionsTopHost.show(null);
+    conditionsBottomHost.show(null);
     if (name === 'conditions') conditionsHost.show('conditions');
     if (name === 'settings') renderSettingsPanel();
   };
@@ -139,15 +285,113 @@ export function bindRightPanel() {
     initial = order.find(t => !((t === 'notepad' && hidden.has('notepad')) || (t === 'todo' && hidden.has('todo')))) || 'backlinks';
     updateState({ rightPanelTab: initial });
   }
-  show(initial);
+  // Setup picker initial state and show correct view
+  if (modeSelect) modeSelect.value = s.rightPanelSplitActive ? 'split' : 'single';
+  if (singleSelect) singleSelect.value = s.rightPanelTab || 'notepad';
+  if (singleGroup) singleGroup.style.display = s.rightPanelSplitActive ? 'none' : 'flex';
+  if (splitGroup) splitGroup.style.display = s.rightPanelSplitActive ? 'flex' : 'none';
+  if (s.rightPanelSplitActive) {
+    showSplit();
+  } else {
+    splitPicker && (splitPicker.hidden = false);
+    splitToggle && splitToggle.setAttribute('aria-pressed', 'false');
+    show(initial);
+  }
   tabs.forEach(btn => btn.addEventListener('click', () => {
     const t = btn.getAttribute('data-tab');
+    if ((getState() || {}).rightPanelSplitActive) {
+      updateState({ rightPanelSplitActive: false, rightPanelLastSingleTab: t, rightPanelTab: t });
+      setPanelHeadersDefault();
+      if (modeSelect) modeSelect.value = 'single';
+      if (singleGroup) singleGroup.style.display = 'flex';
+      if (splitGroup) splitGroup.style.display = 'none';
+    }
     show(t);
     updateState({ rightPanelTab: t });
     if (t === 'settings') renderSettingsPanel();
   }));
 
   // Notepad and To-Do now mount via mini app hosts (supports split mode)
+
+  // Split toggle behavior (deprecated UI, kept hidden); still supported
+  splitToggle?.addEventListener('click', () => {
+    const st = getState();
+    const active = !!st.rightPanelSplitActive;
+    if (!active) {
+      if (modeSelect) modeSelect.value = 'split';
+      updateState({ rightPanelSplitActive: true, rightPanelLastSingleTab: st.rightPanelTab || 'notepad' });
+      if (singleGroup) singleGroup.style.display = 'none';
+      if (splitGroup) splitGroup.style.display = 'flex';
+      showSplit();
+    } else {
+      const back = st.rightPanelLastSingleTab || 'notepad';
+      if (modeSelect) modeSelect.value = 'single';
+      updateState({ rightPanelSplitActive: false, rightPanelTab: back });
+      drawerContent.removeAttribute('data-notes-split');
+      setPanelHeadersDefault();
+      if (singleGroup) singleGroup.style.display = 'flex';
+      if (splitGroup) splitGroup.style.display = 'none';
+      show(back);
+    }
+  });
+
+  // Split picker events
+  splitTopSelect?.addEventListener('change', () => {
+    let top = splitTopSelect.value;
+    let bottom = getState().rightSplitBottomApp || 'todo';
+    if (top === bottom) bottom = top === 'todo' ? 'notepad' : 'todo';
+    updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
+    showSplit();
+  });
+  splitBottomSelect?.addEventListener('change', () => {
+    let bottom = splitBottomSelect.value;
+    let top = getState().rightSplitTopApp || 'notepad';
+    if (top === bottom) top = bottom === 'todo' ? 'notepad' : 'todo';
+    updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
+    showSplit();
+  });
+  splitSwapBtn?.addEventListener('click', () => {
+    const cfg = readSplitConfig();
+    let newTop = cfg.bottom;
+    let newBottom = cfg.top;
+    if (newTop === newBottom) newBottom = newTop === 'todo' ? 'notepad' : 'todo';
+    updateState({ rightSplitTopApp: newTop, rightSplitBottomApp: newBottom });
+    showSplit();
+  });
+
+  // Close button: mirrors main toggle
+  closeBtn?.addEventListener('click', () => {
+    drawer.setAttribute('hidden', '');
+    toggle?.setAttribute('aria-expanded', 'false');
+    updateState({ rightPanelOpen: false });
+  });
+
+  // Mode & Single selection
+  modeSelect?.addEventListener('change', () => {
+    const mode = modeSelect.value === 'split' ? 'split' : 'single';
+    if (mode === 'split') {
+      const st = getState();
+      updateState({ rightPanelSplitActive: true, rightPanelLastSingleTab: st.rightPanelTab || 'notepad' });
+      if (singleGroup) singleGroup.style.display = 'none';
+      if (splitGroup) splitGroup.style.display = 'flex';
+      showSplit();
+    } else {
+      const st = getState();
+      const back = st.rightPanelLastSingleTab || st.rightPanelTab || 'notepad';
+      updateState({ rightPanelSplitActive: false, rightPanelTab: back });
+      drawerContent.removeAttribute('data-notes-split');
+      setPanelHeadersDefault();
+      if (singleGroup) singleGroup.style.display = 'flex';
+      if (splitGroup) splitGroup.style.display = 'none';
+      show(back);
+    }
+  });
+  singleSelect?.addEventListener('change', () => {
+    const val = singleSelect.value || 'notepad';
+    updateState({ rightPanelTab: val, rightPanelLastSingleTab: val });
+    show(val);
+    if (val === 'settings') renderSettingsPanel();
+  });
 }
 
 async function renderSettingsPanel() {
