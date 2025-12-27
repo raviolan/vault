@@ -9,6 +9,8 @@ let bound = { root: null, handle: null, notepadPanel: null, todoPanel: null, not
 let teardown = null; // removes listeners/observers for previous binding
 
 const isDebug = () => (typeof window !== 'undefined' && !!window.__DEBUG_RIGHT_SPLIT);
+// Lightweight ping to verify the correct module is loaded and live
+try { if (typeof window !== 'undefined') { window.__DMV_SPLIT_PING__ = () => console.log('[split] ping', { loaded: true, t: Date.now() }); } } catch {}
 
 export function initRightPanelSplit({ getUserState, patchUserState }) {
   // Query DOM fresh every time; do not mark installed if anything is missing
@@ -19,10 +21,12 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
   const todoSlot = root?.querySelector('#rightTodoSlot');
   const handle = root?.querySelector('#rightSplitHandle');
   if (!root || !notepadPanel || !todoPanel || !notepadSlot || !todoSlot || !handle) {
-    if (isDebug()) {
-      // eslint-disable-next-line no-console
-      console.log('[split:init]', { action: 'missing-dom', rootFound: !!root, handleFound: !!handle });
+    // If previously bound, tear down so we don't fight or leak listeners
+    if (typeof teardown === 'function') {
+      try { teardown(); } catch {}
+      teardown = null;
     }
+    bound = { root: null, handle: null, notepadPanel: null, todoPanel: null, notepadSlot: null, todoSlot: null };
     return;
   }
 
@@ -35,10 +39,6 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     bound.notepadSlot === notepadSlot &&
     bound.todoSlot === todoSlot
   ) {
-    if (isDebug()) {
-      // eslint-disable-next-line no-console
-      console.log('[split:init]', { action: 'already-bound', same: true, handle });
-    }
     return;
   }
 
@@ -67,14 +67,10 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
   // Measure the split region: panels + divider only (exclude any header above)
   function measureSplitRegion() {
     const topRect = notepadPanel.getBoundingClientRect();
-    const bottomRect = todoPanel.getBoundingClientRect();
     const rootRect = root.getBoundingClientRect();
     const splitTop = topRect.top;
-    // Use the real container bottom so availableH reflects actual drawer height.
-    // Fallback: ensure it is never smaller than rootRect.bottom.
-    const splitContainer = handle.closest('.right-drawer-content') || root;
-    const containerRect = splitContainer.getBoundingClientRect();
-    const splitBottom = Math.max(containerRect.bottom, rootRect.bottom);
+    // Prefer the drawer root for split bottom to avoid content-driven heights
+    const splitBottom = rootRect.bottom;
     const regionH = Math.max(0, splitBottom - splitTop);
     const handleH = (handle.getBoundingClientRect().height || handle.offsetHeight || 10);
     const availableH = Math.max(0, regionH - handleH);
@@ -90,34 +86,54 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     return { splitTop, splitBottom, regionH, handleH, availableH, chromeH, maxTopH };
   }
 
+  // Stable slot height applier; compare against DOM to avoid stale caches
+  const setSlotHeight = (h) => {
+    const v = Math.max(60, Math.round(h));
+    const next = `${v}px`;
+    if (notepadSlot.style.height !== next) {
+      notepadSlot.style.height = next;
+    }
+  };
+
+  // Drag/resize coordination flags used by RO and drag lifecycle
+  let dragging = false;
+  let applying = false; // suppress RO reactions while we apply heights
+  let suppressRO = false; // block RO-driven apply while a drag session is active or settling
+
   // Compute and apply heights given a desired ratio (0..1) using split-region metrics
   function applyFromRatio(r) {
+    if (dragging) {
+      if (isDebug()) { console.warn('[split] applyFromRatio blocked during drag'); console.trace(); }
+      return;
+    }
+    applying = true;
+    suppressRO = true;
     const m = measureSplitRegion();
     let topH = Math.round(r * m.availableH);
     topH = Math.max(MIN_TOP, Math.min(m.maxTopH, topH));
     const chrome = Number.isFinite(m.chromeH) ? m.chromeH : 0;
     const slotH = Math.max(60, topH - chrome);
-    notepadSlot.style.height = `${slotH}px`;
+    setSlotHeight(slotH);
+    requestAnimationFrame(() => { applying = false; suppressRO = false; });
   }
 
   // Initial apply
   applyFromRatio(readRatio());
 
-  // Drag/resize coordination flags used by RO and drag lifecycle
-  let dragging = false;
   // Resize awareness: recompute on container resize, but avoid fighting active drags
   let ro;
   let roScheduled = false;
   try {
-    ro = new ResizeObserver(() => {
-      if (dragging) return; // do not recompute while dragging
+    const createRO = () => new ResizeObserver(() => {
+      if (dragging || applying || suppressRO) return; // do not recompute while dragging, mid-apply, or suppressed
       if (roScheduled) return;
       roScheduled = true;
       requestAnimationFrame(() => {
         roScheduled = false;
-        if (!dragging) applyFromRatio(readRatio());
+        if (!dragging && !applying && !suppressRO) applyFromRatio(readRatio());
       });
     });
+    ro = createRO();
     ro.observe(root);
   } catch {}
 
@@ -128,51 +144,53 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
   let ctx = null; // { splitTop, availableH, handleH, grabOffset, chromeH, maxTopH }
   let activeMode = 'none'; // 'pointer' | 'mouse' | 'touch'
   let lastRatio = null;
+  // Debug-only: track external inline height mutations during drag
+  let lastInline = null;
 
   try { handle.style.touchAction = 'none'; } catch {}
-  if (isDebug()) {
-    // eslint-disable-next-line no-console
-    console.log('[split:init]', { action: 'bound', rootFound: !!root, handleFound: !!handle, boundToThisHandle: true, handle });
-  }
+  
 
   const moveCompute = () => {
     if (!ctx) return;
     // Use only cached measurements captured on pointerdown.
     // Preserve grabOffset so the divider stays anchored to the click point.
     const desiredHandleTop = lastY - ctx.grabOffset;
-    let rawTopH = desiredHandleTop - ctx.splitTop;
+    // Recompute current splitTop from the notepad panel's live position to avoid scroll drift
+    const currentTopRect = notepadPanel.getBoundingClientRect();
+    const splitTopNow = currentTopRect.top;
+    let rawTopH = desiredHandleTop - splitTopNow;
     const minTop = MIN_TOP;
-    const maxTop = ctx.maxTopH;
-    rawTopH = Math.max(minTop, Math.min(maxTop, rawTopH));
+    // Dynamically recompute the maximum top height using current drawer root metrics
+    const rootRect = root.getBoundingClientRect();
+    const splitBottomNow = rootRect.bottom;
+    const regionHNow = Math.max(0, splitBottomNow - splitTopNow);
+    const availableHNow = Math.max(0, regionHNow - ctx.handleH);
+    const enoughSpaceNow = availableHNow >= (MIN_TOP + MIN_BOTTOM);
+    const minBottomForCalcNow = enoughSpaceNow ? MIN_BOTTOM : 60;
+    const maxTopNow = Math.max(MIN_TOP, availableHNow - minBottomForCalcNow);
+    rawTopH = Math.max(minTop, Math.min(maxTopNow, rawTopH));
     // Update slot height accounting for panel chrome above the slot
     const chrome = Number.isFinite(ctx.chromeH) ? ctx.chromeH : 0;
     const slotH = Math.max(60, Math.round(rawTopH - chrome));
-    if (isDebug()) {
-      // eslint-disable-next-line no-console
-      console.log({ rawTopH, chromeH: ctx.chromeH, slotH, heightStr: `${slotH}px` });
-      // eslint-disable-next-line no-console
-      console.log('finite?', Number.isFinite(slotH));
-      // eslint-disable-next-line no-console
-      console.log('[split:clamp]', { minTop, maxTop, availableH: ctx.availableH });
+    if (isDebug() && lastInline !== null && notepadSlot.style.height !== lastInline) {
+      console.warn('[split] slot height changed externally', { from: lastInline, to: notepadSlot.style.height });
+      console.trace();
     }
-    notepadSlot.style.height = `${slotH}px`;
+    setSlotHeight(slotH);
+    // Debug: occasionally report available space and clamp
+    if (isDebug()) {
+      moveCompute.__i = (moveCompute.__i || 0) + 1;
+      if ((moveCompute.__i % 10) === 0) {
+        console.log('[split] move', { rootH: rootRect.height, availableHNow, maxTopNow });
+      }
+    }
+    // After our write, track the inline height we expect going forward
+    lastInline = notepadSlot.style.height;
     // Update last ratio (clamped between 0..1)
-    const r = ctx.availableH > 0 ? (rawTopH / ctx.availableH) : DEFAULT_RATIO;
+    const r = availableHNow > 0 ? (rawTopH / availableHNow) : DEFAULT_RATIO;
     lastRatio = Math.max(0, Math.min(1, r));
-    if (isDebug()) {
-      // eslint-disable-next-line no-console
-      console.log('[split:move]', {
-        clientY: lastY,
-        grabOffset: ctx.grabOffset,
-        splitTop: ctx.splitTop,
-        desiredHandleTop,
-        rawTopH,
-        ratio: lastRatio,
-      });
-    }
   };
 
-  let moveLogCount = 0;
   const onMove = (ev) => {
     if (!dragging) return;
     const e = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
@@ -180,11 +198,6 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     if (frame) return;
     frame = requestAnimationFrame(() => { frame = null; moveCompute(); });
     if (ev.cancelable) ev.preventDefault();
-    if (isDebug() && moveLogCount < 5) {
-      // eslint-disable-next-line no-console
-      console.log('[split:move:event]', { type: ev.type, clientY: e.clientY, dragging });
-      moveLogCount += 1;
-    }
   };
   const onUp = (ev) => {
     if (!dragging) return;
@@ -209,11 +222,28 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     const toSave = (typeof lastRatio === 'number' && Number.isFinite(lastRatio))
       ? Math.max(0, Math.min(1, lastRatio))
       : DEFAULT_RATIO;
-    if (isDebug()) {
-      // eslint-disable-next-line no-console
-      console.log('[split:end]', { reason: ev?.type || 'end', ratio: toSave, lastRatio });
-    }
+    // Temporarily suppress RO from re-applying while we settle to the final ratio
+    suppressRO = true;
+    // Re-apply using current measurements to avoid any transient jump
+    applyFromRatio(toSave);
     persistRatio(toSave);
+    // Clear suppression next frame so RO can resume after geometry stabilizes
+    requestAnimationFrame(() => {
+      suppressRO = false;
+      // Reconnect RO after drag completes
+      try {
+        ro = new ResizeObserver(() => {
+          if (dragging || applying || suppressRO) return;
+          if (roScheduled) return;
+          roScheduled = true;
+          requestAnimationFrame(() => {
+            roScheduled = false;
+            if (!dragging && !applying && !suppressRO) applyFromRatio(readRatio());
+          });
+        });
+        ro.observe(root);
+      } catch {}
+    });
     ctx = null;
   };
 
@@ -221,45 +251,26 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     if (ev.cancelable) ev.preventDefault();
     ev.stopPropagation?.();
     const e = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+    // Pause RO during drag to avoid any external re-applies
+    try { ro?.disconnect?.(); } catch {}
+    suppressRO = true;
     dragging = true;
     lastY = e.clientY;
-    if (isDebug()) {
-      const handleRect = handle.getBoundingClientRect();
-      const rootRect = root.getBoundingClientRect();
-      const splitContainer = handle.closest('.right-drawer-content') || root;
-      const containerRect = splitContainer.getBoundingClientRect();
-      const topRect = notepadPanel.getBoundingClientRect();
-      const bottomRect = todoPanel.getBoundingClientRect();
-      const m = measureSplitRegion();
-      // eslint-disable-next-line no-console
-      console.log('[split:down]', {
-        type: ev.type,
-        pointerId: ev.pointerId,
-        pointerType: ev.pointerType,
-        buttons: ev.buttons,
-        target: ev.target,
-        currentTarget: ev.currentTarget,
-        regionH: m.regionH,
-        availableH: m.availableH,
-        maxTopH: m.maxTopH,
-        MIN_TOP,
-        MIN_BOTTOM,
-        topRectTop: Math.round(topRect.top),
-        containerBottom: Math.round(containerRect.bottom),
-        rootBottom: Math.round(rootRect.bottom),
-        bottomRectBottom: Math.round(bottomRect.bottom),
-        handleRect: { top: Math.round(handleRect.top), left: Math.round(handleRect.left), width: Math.round(handleRect.width), height: Math.round(handleRect.height) },
-        rootRect: { top: Math.round(rootRect.top), left: Math.round(rootRect.left), width: Math.round(rootRect.width), height: Math.round(rootRect.height) },
-      });
-    }
+    
     // Snapshot measurements of the split region at drag start
     const m = measureSplitRegion();
     const handleRect = handle.getBoundingClientRect();
     // Preserve the exact click position within the handle (top-based)
     const grabOffset = e.clientY - handleRect.top;
     ctx = { ...m, grabOffset };
+    if (isDebug()) {
+      const rr = root.getBoundingClientRect();
+      const tr = notepadPanel.getBoundingClientRect();
+      console.log('[split] down', { rootH: rr.height, topTop: tr.top, rootBottom: rr.bottom, availableH: m.availableH, maxTopH: m.maxTopH });
+    }
+    // Debug-only: seed external mutation detector with starting inline height
+    lastInline = notepadSlot.style.height;
     document.body.classList.add('dragging-right-split');
-    moveLogCount = 0;
     if (ev.type === 'pointerdown') {
       activeMode = 'pointer';
       try { handle.setPointerCapture?.(ev.pointerId); } catch {}
@@ -277,25 +288,7 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
       document.addEventListener('touchcancel', onUp, { capture: true, once: true });
     }
     // Compute once immediately so first frame reflects the grabbed position
-    if (isDebug() && ctx) {
-      const desiredHandleTop = lastY - ctx.grabOffset;
-      const rawTopH = desiredHandleTop - ctx.splitTop;
-      const r = ctx.availableH > 0 ? (rawTopH / ctx.availableH) : DEFAULT_RATIO;
-      const computedSlotH = Math.max(60, Math.round(rawTopH - ctx.chromeH));
-      const currentSlotH = Math.round(notepadSlot.getBoundingClientRect().height);
-      // eslint-disable-next-line no-console
-      console.log('[split:start]', {
-        clientY: lastY,
-        grabOffset: ctx.grabOffset,
-        splitTop: ctx.splitTop,
-        desiredHandleTop,
-        rawTopH,
-        ratio: Math.max(0, Math.min(1, r)),
-        chromeH: ctx.chromeH,
-        currentSlotH,
-        computedSlotH,
-      });
-    }
+    
     moveCompute();
   };
 
@@ -306,6 +299,25 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     handle.addEventListener('mousedown', onDown);
     handle.addEventListener('touchstart', onDown, { passive: false });
   }
+
+  // Optional debug hooks to confirm binding and event reachability after enabling debug at runtime
+  try {
+    if (isDebug()) {
+      const visible = () => {
+        try { return getComputedStyle(handle).display !== 'none' && getComputedStyle(handle).visibility !== 'hidden'; } catch { return true; }
+      };
+      console.log('[split] bound', {
+        supportsPointer,
+        handleVisible: visible(),
+        handleRect: (() => { try { const r = handle.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; } catch { return null; } })(),
+        rootHidden: root.hasAttribute('hidden')
+      });
+      const dbg = (ev) => { if (isDebug()) console.log('[split] handle', ev.type, { pointerType: ev.pointerType, buttons: ev.buttons, touches: ev.touches?.length }); };
+      handle.addEventListener('pointerdown', dbg, { capture: true });
+      handle.addEventListener('mousedown', dbg, { capture: true });
+      handle.addEventListener('touchstart', dbg, { capture: true });
+    }
+  } catch {}
 
   // Keyboard nudge
   let keyTimer = null;
@@ -328,6 +340,7 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
   // Provide teardown that cleanly removes listeners/observers for this binding
   teardown = () => {
     try { document.body.classList.remove('dragging-right-split'); } catch {}
+    suppressRO = false;
     // Stop active drag listeners
     if (activeMode === 'pointer') {
       document.removeEventListener('pointermove', onMove, { capture: true });
