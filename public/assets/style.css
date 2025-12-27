@@ -2521,3 +2521,59 @@ body[data-theme='light'] .page-header::after {
     color: #ef4444;
     transform: scale(1.05);
 }
+
+/* Widgets */
+.widgetsArea {
+    margin: 0 0 var(--space-9) 0;
+}
+.widgetsHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+}
+.widgetsHeader h2 {
+    margin: 0;
+}
+.widgetsHeader .widgetsHeaderActions {
+    margin-left: auto;
+}
+.widgetGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-6);
+    margin-top: var(--space-6);
+}
+.widgetCard {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-5);
+    padding: var(--space-6);
+    color: inherit;
+    text-decoration: none;
+    position: relative;
+}
+.widgetCard:hover {
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.widgetCardTitle {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.widgetCardContext {
+    color: var(--muted);
+    font-size: var(--text-md);
+    max-height: 3.2em;
+    overflow: hidden;
+}
+.widgetControls {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    display: inline-flex;
+    gap: 6px;
+}
+.widgetControls button {
+    font-size: 12px;
+    padding: 3px 6px;
+}

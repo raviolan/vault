@@ -1,6 +1,7 @@
 import { $, escapeHtml } from '../lib/dom.js';
 import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
 import { getNavGroupsForSection, addGroup, renameGroup, deleteGroup, setGroupForPage } from '../features/navGroups.js';
+import { renderWidgetsArea } from '../features/widgets.js';
 
 const KEY_TO_LABEL = new Map([
   ['characters', 'Characters'],
@@ -49,12 +50,21 @@ export async function render(outlet, { key }) {
       }).join('')
     : `<li class="meta">No items yet.</li>`;
 
+  const widgetsHostId = 'sectionWidgetsHost';
   outlet.innerHTML = organizer + `
+    <div id="${widgetsHostId}"></div>
     <section class="card">
       <h2>${escapeHtml(label)}</h2>
       <ul>${listHtml}</ul>
     </section>
   `;
+
+  // Render widgets area for this section surface
+  try {
+    const host = $('#' + widgetsHostId, outlet);
+    const surfaceId = `section:${String(key)}`;
+    renderWidgetsArea(host, { surfaceId, title: 'Widgets' });
+  } catch {}
 
   // Bind organizer controls
   const ngGroups = $('#ngGroups');

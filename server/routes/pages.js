@@ -14,6 +14,19 @@ export function routePages(req, res, ctx) {
     return true;
   }
 
+  // GET /api/pages/snapshots
+  if (pathname === '/api/pages/snapshots' && req.method === 'GET') {
+    const idsParams = url.searchParams.getAll('ids');
+    // Support comma-separated and repeated params
+    const ids = [];
+    for (const part of idsParams) {
+      for (const s of String(part || '').split(',')) ids.push(s);
+    }
+    const snapshots = ctx.dbGetPageSnapshots(ctx.db, ids);
+    sendJson(res, 200, { snapshots });
+    return true;
+  }
+
   // POST /api/pages (create)
   if (pathname === '/api/pages' && req.method === 'POST') {
     return (async () => {

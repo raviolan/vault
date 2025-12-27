@@ -6,3 +6,4 @@ export { createBlock, patchBlock, deleteBlock, reorderBlocks, normalizeSiblingSo
 export { searchPages, escapeLike } from './search.js';
 export { getBacklinks } from './backlinks.js';
 export { ensureTag, listTagsWithCounts, getPageTags, setPageTags } from './tags.js';
+export { getPageSnapshots } from './snapshots.js';
