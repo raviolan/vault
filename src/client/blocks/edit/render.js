@@ -72,6 +72,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       const hr = document.createElement('hr');
       wrap.appendChild(hr);
     } else if (b.type === 'section') {
+      const lvl = Math.min(3, Math.max(0, Number((b.props && b.props.level) || 0)));
       const header = document.createElement('div');
       header.className = 'section-header';
       const toggle = document.createElement('button');
@@ -81,7 +82,8 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       header.appendChild(toggle);
       const title = document.createElement('input');
       title.className = 'block-input section-title';
-      title.placeholder = 'Section title';
+      if (lvl) title.classList.add(`h${lvl}`);
+      title.placeholder = lvl === 1 ? 'Heading 1' : (lvl === 2 ? 'Heading 2' : (lvl === 3 ? 'Heading 3' : 'Section title'));
       title.value = b.content?.title || '';
       header.appendChild(title);
       const addBtn = document.createElement('button');
@@ -90,6 +92,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       addBtn.textContent = '+';
       addBtn.title = 'Add child paragraph';
       header.appendChild(addBtn);
+      if (lvl) wrap.classList.add(`section--lvl${lvl}`); else wrap.classList.add('section--plain');
       wrap.appendChild(header);
 
       const kidsWrap = document.createElement('div');

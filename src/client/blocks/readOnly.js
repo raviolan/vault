@@ -44,6 +44,8 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       header.appendChild(btn);
       const title = document.createElement('span');
       title.className = 'section-title-read';
+      const lvl = Math.min(3, Math.max(0, Number(props.level || 0)));
+      if (lvl) title.classList.add(`h${lvl}`);
       title.textContent = content.title || '';
       header.appendChild(title);
       wrap.appendChild(header);

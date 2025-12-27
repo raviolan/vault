@@ -19,9 +19,9 @@ function ensureSlashMenuStyles() {
 
 function getSlashMenuItems() {
   return [
-    { key: 'h1', label: 'Heading 1', type: 'heading', props: { level: 1 } },
-    { key: 'h2', label: 'Heading 2', type: 'heading', props: { level: 2 } },
-    { key: 'h3', label: 'Heading 3', type: 'heading', props: { level: 3 } },
+    { key: 'h1', label: 'Heading 1', type: 'section', props: { collapsed: false, level: 1 } },
+    { key: 'h2', label: 'Heading 2', type: 'section', props: { collapsed: false, level: 2 } },
+    { key: 'h3', label: 'Heading 3', type: 'section', props: { collapsed: false, level: 3 } },
     { key: 'p', label: 'Paragraph', type: 'paragraph', props: {} },
     { key: 'divider', label: 'Divider', type: 'divider', props: {} },
     { key: 'section', label: 'Section', type: 'section', props: { collapsed: false } },
@@ -96,6 +96,12 @@ export function maybeHandleSlashMenu({ page, block, inputEl, orderedBlocksFlat, 
     try {
       await apiPatchBlock(block.id, { type: newType, props: newProps, content: newContent });
       await refreshBlocksFromServer(page.id);
+      // If this is a leveled section, normalize outline nesting
+      if (newType === 'section' && (newProps?.level === 1 || newProps?.level === 2 || newProps?.level === 3)) {
+        const { normalizeOutlineFromLevels } = await import('./outline.js');
+        await normalizeOutlineFromLevels(page);
+        await refreshBlocksFromServer(page.id);
+      }
       await onAfterChange();
       if (newType === 'divider') {
         const flat = orderedBlocksFlat();
