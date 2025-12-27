@@ -328,6 +328,31 @@
 /* Remove left rail on expanded children per request */
 .left .nav-details[open] .nav-item { border-left: 0; }
 
+/* --- Nested subsection headers (inside a section) --- */
+/* Subsection headers (nested groups) — avoid “white card” look */
+.left details[data-section] .nav-details > summary.nav-label {
+  border-left-color: rgba(var(--section-rgb, 148, 163, 184), 0.55);
+  border-left-width: 3px;
+  border-left-style: solid;
+  background-color: rgba(var(--section-rgb, 148, 163, 184), 0.06);
+  border-radius: 12px;
+}
+
+/* Collapsed subsections get a gentle section-tinted gradient */
+.left details[data-section] .nav-details:not([open]) > summary.nav-label {
+  background-image: linear-gradient(90deg,
+    rgba(var(--section-rgb, 148, 163, 184), 0.22) 0%,
+    rgba(var(--section-rgb, 148, 163, 184), 0.08) 28%,
+    rgba(var(--section-rgb, 148, 163, 184), 0) 70%);
+  border-left-color: rgba(var(--section-rgb, 148, 163, 184), 0.65);
+}
+
+/* Slightly calmer when open so it doesn’t fight the open container tint */
+.left details[data-section] .nav-details[open] > summary.nav-label {
+  background-color: rgba(var(--section-rgb, 148, 163, 184), 0.05);
+  background-image: none;
+}
+
 .nav-list {
     list-style: none;
     margin: 0;
