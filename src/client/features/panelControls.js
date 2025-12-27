@@ -22,7 +22,7 @@ export function initPanels() {
   const leftToggle = $('#leftDrawerToggle');
   const rightToggle = $('#rightDrawerToggle');
   if (leftToggle) leftToggle.textContent = 'Close';
-  if (rightToggle) rightToggle.textContent = 'Close';
+  // Right toggle label will reflect open/collapsed state; set below
 
   // Resizers
   const leftResizer = $('.resizer-left');
@@ -44,6 +44,14 @@ export function initPanels() {
     rightTab.hidden = false;
     rightTab.addEventListener('click', () => openRight());
   }
+
+  // Initialize right-side labels according to current state
+  try {
+    const collapsed = document.body.classList.contains('drawer-collapsed') || !!st.rightCollapsed;
+    const isOpen = !!st.rightPanelOpen && !collapsed;
+    if (rightToggle) rightToggle.textContent = isOpen ? 'Close' : 'Open Tools';
+    if (rightTab) rightTab.textContent = 'Open Tools';
+  } catch {}
 
   // Option+Q toggles left .nav-details groups
   document.addEventListener('keydown', (e) => {
@@ -149,6 +157,10 @@ function toggleRight() {
   if (nowCollapsed) {
     document.body.classList.add('drawer-collapsed');
     updateState({ rightCollapsed: true, rightPanelOpen: false });
+    const rt = $('#rightDrawerToggle');
+    const tab = $('.drawer-tab');
+    if (rt) rt.textContent = 'Open Tools';
+    if (tab) tab.textContent = 'Open Tools';
   } else {
     openRight();
   }
@@ -158,4 +170,8 @@ function openRight() {
   $('#rightDrawer')?.removeAttribute('hidden');
   $('#rightDrawerToggle')?.setAttribute('aria-expanded', 'true');
   updateState({ rightCollapsed: false, rightPanelOpen: true });
+  const rt = $('#rightDrawerToggle');
+  const tab = $('.drawer-tab');
+  if (rt) rt.textContent = 'Close';
+  if (tab) tab.textContent = 'Open Tools';
 }

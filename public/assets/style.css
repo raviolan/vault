@@ -463,6 +463,35 @@ body[data-mode='edit'] .editor-add-controls .chip {
 }
 .right-split-picker select { height: 30px; }
 
+/* Right panel: collapsible controls wrapper */
+#rightPanelControls {
+    margin: 2px 6px 6px 6px;
+}
+#rightPanelControls > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px; /* chip-like */
+    background: transparent;
+    user-select: none;
+}
+#rightPanelControls > summary::-webkit-details-marker { display: none; }
+#rightPanelControls > summary::marker { content: ''; }
+#rightPanelControls > summary::after {
+    content: '▸';
+    display: inline-block;
+    margin-left: 6px;
+    color: var(--muted);
+}
+#rightPanelControls[open] > summary::after { content: '▾'; }
+
 /* Split inner layout: allow internal scroll in mounts */
 .split-mount { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .split-mount #notepad { width: 100%; height: 100%; resize: none; }

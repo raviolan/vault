@@ -23,6 +23,8 @@ export function bindRightPanel() {
   if (s.rightPanelOpen) drawer.removeAttribute('hidden');
   else drawer.setAttribute('hidden', '');
   toggle.setAttribute('aria-expanded', String(!!s.rightPanelOpen));
+  // Label the toggle according to open state (collapsed case handled in panelControls)
+  try { toggle.textContent = s.rightPanelOpen ? 'Close' : 'Open Tools'; } catch {}
   if (pinBtn) pinBtn.setAttribute('aria-pressed', String(!!s.rightPanelPinned));
 
   toggle.addEventListener('click', () => {
@@ -30,10 +32,12 @@ export function bindRightPanel() {
     if (isHidden) {
       drawer.removeAttribute('hidden');
       toggle.setAttribute('aria-expanded', 'true');
+      try { toggle.textContent = 'Close'; } catch {}
       updateState({ rightPanelOpen: true });
     } else {
       drawer.setAttribute('hidden', '');
       toggle.setAttribute('aria-expanded', 'false');
+      try { toggle.textContent = 'Open Tools'; } catch {}
       updateState({ rightPanelOpen: false });
     }
   });
@@ -56,6 +60,20 @@ export function bindRightPanel() {
   const singleSelect = document.getElementById('rightPanelSingleSelect');
   const singleGroup = document.getElementById('rightSingleGroup');
   const splitGroup = document.getElementById('rightSplitGroup');
+  const controlsDetails = document.getElementById('rightPanelControls');
+
+  // Collapsible controls: restore persisted open/closed state
+  try {
+    const us = getUserState ? getUserState() : {};
+    if (controlsDetails) {
+      const open = !!(us && typeof us.rightPanelControlsOpen === 'boolean' && us.rightPanelControlsOpen);
+      // default collapsed
+      controlsDetails.open = open;
+      controlsDetails.addEventListener('toggle', () => {
+        try { patchUserState({ rightPanelControlsOpen: !!controlsDetails.open }); } catch {}
+      });
+    }
+  } catch {}
   // Respect mini app visibility settings
   const hidden = new Set(Array.isArray(getState().miniAppsHidden) ? getState().miniAppsHidden : []);
   for (const btn of tabs) {
@@ -359,12 +377,7 @@ export function bindRightPanel() {
     showSplit();
   });
 
-  // Close button: mirrors main toggle
-  closeBtn?.addEventListener('click', () => {
-    drawer.setAttribute('hidden', '');
-    toggle?.setAttribute('aria-expanded', 'false');
-    updateState({ rightPanelOpen: false });
-  });
+  // Legacy close button no longer present; listener retained for compatibility
 
   // Mode & Single selection
   modeSelect?.addEventListener('change', () => {

@@ -126,10 +126,12 @@
             <button class="chip" data-tab="backlinks" hidden>Backlinks</button>
             <button class="chip" data-tab="settings" hidden>Settings</button>
             <button id="rightSplitToggle" class="chip" aria-pressed="false" title="Split view" hidden>Split</button>
-            <!-- Close is the only visible control in this row -->
-            <button id="rightDrawerClose" class="chip" title="Close">Close</button>
+            <!-- Deprecated close button removed: use the top "Tools" toggle -->
           </div>
 
+          <details id="rightPanelControls">
+            <summary>Panel controls</summary>
+            <div id="rightPanelControlsBody">
           <div id="rightSplitPicker" class="right-split-picker">
             <span class="meta">Mode</span>
             <select id="rightPanelModeSelect">
@@ -164,6 +166,8 @@
               <button id="rightSplitSwap" class="chip" type="button" title="Swap">⇅</button>
             </div>
           </div>
+            </div>
+          </details>
 
           <section class="right-panel" data-panel="notepad">
             <h3 class="meta">Notepad</h3>
