@@ -518,6 +518,66 @@ h4 {
 }
 
 /* Grid & Cards */
+
+/* Header Media Controls */
+/* Footer row layout so cover buttons appear right of profile */
+.headerMedia .headerMediaFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    min-height: 64px;
+}
+
+.headerMedia.hasProfile .headerMediaFooter { padding-left: 170px; }
+
+.headerMediaFooterLeft,
+.headerMediaFooterRight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.headerMediaFooterRight { justify-content: flex-end; flex: 1; }
+
+/* Controls containers inside footer */
+.headerMedia .headerMediaControls,
+.headerMedia .headerMediaProfileControls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Make chips readable on page background; keep overlay chips dark */
+.headerMedia .headerMediaControls .chip,
+.headerMedia .headerMediaProfileControls .chip {
+    background: rgba(0,0,0,0.12);
+    color: inherit;
+    border-color: var(--border);
+    white-space: nowrap;
+}
+.headerMedia .headerMediaControls .chip:hover,
+.headerMedia .headerMediaProfileControls .chip:hover {
+    background: rgba(0,0,0,0.18);
+}
+
+/* Overlay bar used during reposition over the image */
+.headerMedia .headerMediaRepositionBar {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+}
+.headerMedia .headerMediaRepositionBar .chip {
+    background: rgba(0,0,0,0.60);
+    color: #fff;
+    border-color: rgba(255,255,255,0.22);
+}
+.headerMedia .headerMediaRepositionBar .chip:hover { background: rgba(0,0,0,0.72); }
 .session-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
