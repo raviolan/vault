@@ -2,7 +2,7 @@ import { escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
-import { renderBlocksEdit } from '../blocks/edit.js';
+import { renderBlocksEdit, refreshBlocksFromServer } from '../blocks/edit.js';
 import { setUiMode } from '../lib/uiMode.js';
 import { autosizeTextarea } from '../lib/autosizeTextarea.js';
 import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
@@ -11,12 +11,32 @@ import { renderBacklinksPanel } from '../features/backlinks.js';
 import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndicator.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
+import { sectionForType, sectionKeyForType } from '../features/nav.js';
+import { getNavGroupsForSection } from '../features/navGroups.js';
+import { flushDebouncedPatches } from '../blocks/edit/state.js';
+
+function setPageBreadcrumb(page) {
+  try {
+    const sectionLabel = sectionForType(page.type);
+    const secKey = sectionKeyForType(page.type);
+    let groupName = null;
+    try {
+      const { groups, pageToGroup } = getNavGroupsForSection(secKey);
+      const gid = pageToGroup?.[page.id] || null;
+      if (gid) groupName = (groups || []).find(g => String(g.id) === String(gid))?.name || null;
+    } catch {}
+    const parts = [sectionLabel, groupName, page.title].filter(Boolean);
+    setBreadcrumb(parts.join(' • '));
+  } catch {
+    setBreadcrumb(page?.title || '');
+  }
+}
 
 export async function renderPage({ match }) {
   const id = match[1];
   const page = await fetchJson(`/api/pages/${encodeURIComponent(id)}`);
 
-  setBreadcrumb(page.title);
+  setPageBreadcrumb(page);
   setPageActionsEnabled({ canEdit: true, canDelete: true });
 
   const outlet = document.getElementById('outlet');
@@ -28,11 +48,11 @@ export async function renderPage({ match }) {
   const typeLabel = TYPE_LABELS[page.type] || page.type;
   outlet.innerHTML = `
     <article class="page">
-      <div id="pageHeaderMedia"></div>
-      <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
-      <p class="meta">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
-      <div id="pageTags" class="toolbar" style="margin: 6px 0;"></div>
-      <div class="page-body" id="pageBlocks"></div>
+      <div id=\"pageHeaderMedia\"></div>
+      <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+      <div id=\"pageTags\" class=\"toolbar\" style=\"margin: 6px 0;\"></div>
+      <div class=\"page-body\" id=\"pageBlocks\"></div>
+      <p class=\"meta\">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
   `;
   // Render header media (view or edit depending on current state)
@@ -203,7 +223,7 @@ export async function renderPage({ match }) {
   const btnEdit = document.getElementById('btnEditPage');
   if (btnEdit) {
     btnEdit.textContent = isEditingPage(page.id) ? 'Done' : 'Edit';
-    btnEdit.onclick = () => {
+    btnEdit.onclick = async () => {
       const now = !isEditingPage(page.id);
       setEditModeForPage(page.id, now);
       btnEdit.textContent = now ? 'Done' : 'Edit';
@@ -217,6 +237,15 @@ export async function renderPage({ match }) {
       } else {
         setUiMode(null);
         disablePageTitleEdit(page);
+        try {
+          await flushDebouncedPatches();
+        } catch (e) { console.error('Failed to flush debounced patches', e); }
+        try {
+          const fresh = await refreshBlocksFromServer(page.id);
+          if (fresh && (fresh.updatedAt || fresh.createdAt)) {
+            page.updatedAt = fresh.updatedAt || fresh.createdAt;
+          }
+        } catch (e) { console.error('Failed to refresh blocks from server', e); }
         renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
         try { unmountSaveIndicator(); } catch {}
         // Keep header media callbacks by reusing stable re-render
@@ -243,7 +272,7 @@ export async function renderPageBySlug({ match }) {
   const slug = match[1];
   const page = await fetchJson(`/api/pages/slug/${encodeURIComponent(slug)}`);
 
-  setBreadcrumb(page.title);
+  setPageBreadcrumb(page);
   setPageActionsEnabled({ canEdit: true, canDelete: true });
 
   const outlet = document.getElementById('outlet');
@@ -254,11 +283,11 @@ export async function renderPageBySlug({ match }) {
   const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
   const typeLabel = TYPE_LABELS[page.type] || page.type;
   outlet.innerHTML = `
-    <article class="page">
-      <div id="pageHeaderMedia"></div>
-      <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
-      <p class="meta">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
-      <div class="page-body" id="pageBlocks"></div>
+    <article class=\"page\">
+      <div id=\"pageHeaderMedia\"></div>
+      <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+      <div class=\"page-body\" id=\"pageBlocks\"></div>
+      <p class=\"meta\">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
   `;
   // Render header media in slug route as well
@@ -405,7 +434,7 @@ export async function renderPageBySlug({ match }) {
   const btnEdit = document.getElementById('btnEditPage');
   if (btnEdit) {
     btnEdit.textContent = isEditingPage(page.id) ? 'Done' : 'Edit';
-    btnEdit.onclick = () => {
+    btnEdit.onclick = async () => {
       const now = !isEditingPage(page.id);
       setEditModeForPage(page.id, now);
       btnEdit.textContent = now ? 'Done' : 'Edit';
@@ -419,6 +448,15 @@ export async function renderPageBySlug({ match }) {
       } else {
         setUiMode(null);
         disablePageTitleEdit(page);
+        try {
+          await flushDebouncedPatches();
+        } catch (e) { console.error('Failed to flush debounced patches', e); }
+        try {
+          const fresh = await refreshBlocksFromServer(page.id);
+          if (fresh && (fresh.updatedAt || fresh.createdAt)) {
+            page.updatedAt = fresh.updatedAt || fresh.createdAt;
+          }
+        } catch (e) { console.error('Failed to refresh blocks from server', e); }
         renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
         try { unmountSaveIndicator(); } catch {}
         // Keep header media callbacks by reusing stable re-render
@@ -493,6 +531,7 @@ export function enablePageTitleEdit(page) {
           const updatedAt = (updated.updatedAt || updated.createdAt || '').toString();
           meta.innerHTML = `Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(updatedAt)}`;
         }
+        try { setPageBreadcrumb(page); } catch {}
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
       } catch (e) {
         console.error('Failed to update type', e);
@@ -524,7 +563,7 @@ function bindPageTitleInput(page, input) {
       try {
         const updated = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}`, { method: 'PATCH', body: JSON.stringify({ title: newTitle }) });
         page.title = updated.title || newTitle;
-        setBreadcrumb(page.title);
+        setPageBreadcrumb(page);
         await import('../features/nav.js').then(m => m.refreshNav());
       } catch (e) {
         console.error('Failed to update title', e);

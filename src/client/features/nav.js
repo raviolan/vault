@@ -36,6 +36,20 @@ export function sectionForType(type) {
   }
 }
 
+// Return a stable section key for a given page type
+export function sectionKeyForType(type) {
+  switch (type) {
+    case 'npc': return 'npcs';
+    case 'location': return 'world';
+    case 'arc': return 'arcs';
+    case 'tool': return 'tools';
+    case 'note': return 'campaign';
+    case 'pc':
+    case 'character':
+    default: return 'characters';
+  }
+}
+
 function sectionKey(label) {
   const key = String(label || '').toLowerCase();
   if (key.includes('npc')) return 'npcs';
