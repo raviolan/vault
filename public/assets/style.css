@@ -2581,7 +2581,7 @@ body[data-theme='light'] .page-header::after {
 /* Header Media */
 .headerMedia { margin: 10px 0 14px; position: relative; }
 .headerMedia .cover {
-  height: 240px;
+  height: var(--headerMediaCoverH, 240px);
   border-radius: 14px;
   background-size: cover;
   background-repeat: no-repeat;
@@ -2589,6 +2589,7 @@ body[data-theme='light'] .page-header::after {
   position: relative;
   overflow: hidden;
 }
+.headerMedia.headerMedia--tall { --headerMediaCoverH: 480px; }
 .headerMedia .profile {
   width: 140px; height: 140px;
   border-radius: 999px;

@@ -13,6 +13,7 @@ export function renderHeaderMedia(hostEl, opts) {
     onRemoveCover = null,
     onRemoveProfile = null,
     onSavePosition = null,
+    variant = 'default',
   } = opts || {};
 
   if (!hostEl) return;
@@ -28,6 +29,7 @@ export function renderHeaderMedia(hostEl, opts) {
   // Build structure
   const wrap = document.createElement('div');
   wrap.className = 'headerMedia';
+  if (variant === 'tall') wrap.classList.add('headerMedia--tall');
   // Ensure positioning anchor for absolute children
   wrap.style.position = 'relative';
   const coverDiv = document.createElement('div');

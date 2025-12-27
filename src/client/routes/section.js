@@ -1,4 +1,6 @@
 import { $, escapeHtml } from '../lib/dom.js';
+import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
+import { setUiMode } from '../lib/uiMode.js';
 import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
 import { getNavGroupsForSection, addGroup, renameGroup, deleteGroup, setGroupForPage } from '../features/navGroups.js';
 import { renderWidgetsArea } from '../features/widgets.js';
@@ -20,6 +22,8 @@ export async function render(outlet, { key }) {
   if (!outlet) return;
   const pages = await loadPages();
   const label = KEY_TO_LABEL.get(String(key).toLowerCase()) || 'Section';
+  try { setBreadcrumb(label); } catch {}
+  try { setPageActionsEnabled({ canEdit: true, canDelete: false }); } catch {}
 
   const filtered = pages.filter(p => sectionForType(p.type) === label)
     .slice()
@@ -54,13 +58,13 @@ export async function render(outlet, { key }) {
     : `<li class="meta">No items yet.</li>`;
 
   const widgetsHostId = 'sectionWidgetsHost';
-  outlet.innerHTML = organizer + `
+  outlet.innerHTML = `
+    <div id="surfaceHeader"></div>
+    ${organizer}
     <div id="${widgetsHostId}"></div>
     <section class="card">
-      <div id="surfaceHeader"></div>
       <div style="display:flex; align-items:center; gap:8px; margin: 4px 0;">
         <h2 style="flex:1 1 auto;">${escapeHtml(label)}</h2>
-        <button id="btnCustomize" type="button" class="chip">Customize</button>
       </div>
       <ul>${listHtml}</ul>
     </section>
@@ -77,7 +81,7 @@ export async function render(outlet, { key }) {
   try {
     const surfId = `section:${String(key)}`;
     const hmHost = $('#surfaceHeader', outlet);
-    const btn = $('#btnCustomize', outlet);
+    const topEditBtn = document.getElementById('btnEditPage');
     let customizing = false;
     let media = null;
     const refresh = async () => {
@@ -89,6 +93,7 @@ export async function render(outlet, { key }) {
         cover: media,
         profile: null,
         showProfile: false,
+        variant: 'tall',
         async onUploadCover(file) {
           const resp = await uploadMedia({ scope: 'surface', surfaceId: surfId, slot: 'header', file });
           media = { url: resp.url, posX: resp.posX, posY: resp.posY };
@@ -105,8 +110,21 @@ export async function render(outlet, { key }) {
         }
       });
     };
-    if (btn) btn.onclick = () => { customizing = !customizing; btn.textContent = customizing ? 'Done' : 'Customize'; void refresh(); };
+    // Wire top toolbar Edit button to toggle section header edit mode
+    const onTopEditClick = () => {
+      customizing = !customizing;
+      if (topEditBtn) topEditBtn.textContent = customizing ? 'Done' : 'Edit';
+      try { setUiMode(customizing ? 'edit' : null); } catch {}
+      void refresh();
+    };
+    // Initialize button state and listener
+    if (topEditBtn) {
+      topEditBtn.textContent = customizing ? 'Done' : 'Edit';
+      topEditBtn.addEventListener('click', onTopEditClick);
+    }
     void refresh();
+    // Cleanup on route change
+    return () => { try { topEditBtn?.removeEventListener('click', onTopEditClick); } catch {} };
   } catch {}
 
   // Bind organizer controls
