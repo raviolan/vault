@@ -18,6 +18,7 @@ import { refreshNav } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
+import { setThemeMode, syncThemeButtons } from './lib/themeSwitchers.js';
 import { mountLeftPanelBottom } from './surfaces/leftPanelBottom.js';
 import { mountLeftPanelWeather } from './surfaces/leftPanelWeather.js';
 import * as WeatherSettingsRoute from './routes/weatherSettings.js';
@@ -76,30 +77,10 @@ export async function boot() {
   // Bind theme mode toggle (switch)
   const btnDark = document.getElementById('themeModeDark');
   const btnLight = document.getElementById('themeModeLight');
-  const syncSwitch = () => {
-    const st = getState();
-    const isLight = st.themeMode === 'light';
-    if (btnDark) {
-      btnDark.setAttribute('aria-pressed', String(!isLight));
-      btnDark.classList.toggle('active', !isLight);
-    }
-    if (btnLight) {
-      btnLight.setAttribute('aria-pressed', String(isLight));
-      btnLight.classList.toggle('active', isLight);
-    }
-  };
   if (btnDark && btnLight) {
-    syncSwitch();
-    btnDark.addEventListener('click', () => {
-      updateState({ themeMode: 'dark' });
-      applyThemeMode('dark', getState());
-      syncSwitch();
-    });
-    btnLight.addEventListener('click', () => {
-      updateState({ themeMode: 'light' });
-      applyThemeMode('light', getState());
-      syncSwitch();
-    });
+    syncThemeButtons();
+    btnDark.addEventListener('click', () => setThemeMode('dark'));
+    btnLight.addEventListener('click', () => setThemeMode('light'));
   }
 
   const leftDrawer = $('#leftDrawer');
