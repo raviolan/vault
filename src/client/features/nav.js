@@ -61,9 +61,15 @@ export function renderNavSections(pages, navCfg) {
 
   const sections = (navCfg?.sections?.length ? navCfg.sections : Array.from(bySection.keys()).map(label => ({ label })));
 
+  // Use a natural, case-insensitive collator for display-only sorting
+  // Note: Sorting is applied at render time only; persisted user ordering is unchanged.
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
   for (const sec of sections) {
     const label = sec.label;
-    const items = (bySection.get(label) || []).slice().sort((a,b) => a.title.localeCompare(b.title));
+    const items = (bySection.get(label) || [])
+      .slice()
+      .sort((a, b) => collator.compare(a?.title || '', b?.title || ''));
     const key = sectionKey(label);
 
     const li = document.createElement('li');
@@ -102,7 +108,7 @@ export function renderNavSections(pages, navCfg) {
     const { groups, pageToGroup } = getNavGroupsForSection(key);
     const hasGroups = Array.isArray(groups) && groups.length > 0;
     if (hasGroups) {
-      // Group pages by groupId, keep original sort order from items
+      // Group pages by groupId; sort at display time only
       const byGroup = new Map(groups.map(g => [g.id, []]));
       const ungrouped = [];
       for (const p of items) {
@@ -110,10 +116,17 @@ export function renderNavSections(pages, navCfg) {
         if (gid && byGroup.has(gid)) byGroup.get(gid).push(p);
         else ungrouped.push(p);
       }
+      // Sort groups alphabetically (case-insensitive, natural) at render time
+      const sortedGroups = groups.slice().sort((a, b) => collator.compare(a?.name || '', b?.name || ''));
+
       // Render each group as nested details
-      for (const g of groups) {
+      for (const g of sortedGroups) {
         const gi = document.createElement('li');
-        const count = (byGroup.get(g.id) || []).length;
+        // Sort pages within the group by title for display
+        const pagesInGroup = (byGroup.get(g.id) || [])
+          .slice()
+          .sort((a, b) => collator.compare(a?.title || '', b?.title || ''));
+        const count = pagesInGroup.length;
         gi.innerHTML = `
           <details class="nav-details" open>
             <summary class="nav-label">
@@ -124,7 +137,7 @@ export function renderNavSections(pages, navCfg) {
           </details>
         `;
         const glist = gi.querySelector('.nav-list');
-        for (const p of (byGroup.get(g.id) || [])) {
+        for (const p of pagesInGroup) {
           const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
           const item = document.createElement('li');
           item.innerHTML = `<a class="nav-item" href="${href}" data-link>
@@ -134,27 +147,17 @@ export function renderNavSections(pages, navCfg) {
         }
         list.appendChild(gi);
       }
-      // Ungrouped at bottom (collapsible, default open)
-      const ui = document.createElement('li');
-      ui.innerHTML = `
-        <details class="nav-details" open>
-          <summary class="nav-label">
-            <span>Ungrouped</span>
-            <span class="meta" style="margin-left:auto;">${ungrouped.length}</span>
-          </summary>
-          <ul class="nav-list"></ul>
-        </details>
-      `;
-      const ulist = ui.querySelector('.nav-list');
-      for (const p of ungrouped) {
+      // Ungrouped at bottom (no header): render items directly under section
+      // Note: Per request, do not render an "Ungrouped" group header; items still appear, sorted by title.
+      const sortedUngrouped = ungrouped.slice().sort((a, b) => collator.compare(a?.title || '', b?.title || ''));
+      for (const p of sortedUngrouped) {
         const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
         const item = document.createElement('li');
         item.innerHTML = `<a class="nav-item" href="${href}" data-link>
           <span class="nav-text">${escapeHtml(p.title)}</span>
         </a>`;
-        ulist.appendChild(item);
+        list.appendChild(item);
       }
-      list.appendChild(ui);
     } else {
       // Default rendering (no groups)
       for (const p of items) {

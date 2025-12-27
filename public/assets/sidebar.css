@@ -344,6 +344,21 @@
     align-items: stretch;
 }
 
+/* Ensure group headers and items span the full available width */
+.left details.nav-details { width: 100%; }
+.left details.nav-details > summary.nav-label {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+}
+.left .nav-list { width: 100%; }
+.left .nav-list > li { width: 100%; }
+.left a.nav-item {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .nav-only {
     padding: 2px 6px;
     margin-left: auto
