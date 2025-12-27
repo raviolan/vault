@@ -8,6 +8,7 @@ const DEFAULT_STATE = {
   navCollapsed: false,
   notepadText: '',
   todoItems: [],
+  surfaceMediaV1: { surfaces: {} },
 };
 
 let state = { ...DEFAULT_STATE };
@@ -58,4 +59,3 @@ export function setState(next) {
   if (loaded) scheduleSave();
   return state;
 }
-

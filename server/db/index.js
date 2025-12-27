@@ -7,3 +7,4 @@ export { searchPages, escapeLike } from './search.js';
 export { getBacklinks } from './backlinks.js';
 export { ensureTag, listTagsWithCounts, getPageTags, setPageTags } from './tags.js';
 export { getPageSnapshots } from './snapshots.js';
+export { getPageMedia, setPageMedia, clearPageMediaSlot } from './pageMedia.js';

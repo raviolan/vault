@@ -2,6 +2,9 @@ import { $, escapeHtml } from '../lib/dom.js';
 import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
 import { getNavGroupsForSection, addGroup, renameGroup, deleteGroup, setGroupForPage } from '../features/navGroups.js';
 import { renderWidgetsArea } from '../features/widgets.js';
+import { renderHeaderMedia } from '../features/headerMedia.js';
+import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
+import { loadState } from '../lib/state.js';
 
 const KEY_TO_LABEL = new Map([
   ['characters', 'Characters'],
@@ -54,7 +57,11 @@ export async function render(outlet, { key }) {
   outlet.innerHTML = organizer + `
     <div id="${widgetsHostId}"></div>
     <section class="card">
-      <h2>${escapeHtml(label)}</h2>
+      <div id="surfaceHeader"></div>
+      <div style="display:flex; align-items:center; gap:8px; margin: 4px 0;">
+        <h2 style="flex:1 1 auto;">${escapeHtml(label)}</h2>
+        <button id="btnCustomize" type="button" class="chip">Customize</button>
+      </div>
       <ul>${listHtml}</ul>
     </section>
   `;
@@ -64,6 +71,42 @@ export async function render(outlet, { key }) {
     const host = $('#' + widgetsHostId, outlet);
     const surfaceId = `section:${String(key)}`;
     renderWidgetsArea(host, { surfaceId, title: 'Widgets' });
+  } catch {}
+
+  // Render header media for this section surface
+  try {
+    const surfId = `section:${String(key)}`;
+    const hmHost = $('#surfaceHeader', outlet);
+    const btn = $('#btnCustomize', outlet);
+    let customizing = false;
+    let media = null;
+    const refresh = async () => {
+      const state = await loadState();
+      const surf = state?.surfaceMediaV1?.surfaces?.[surfId] || null;
+      media = surf && surf.header ? { url: `/media/${surf.header.path}`, posX: surf.header.posX, posY: surf.header.posY } : null;
+      renderHeaderMedia(hmHost, {
+        mode: customizing ? 'edit' : 'view',
+        cover: media,
+        profile: null,
+        showProfile: false,
+        async onUploadCover(file) {
+          const resp = await uploadMedia({ scope: 'surface', surfaceId: surfId, slot: 'header', file });
+          media = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          refresh();
+        },
+        async onRemoveCover() {
+          await deleteMedia({ scope: 'surface', surfaceId: surfId, slot: 'header' });
+          media = null; refresh();
+        },
+        async onSavePosition(slot, x, y) {
+          await updatePosition({ scope: 'surface', surfaceId: surfId, slot: 'header', posX: x, posY: y });
+          if (media) { media.posX = x; media.posY = y; }
+          refresh();
+        }
+      });
+    };
+    if (btn) btn.onclick = () => { customizing = !customizing; btn.textContent = customizing ? 'Done' : 'Customize'; void refresh(); };
+    void refresh();
   } catch {}
 
   // Bind organizer controls

@@ -2577,3 +2577,30 @@ body[data-theme='light'] .page-header::after {
     font-size: 12px;
     padding: 3px 6px;
 }
+
+/* Header Media */
+.headerMedia { margin: 10px 0 14px; position: relative; }
+.headerMedia .cover {
+  height: 240px;
+  border-radius: 14px;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: var(--pos, center center);
+  position: relative;
+  overflow: hidden;
+}
+.headerMedia .profile {
+  width: 140px; height: 140px;
+  border-radius: 999px;
+  object-fit: cover;
+  position: absolute;
+  left: 16px; bottom: -48px;
+  border: 4px solid var(--panel);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+/* Add spacing when profile overlaps */
+article.page.has-profile-media > h1#pageTitleView,
+article.page.has-profile-media > #pageTitleInput {
+  margin-top: 54px;
+}

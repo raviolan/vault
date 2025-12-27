@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ensureUniqueSlug, slugifyTitle } from './slugs.js';
+import { getPageMedia as dbGetPageMedia } from './pageMedia.js';
 
 export function listPages(db) {
   const rows = db.prepare('SELECT id, title, type, slug, created_at, updated_at FROM pages ORDER BY updated_at DESC, created_at DESC').all();
@@ -33,6 +34,13 @@ export function getPageWithBlocks(db, id) {
   const page = db.prepare('SELECT id, title, type, slug, created_at, updated_at FROM pages WHERE id = ?').get(id);
   if (!page) return null;
   const blocks = db.prepare('SELECT id, page_id, parent_id, sort, type, props_json, content_json, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY parent_id IS NOT NULL, parent_id, sort, created_at').all(id);
+  const media = (() => {
+    try {
+      const m = dbGetPageMedia(db, id);
+      const map = (slot) => slot ? ({ url: `/media/${slot.path}`, posX: slot.posX, posY: slot.posY }) : null;
+      return m ? { header: map(m.header), profile: map(m.profile) } : { header: null, profile: null };
+    } catch { return { header: null, profile: null }; }
+  })();
   return {
     id: page.id,
     title: page.title,
@@ -40,6 +48,7 @@ export function getPageWithBlocks(db, id) {
     slug: page.slug,
     createdAt: new Date(page.created_at * 1000).toISOString(),
     updatedAt: new Date(page.updated_at * 1000).toISOString(),
+    media,
     blocks: blocks.map(b => ({
       id: b.id,
       pageId: b.page_id,
@@ -81,4 +90,3 @@ export function patchPage(db, pageId, { title, type, regenerateSlug = false } = 
 export function deletePage(db, id) {
   db.prepare('DELETE FROM pages WHERE id = ?').run(id);
 }
-

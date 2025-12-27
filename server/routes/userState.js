@@ -11,6 +11,7 @@ function defaultUserState() {
     navCollapsed: false,
     notepadText: '',
     todoItems: [],
+    surfaceMediaV1: { surfaces: {} },
   };
 }
 
@@ -63,4 +64,3 @@ export function routeUserState(req, res, ctx) {
 
   return false;
 }
-

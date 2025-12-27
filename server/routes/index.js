@@ -15,6 +15,7 @@ import { routeBacklinks } from './backlinks.js';
 import { routeTags } from './tags.js';
 import { routeUserState } from './userState.js';
 import { routeOpen5e } from './open5e.js';
+import { routeMedia } from './media.js';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -113,6 +114,8 @@ const ROUTES = [
   { name: 'search', handle: routeSearch },
   { name: 'meta', handle: routeMeta },
   { name: 'tags', handle: routeTags },
+  // Media must be early to serve /media/* quickly
+  { name: 'media', handle: routeMedia },
   { name: 'export', handle: routeExport },
   { name: 'import', handle: routeImport },
   // Backlinks must precede generic /api/pages/:id

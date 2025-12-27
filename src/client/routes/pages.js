@@ -9,6 +9,8 @@ import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPage
 import { openDeleteModal } from '../features/modals.js';
 import { renderBacklinksPanel } from '../features/backlinks.js';
 import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndicator.js';
+import { renderHeaderMedia } from '../features/headerMedia.js';
+import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 
 export async function renderPage({ match }) {
   const id = match[1];
@@ -19,17 +21,70 @@ export async function renderPage({ match }) {
 
   const outlet = document.getElementById('outlet');
   if (!outlet) return;
+  // Stable re-render hook for Header Media
+  let rerenderHeaderMedia = null;
 
   const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
   const typeLabel = TYPE_LABELS[page.type] || page.type;
   outlet.innerHTML = `
     <article class="page">
+      <div id="pageHeaderMedia"></div>
       <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
       <p class="meta">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
       <div id="pageTags" class="toolbar" style="margin: 6px 0;"></div>
       <div class="page-body" id="pageBlocks"></div>
     </article>
   `;
+  // Render header media (view or edit depending on current state)
+  try {
+    const host = document.getElementById('pageHeaderMedia');
+    const showProfile = (page.type === 'npc' || page.type === 'character');
+    const renderHM = () => {
+      const mode = isEditingPage(page.id) ? 'edit' : 'view';
+      const article = outlet.querySelector('article.page');
+      if (article) {
+        if (showProfile && page.media?.profile) article.classList.add('has-profile-media'); else article.classList.remove('has-profile-media');
+      }
+      renderHeaderMedia(host, {
+        mode,
+        cover: page.media?.header || null,
+        profile: showProfile ? (page.media?.profile || null) : null,
+        showProfile,
+        async onUploadCover(file) {
+          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
+          page.media = page.media || {};
+          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          renderHM();
+        },
+        async onUploadProfile(file) {
+          if (!showProfile) return;
+          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
+          page.media = page.media || {};
+          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          renderHM();
+        },
+        async onRemoveCover() {
+          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'header' });
+          if (page.media) page.media.header = null;
+          renderHM();
+        },
+        async onRemoveProfile() {
+          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'profile' });
+          if (page.media) page.media.profile = null;
+          renderHM();
+        },
+        async onSavePosition(slot, x, y) {
+          await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y });
+          if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; }
+          if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; }
+          renderHM();
+        },
+      });
+    };
+    // Expose stable re-render function so edit toggles keep callbacks intact
+    rerenderHeaderMedia = renderHM;
+    renderHM();
+  } catch {}
   const blocksRoot = document.getElementById('pageBlocks');
   setCurrentPageBlocks(page.blocks || []);
   if (isEditingPage(page.id)) {
@@ -157,11 +212,15 @@ export async function renderPage({ match }) {
         enablePageTitleEdit(page);
         renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
         try { mountSaveIndicator(); } catch {}
+        // Keep header media callbacks by reusing stable re-render
+        try { rerenderHeaderMedia?.(); } catch {}
       } else {
         setUiMode(null);
         disablePageTitleEdit(page);
         renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
         try { unmountSaveIndicator(); } catch {}
+        // Keep header media callbacks by reusing stable re-render
+        try { rerenderHeaderMedia?.(); } catch {}
       }
     };
   }
@@ -189,16 +248,69 @@ export async function renderPageBySlug({ match }) {
 
   const outlet = document.getElementById('outlet');
   if (!outlet) return;
+  // Stable re-render hook for Header Media
+  let rerenderHeaderMedia = null;
 
   const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
   const typeLabel = TYPE_LABELS[page.type] || page.type;
   outlet.innerHTML = `
     <article class="page">
+      <div id="pageHeaderMedia"></div>
       <h1 id="pageTitleView">${escapeHtml(page.title)}</h1>
       <p class="meta">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
       <div class="page-body" id="pageBlocks"></div>
     </article>
   `;
+  // Render header media in slug route as well
+  try {
+    const host = document.getElementById('pageHeaderMedia');
+    const showProfile = (page.type === 'npc' || page.type === 'character');
+    const renderHM = () => {
+      const mode = isEditingPage(page.id) ? 'edit' : 'view';
+      const article = outlet.querySelector('article.page');
+      if (article) {
+        if (showProfile && page.media?.profile) article.classList.add('has-profile-media'); else article.classList.remove('has-profile-media');
+      }
+      renderHeaderMedia(host, {
+        mode,
+        cover: page.media?.header || null,
+        profile: showProfile ? (page.media?.profile || null) : null,
+        showProfile,
+        async onUploadCover(file) {
+          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
+          page.media = page.media || {};
+          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          renderHM();
+        },
+        async onUploadProfile(file) {
+          if (!showProfile) return;
+          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
+          page.media = page.media || {};
+          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          renderHM();
+        },
+        async onRemoveCover() {
+          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'header' });
+          if (page.media) page.media.header = null;
+          renderHM();
+        },
+        async onRemoveProfile() {
+          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'profile' });
+          if (page.media) page.media.profile = null;
+          renderHM();
+        },
+        async onSavePosition(slot, x, y) {
+          await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y });
+          if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; }
+          if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; }
+          renderHM();
+        },
+      });
+    };
+    // Expose stable re-render function so edit toggles keep callbacks intact
+    rerenderHeaderMedia = renderHM;
+    renderHM();
+  } catch {}
   const blocksRoot = document.getElementById('pageBlocks');
   setCurrentPageBlocks(page.blocks || []);
   if (isEditingPage(page.id)) {
@@ -302,11 +414,15 @@ export async function renderPageBySlug({ match }) {
         enablePageTitleEdit(page);
         renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
         try { mountSaveIndicator(); } catch {}
+        // Keep header media callbacks by reusing stable re-render
+        try { rerenderHeaderMedia?.(); } catch {}
       } else {
         setUiMode(null);
         disablePageTitleEdit(page);
         renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
         try { unmountSaveIndicator(); } catch {}
+        // Keep header media callbacks by reusing stable re-render
+        try { rerenderHeaderMedia?.(); } catch {}
       }
     };
   }
