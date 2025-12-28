@@ -7,6 +7,8 @@ import { hideSlashMenuPublic, maybeHandleSlashMenu, isSlashMenuFor } from './sla
 import { indentBlock, outdentBlock, moveBlockWithinSiblings } from './reorder.js';
 import { markDirty } from './state.js';
 import { handleFormatShortcutKeydown } from '../../lib/formatShortcuts.js';
+import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../../lib/sanitize.js';
+import { escapeHtml } from '../../lib/dom.js';
 
 export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat, render, focus }) {
   inputEl.addEventListener('input', () => {
@@ -273,4 +275,82 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
 
   inputEl.addEventListener('focus', () => maybeHandleSlashMenu({ page, block, inputEl, orderedBlocksFlat, onAfterChange: async () => { render(); focus(block.id); } }));
   inputEl.addEventListener('blur', () => { setTimeout(() => { if (isSlashMenuFor(block.id)) hideSlashMenuPublic(); }, 150); });
+}
+
+// True WYSIWYG handlers for contenteditable paragraphs
+export function bindRichTextHandlers({ page, block, editableEl, orderedBlocksFlat, render, focus }) {
+  // Identify as a block editor region
+  editableEl.setAttribute('role', 'textbox');
+  editableEl.setAttribute('aria-multiline', 'true');
+
+  const scheduleSave = () => {
+    try {
+      const rawHtml = String(editableEl.innerHTML || '');
+      const html = sanitizeRichHtml(rawHtml);
+      const text = plainTextFromHtmlContainer(editableEl);
+      markDirty();
+      // Persist rich HTML in props.html and plain text in content.text
+      debouncePatch(block.id, { props: { ...(block.props || {}), html }, content: { ...(block.content || {}), text } });
+    } catch (err) { console.error('rich save failed', err); }
+  };
+
+  let inputTimer = null;
+  const debounceLocal = (fn) => {
+    if (inputTimer) clearTimeout(inputTimer);
+    inputTimer = setTimeout(fn, 120);
+  };
+
+  editableEl.addEventListener('input', () => {
+    debounceLocal(scheduleSave);
+  });
+
+  // Enter -> line break (<br>)
+  editableEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      try {
+        document.execCommand('insertLineBreak');
+      } catch {}
+      // Fallback if execCommand unsupported
+      try {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const r = sel.getRangeAt(0);
+          const br = document.createElement('br');
+          r.insertNode(br);
+          r.setStartAfter(br);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+      } catch {}
+      debounceLocal(scheduleSave);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      // Bold/Italic shortcuts still handled globally elsewhere; nothing special here
+      // Let browser handle and rely on input event to persist
+      // But do not block default
+      return;
+    }
+  });
+
+  // Paste as plain text with newline -> <br>
+  editableEl.addEventListener('paste', (e) => {
+    try {
+      const text = e.clipboardData?.getData('text/plain') ?? '';
+      if (!text) return; // let browser handle
+      e.preventDefault();
+      const safe = escapeHtml(text.replace(/\r\n/g, '\n'))
+        .replace(/\n/g, '<br>');
+      document.execCommand('insertHTML', false, safe);
+      debounceLocal(scheduleSave);
+    } catch (err) { console.error('rich paste failed', err); }
+  });
+
+  // Sync slash menu behavior on focus
+  editableEl.addEventListener('focus', () => {
+    maybeHandleSlashMenu({ page, block, inputEl: editableEl, orderedBlocksFlat, onAfterChange: async () => { render(); focus(block.id); } });
+  });
+  editableEl.addEventListener('blur', () => { setTimeout(() => { if (isSlashMenuFor(block.id)) hideSlashMenuPublic(); }, 150); });
 }

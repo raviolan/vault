@@ -1,6 +1,7 @@
 import { parseMaybeJson, blocksToTree } from './tree.js';
 import { buildWikiTextNodes } from '../features/wikiLinks.js';
 import { apiPatchBlock } from './api.js';
+import { sanitizeRichHtml } from '../lib/sanitize.js';
 
 export function renderBlocksReadOnly(rootEl, blocks) {
   if (!blocks || !blocks.length) {
@@ -23,8 +24,14 @@ export function renderBlocksReadOnly(rootEl, blocks) {
     }
     if (n.type === 'paragraph') {
       const p = document.createElement('p');
-      const txt = String(content.text || '');
-      p.appendChild(buildWikiTextNodes(txt, n.id));
+      const rich = (props && props.html) ? String(props.html) : '';
+      if (rich && rich.trim()) {
+        // Render sanitized HTML when present
+        p.innerHTML = sanitizeRichHtml(rich);
+      } else {
+        const txt = String(content.text || '');
+        p.appendChild(buildWikiTextNodes(txt, n.id));
+      }
       return p;
     }
     if (n.type === 'divider') {

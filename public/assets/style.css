@@ -1350,6 +1350,30 @@ body[data-mode='edit'] .page .page-editor {
     box-shadow: var(--shadow-1);
 }
 
+/* Default: toolbar hidden unless in edit mode */
+.editor-toolbar { display: none; }
+
+/* Sticky editor toolbar (edit mode only) */
+body[data-mode='edit'] .editor-toolbar {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-4);
+    box-shadow: var(--shadow-1);
+}
+body[data-mode='edit'] .editor-toolbar .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+body[data-mode='edit'] .editor-toolbar select { height: 28px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+body[data-mode='edit'] .editor-toolbar button { height: 28px; min-width: 28px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
+body[data-mode='edit'] .editor-toolbar button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+body[data-mode='edit'] .editor-toolbar .sep { width: 1px; height: 24px; background: var(--border); margin: 0 2px; }
+
 body[data-mode='edit'] .page .page-body {
     max-width: 76ch;
     line-height: 1.7;
@@ -1389,6 +1413,10 @@ body[data-mode='edit'] .block .block-input.paragraph {
     font-size: var(--text-lg);
     resize: none;
 }
+
+/* Rich paragraph contenteditable should look like the normal input */
+body[data-mode='edit'] .block .block-input.paragraph.block-rich { white-space: pre-wrap; outline: none; }
+body[data-mode='edit'] .block .block-input.paragraph.block-rich a { color: var(--link); text-decoration: underline; }
 /* Only when a single block exists (blank canvas), give it a tall starting height */
 body[data-mode='edit'] .page .page-body > .block:only-child .block-input.paragraph {
     min-height: 64vh;
