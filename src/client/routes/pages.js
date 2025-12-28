@@ -68,8 +68,21 @@ export async function renderPage({ match }) {
   outlet.innerHTML = `
     <article class="page">
       <div id=\"pageHeaderMedia\"></div>
-      <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
-      <div id=\"pageTags\" class=\"toolbar\" style=\"margin: 6px 0;\"></div>
+      <div class=\"page-identity\" id=\"pageIdentity\">
+        <div class=\"avatar-col\"></div>
+        <div class=\"name-col\">
+          <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+          <div id=\"pageTags\" class=\"toolbar\"></div>
+        </div>
+        <div class=\"actions-col\" role=\"toolbar\" aria-label=\"Page actions\">
+          <button id=\"btnEditPageLocal\" class=\"chip\" title=\"Edit This Page\" disabled>Edit</button>
+          <button id=\"btnDeletePageLocal\" class=\"delete-page-btn\" title=\"Delete this page\" aria-label=\"Delete this page\" hidden>
+            <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"> 
+              <path d=\"M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6\" /> 
+            </svg>
+          </button>
+        </div>
+      </div>
       <div class=\"page-body\" id=\"pageBlocks\"></div>
       <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
@@ -123,6 +136,14 @@ export async function renderPage({ match }) {
           }
         },
       });
+      // Reserve identity left column to match avatar width (if present)
+      try {
+        const identity = document.getElementById('pageIdentity');
+        const clip = host.querySelector('.profileWrap');
+        const w = clip ? Math.round(clip.getBoundingClientRect().width) : 0;
+        const reserve = (showProfile && page.media?.profile && w) ? `${w}px` : '0px';
+        if (identity) identity.style.setProperty('--avatar-slot', reserve);
+      } catch {}
     };
     // Expose stable re-render function so edit toggles keep callbacks intact
     rerenderHeaderMedia = renderHM;
@@ -237,19 +258,25 @@ export async function renderPage({ match }) {
   // Tags editor
   void renderPageTags(page.id);
 
-  // Bind delete
+  // Bind delete (global + local)
   const btnDelete = document.getElementById('btnDeletePage');
-  if (btnDelete) {
-    btnDelete.onclick = () => openDeleteModal(page);
-  }
+  const btnDeleteLocal = document.getElementById('btnDeletePageLocal');
+  if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
+  if (btnDeleteLocal) { btnDeleteLocal.onclick = () => openDeleteModal(page); }
 
   const btnEdit = document.getElementById('btnEditPage');
-  if (btnEdit) {
-    btnEdit.textContent = isEditingPage(page.id) ? 'Done' : 'Edit';
-    btnEdit.onclick = async () => {
+  const btnEditLocal = document.getElementById('btnEditPageLocal');
+  if (btnEdit || btnEditLocal) {
+    const setLabels = () => {
+      const label = isEditingPage(page.id) ? 'Done' : 'Edit';
+      if (btnEdit) btnEdit.textContent = label;
+      if (btnEditLocal) btnEditLocal.textContent = label;
+    };
+    setLabels();
+    const onClick = async () => {
       const now = !isEditingPage(page.id);
       setEditModeForPage(page.id, now);
-      btnEdit.textContent = now ? 'Done' : 'Edit';
+      setLabels();
       if (now) {
         setUiMode('edit');
         enablePageTitleEdit(page);
@@ -275,6 +302,8 @@ export async function renderPage({ match }) {
         try { rerenderHeaderMedia?.(); } catch {}
       }
     };
+    if (btnEdit) btnEdit.onclick = onClick;
+    if (btnEditLocal) btnEditLocal.onclick = onClick;
   }
 
   // Cleanup on route change: ensure we exit edit mode styles/indicator
@@ -308,7 +337,20 @@ export async function renderPageBySlug({ match }) {
   outlet.innerHTML = `
     <article class=\"page\"> 
       <div id=\"pageHeaderMedia\"></div>
-      <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+      <div class=\"page-identity\" id=\"pageIdentity\">
+        <div class=\"avatar-col\"></div>
+        <div class=\"name-col\">
+          <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+        </div>
+        <div class=\"actions-col\" role=\"toolbar\" aria-label=\"Page actions\"> 
+          <button id=\"btnEditPageLocal\" class=\"chip\" title=\"Edit This Page\" disabled>Edit</button>
+          <button id=\"btnDeletePageLocal\" class=\"delete-page-btn\" title=\"Delete this page\" aria-label=\"Delete this page\" hidden>
+            <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">
+              <path d=\"M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6\" />
+            </svg>
+          </button>
+        </div>
+      </div>
       <div class=\"page-body\" id=\"pageBlocks\"></div>
       <p class=\"meta\">Section: ${escapeHtml(sectionLabel2 || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
@@ -362,6 +404,14 @@ export async function renderPageBySlug({ match }) {
           }
         },
       });
+      // Reserve identity left column based on avatar size (if present)
+      try {
+        const identity = document.getElementById('pageIdentity');
+        const clip = host.querySelector('.profileWrap');
+        const w = clip ? Math.round(clip.getBoundingClientRect().width) : 0;
+        const reserve = (showProfile && page.media?.profile && w) ? `${w}px` : '0px';
+        if (identity) identity.style.setProperty('--avatar-slot', reserve);
+      } catch {}
     };
     // Expose stable re-render function so edit toggles keep callbacks intact
     rerenderHeaderMedia = renderHM;
@@ -452,19 +502,25 @@ export async function renderPageBySlug({ match }) {
     try { unmountSaveIndicator(); } catch {}
   }
 
-  // Bind delete
+  // Bind delete (global + local)
   const btnDelete = document.getElementById('btnDeletePage');
-  if (btnDelete) {
-    btnDelete.onclick = () => openDeleteModal(page);
-  }
+  const btnDeleteLocal = document.getElementById('btnDeletePageLocal');
+  if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
+  if (btnDeleteLocal) { btnDeleteLocal.onclick = () => openDeleteModal(page); }
 
   const btnEdit = document.getElementById('btnEditPage');
-  if (btnEdit) {
-    btnEdit.textContent = isEditingPage(page.id) ? 'Done' : 'Edit';
-    btnEdit.onclick = async () => {
+  const btnEditLocal = document.getElementById('btnEditPageLocal');
+  if (btnEdit || btnEditLocal) {
+    const setLabels = () => {
+      const label = isEditingPage(page.id) ? 'Done' : 'Edit';
+      if (btnEdit) btnEdit.textContent = label;
+      if (btnEditLocal) btnEditLocal.textContent = label;
+    };
+    setLabels();
+    const onClick = async () => {
       const now = !isEditingPage(page.id);
       setEditModeForPage(page.id, now);
-      btnEdit.textContent = now ? 'Done' : 'Edit';
+      setLabels();
       if (now) {
         setUiMode('edit');
         enablePageTitleEdit(page);
@@ -490,6 +546,8 @@ export async function renderPageBySlug({ match }) {
         try { rerenderHeaderMedia?.(); } catch {}
       }
     };
+    if (btnEdit) btnEdit.onclick = onClick;
+    if (btnEditLocal) btnEditLocal.onclick = onClick;
   }
 
   // Backlinks

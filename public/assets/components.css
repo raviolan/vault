@@ -535,7 +535,7 @@ h4 {
 /* Grid & Cards */
 
 /* Header Media Controls */
-/* Footer row layout so cover buttons appear right of profile */
+/* Footer row layout remains for profile tools; cover tools overlay inside the cover */
 .headerMedia .headerMediaFooter {
     display: flex;
     align-items: center;
@@ -557,8 +557,21 @@ h4 {
 
 .headerMediaFooterRight { justify-content: flex-end; flex: 1; }
 
-/* Controls containers inside footer */
-.headerMedia .headerMediaControls,
+/* Cover controls overlay in the cover (top-right) */
+.headerMedia .cover .headerMediaControls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 10px;
+    background: color-mix(in oklab, white 8%, transparent);
+    border: 1px solid color-mix(in oklab, black 12%, transparent);
+    backdrop-filter: blur(8px);
+}
+
+/* Profile controls remain in the footer (left) */
 .headerMedia .headerMediaProfileControls {
     display: flex;
     gap: 8px;
@@ -580,6 +593,9 @@ h4 {
 
 /* Overlay bar used during reposition over the image */
 .headerMedia .headerMediaRepositionBar {
+    position: absolute;
+    top: 12px;
+    right: 12px;
     display: flex;
     gap: 8px;
     padding: 8px;
@@ -593,6 +609,39 @@ h4 {
     border-color: rgba(255,255,255,0.22);
 }
 .headerMedia .headerMediaRepositionBar .chip:hover { background: rgba(0,0,0,0.72); }
+.page-identity {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    padding: 10px 0 12px 0;
+}
+.page-identity .avatar-col {
+    flex: 0 0 var(--avatar-slot, 0px);
+}
+.page-identity .name-col {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.page-identity .name-col #pageTitleView,
+.page-identity .name-col #pageTitleInput {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.page-identity .name-col #pageTags {
+    margin-top: 4px;
+}
+.page-identity .actions-col {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+@media (max-width: 640px) {
+    .page-identity { flex-wrap: wrap; }
+    .page-identity .actions-col { margin-left: auto; width: 100%; justify-content: flex-end; }
+}
 .session-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

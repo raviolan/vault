@@ -49,6 +49,7 @@ export function renderHeaderMedia(hostEl, opts) {
   wrap.appendChild(coverDiv);
 
   // Footer row for controls (below cover)
+  // Kept for profile tools and spacing; cover tools now overlay inside the cover
   const footer = document.createElement('div'); footer.className = 'headerMediaFooter';
   const footerLeft = document.createElement('div'); footerLeft.className = 'headerMediaFooterLeft';
   const footerRight = document.createElement('div'); footerRight.className = 'headerMediaFooterRight';
@@ -109,16 +110,14 @@ export function renderHeaderMedia(hostEl, opts) {
         overlay.style.background = 'rgba(0,0,0,0.08)';
         // Hide normal cover controls while repositioning
         ctl.style.display = 'none';
-        // Add reposition bar to footer (below header, right side)
+        // Add reposition bar as an overlay inside the cover (top-right)
         const bar = document.createElement('div');
         bar.className = 'headerMediaRepositionBar';
-        bar.style.padding = '8px';
-        bar.style.display = 'flex'; bar.style.gap = '8px';
         const saveBtn = document.createElement('button'); saveBtn.className = 'chip'; saveBtn.textContent = 'Save';
         const cancelBtn = document.createElement('button'); cancelBtn.className = 'chip'; cancelBtn.textContent = 'Cancel';
         bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
         coverDiv.appendChild(overlay);
-        footerRight.appendChild(bar);
+        coverDiv.appendChild(bar);
 
         const onPointerDown = (e) => {
           overlay.setPointerCapture(e.pointerId);
@@ -171,8 +170,8 @@ export function renderHeaderMedia(hostEl, opts) {
         };
       };
     }
-    // Put cover controls in footer right
-    footerRight.appendChild(ctl);
+    // Place cover controls inside the cover so they don't compete with page tools
+    coverDiv.appendChild(ctl);
   }
 
   // Profile image (view if present; edit supports add/change/remove and reposition/zoom)
