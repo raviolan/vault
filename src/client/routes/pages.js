@@ -12,7 +12,7 @@ import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndica
 import { renderHeaderMedia } from '../features/headerMedia.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { sectionForType, sectionKeyForType } from '../features/nav.js';
-import { getNavGroupsForSection } from '../features/navGroups.js';
+import { getNavGroupsForSection, setGroupForPage, addGroup } from '../features/navGroups.js';
 import { flushDebouncedPatches } from '../blocks/edit/state.js';
 
 function setPageBreadcrumb(page) {
@@ -496,6 +496,11 @@ export function enablePageTitleEdit(page) {
     const wrap = document.createElement('div');
     wrap.id = 'pageTypeControl';
     wrap.style.margin = '6px 0';
+    // Make row layout for Type + Category controls
+    wrap.style.display = 'flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '12px';
+    wrap.style.flexWrap = 'wrap';
     // Keep label and select simple; do not modify existing hooks/classes
     const label = document.createElement('label');
     label.textContent = 'Type ';
@@ -518,9 +523,73 @@ export function enablePageTitleEdit(page) {
     }
     label.appendChild(sel);
     wrap.appendChild(label);
+    // Category UI
+    const secKey = sectionKeyForType(page.type || 'note');
+    const { groups, pageToGroup } = getNavGroupsForSection(secKey);
+    const currentGid = pageToGroup?.[page.id] || '';
+    const gLabel = document.createElement('label');
+    gLabel.textContent = 'Category ';
+    const gSel = document.createElement('select');
+    gSel.id = 'pageGroupSelect';
+    gSel.name = 'pageGroup';
+    const buildGroupOptions = (gs, selectedId) => {
+      gSel.innerHTML = '';
+      const o0 = document.createElement('option');
+      o0.value = '';
+      o0.textContent = 'Ungrouped';
+      gSel.appendChild(o0);
+      for (const g of (gs || [])) {
+        const o = document.createElement('option');
+        o.value = String(g.id);
+        o.textContent = g.name;
+        if (String(g.id) === String(selectedId || '')) o.selected = true;
+        gSel.appendChild(o);
+      }
+    };
+    buildGroupOptions(groups, currentGid);
+    gLabel.appendChild(gSel);
+    wrap.appendChild(gLabel);
+    // Optional New… button
+    const btnNew = document.createElement('button');
+    btnNew.type = 'button';
+    btnNew.className = 'chip';
+    btnNew.textContent = 'New…';
+    wrap.appendChild(btnNew);
     input.after(wrap);
 
+    // Persist Category change immediately
+    gSel.addEventListener('change', async () => {
+      const key = sectionKeyForType(page.type || 'note');
+      const gid = gSel.value || null;
+      try {
+        await setGroupForPage(key, page.id, gid);
+        try { setPageBreadcrumb(page); } catch {}
+        try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+      } catch (e) {
+        console.error('Failed to update category', e);
+      }
+    });
+
+    // Create new category inline
+    btnNew.onclick = async () => {
+      const key = sectionKeyForType(page.type || 'note');
+      const name = prompt('New category name');
+      if (!name) return;
+      try {
+        const newId = await addGroup(key, name);
+        if (!newId) return;
+        const { groups: gs } = getNavGroupsForSection(key);
+        buildGroupOptions(gs, String(newId));
+        await setGroupForPage(key, page.id, newId);
+        try { setPageBreadcrumb(page); } catch {}
+        try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+      } catch (e) {
+        console.error('Failed to create category', e);
+      }
+    };
+
     sel.addEventListener('change', async () => {
+      const oldKey = sectionKeyForType(page.type || 'note');
       const newType = sel.value;
       try {
         const updated = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}`, { method: 'PATCH', body: JSON.stringify({ type: newType }) });
@@ -530,6 +599,14 @@ export function enablePageTitleEdit(page) {
         if (meta) {
           const updatedAt = (updated.updatedAt || updated.createdAt || '').toString();
           meta.innerHTML = `Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(updatedAt)}`;
+        }
+        // If section changed, clear old mapping and rebuild Category options
+        const newKey = sectionKeyForType(page.type || 'note');
+        if (oldKey !== newKey) {
+          try { await setGroupForPage(oldKey, page.id, null); } catch {}
+          const { groups: gs, pageToGroup: ptg } = getNavGroupsForSection(newKey);
+          const cur = ptg?.[page.id] || '';
+          buildGroupOptions(gs, cur);
         }
         try { setPageBreadcrumb(page); } catch {}
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
