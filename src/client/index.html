@@ -233,7 +233,13 @@
     <div class="modal-content">
       <h2>Create New Page</h2>
       <form>
-        <label>Type
+        <label>Create
+          <select name="createKind">
+            <option value="page" selected>Page</option>
+            <option value="section">Section</option>
+          </select>
+        </label>
+        <label data-create-row="pageType">Type
           <select name="pageType">
             <option value="note">Note</option>
             <option value="npc">NPC</option>
@@ -243,7 +249,7 @@
             <option value="tool">Tool</option>
           </select>
         </label>
-        <label>Title
+        <label><span data-title-label>Title</span>
           <input name="pageTitle" type="text" required autocomplete="off" />
         </label>
         <div class="modal-actions">

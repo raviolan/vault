@@ -14,6 +14,8 @@ import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js'
 import { sectionForType, sectionKeyForType } from '../features/nav.js';
 import { getNavGroupsForSection, setGroupForPage, addGroup } from '../features/navGroups.js';
 import { flushDebouncedPatches } from '../blocks/edit/state.js';
+import { getState, updateState, saveStateNow } from '../lib/state.js';
+import { addPageToSection, removePageFromSection } from '../lib/sections.js';
 
 function setPageBreadcrumb(page) {
   try {
@@ -44,15 +46,14 @@ export async function renderPage({ match }) {
   // Stable re-render hook for Header Media
   let rerenderHeaderMedia = null;
 
-  const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
-  const typeLabel = TYPE_LABELS[page.type] || page.type;
+  const sectionLabel = sectionForType(page.type);
   outlet.innerHTML = `
     <article class="page">
       <div id=\"pageHeaderMedia\"></div>
       <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
       <div id=\"pageTags\" class=\"toolbar\" style=\"margin: 6px 0;\"></div>
       <div class=\"page-body\" id=\"pageBlocks\"></div>
-      <p class=\"meta\">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
   `;
   // Render header media (view or edit depending on current state)
@@ -280,14 +281,13 @@ export async function renderPageBySlug({ match }) {
   // Stable re-render hook for Header Media
   let rerenderHeaderMedia = null;
 
-  const TYPE_LABELS = { note: 'Note', npc: 'NPC', character: 'Character', location: 'Location', arc: 'Arc', tool: 'Tool' };
-  const typeLabel = TYPE_LABELS[page.type] || page.type;
+  const sectionLabel2 = sectionForType(page.type);
   outlet.innerHTML = `
-    <article class=\"page\">
+    <article class=\"page\"> 
       <div id=\"pageHeaderMedia\"></div>
       <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
       <div class=\"page-body\" id=\"pageBlocks\"></div>
-      <p class=\"meta\">Type: ${escapeHtml(typeLabel)} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <p class=\"meta\">Section: ${escapeHtml(sectionLabel2 || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
   `;
   // Render header media in slug route as well
@@ -503,26 +503,55 @@ export function enablePageTitleEdit(page) {
     wrap.style.flexWrap = 'wrap';
     // Keep label and select simple; do not modify existing hooks/classes
     const label = document.createElement('label');
-    label.textContent = 'Type ';
+    label.textContent = 'Section ';
     const sel = document.createElement('select');
     sel.name = 'pageType';
     sel.id = 'pageTypeSelect';
-    const types = [
-      { v: 'note', t: 'Note' },
-      { v: 'npc', t: 'NPC' },
-      { v: 'character', t: 'Character' },
-      { v: 'location', t: 'Location' },
-      { v: 'arc', t: 'Arc' },
-      { v: 'tool', t: 'Tool' },
-    ];
-    for (const opt of types) {
-      const o = document.createElement('option');
-      o.value = opt.v; o.textContent = opt.t;
-      if ((page.type || 'note') === opt.v) o.selected = true;
-      sel.appendChild(o);
-    }
+    // Build unified dropdown with Core sections and user Folders
+    const buildTypeFolderOptions = () => {
+      sel.innerHTML = '';
+      // Determine current folder selection
+      const st = getState();
+      const secs = Array.isArray(st?.sections) ? st.sections : [];
+      const curFolder = secs.find(s => (s.pageIds || []).includes(page.id)) || null;
+      // Core sections
+      const core = [
+        { v: 'character', t: 'Characters' },
+        { v: 'npc',       t: 'NPCs' },
+        { v: 'location',  t: 'World' },
+        { v: 'arc',       t: 'Arcs' },
+        { v: 'note',      t: 'Campaign' },
+        { v: 'tool',      t: 'Tools' },
+      ];
+      const ogCore = document.createElement('optgroup');
+      ogCore.label = 'Core sections';
+      const rawType = page.type || 'note';
+      const selectedType = (rawType === 'pc') ? 'character' : rawType;
+      for (const opt of core) {
+        const o = document.createElement('option');
+        o.value = opt.v; o.textContent = opt.t;
+        if (!curFolder && selectedType === opt.v) o.selected = true;
+        ogCore.appendChild(o);
+      }
+      sel.appendChild(ogCore);
+      // Folders
+      const ogFolders = document.createElement('optgroup');
+      ogFolders.label = 'Folders';
+      const folderList = secs.map(s => ({ id: String(s.id), title: s.title || '', pageIds: Array.isArray(s.pageIds) ? s.pageIds : [] }))
+        .sort((a, b) => String(a.title).localeCompare(String(b.title), undefined, { sensitivity: 'base' }));
+      for (const s of folderList) {
+        const o = document.createElement('option');
+        o.value = `folder:${s.id}`;
+        o.textContent = s.title || '';
+        if (curFolder && String(curFolder.id) === String(s.id)) o.selected = true;
+        ogFolders.appendChild(o);
+      }
+      sel.appendChild(ogFolders);
+    };
+    buildTypeFolderOptions();
     label.appendChild(sel);
     wrap.appendChild(label);
+
     // Category UI
     const secKey = sectionKeyForType(page.type || 'note');
     const { groups, pageToGroup } = getNavGroupsForSection(secKey);
@@ -589,16 +618,53 @@ export function enablePageTitleEdit(page) {
     };
 
     sel.addEventListener('change', async () => {
+      const val = sel.value;
+      // Handle folder selection vs core section type
+      if (val && val.startsWith('folder:')) {
+        const folderId = val.slice('folder:'.length);
+        try {
+          // Remove from all folders first, then add to chosen folder
+          let st = getState();
+          const secs = Array.isArray(st?.sections) ? st.sections.slice() : [];
+          for (const s of secs) {
+            st = removePageFromSection(st, s.id, page.id);
+          }
+          if (folderId) {
+            st = addPageToSection(st, folderId, page.id);
+          }
+          updateState(st);
+          await saveStateNow();
+          try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+          // Rebuild options to reflect new selection state
+          buildTypeFolderOptions();
+        } catch (e) {
+          console.error('Failed to move page to folder', e);
+        }
+        return;
+      }
+
+      // Core section selected: remove from folders, then PATCH page.type
       const oldKey = sectionKeyForType(page.type || 'note');
-      const newType = sel.value;
+      const newType = val;
       try {
+        // Remove page from any folders first
+        let st = getState();
+        const secs = Array.isArray(st?.sections) ? st.sections.slice() : [];
+        for (const s of secs) {
+          st = removePageFromSection(st, s.id, page.id);
+        }
+        updateState(st);
+        await saveStateNow();
+        try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+
         const updated = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}`, { method: 'PATCH', body: JSON.stringify({ type: newType }) });
         // Reflect updated type in local page and meta display
         page.type = updated.type || newType;
         const meta = document.querySelector('article.page p.meta');
         if (meta) {
           const updatedAt = (updated.updatedAt || updated.createdAt || '').toString();
-          meta.innerHTML = `Type: ${escapeHtml(page.type)} · Updated: ${escapeHtml(updatedAt)}`;
+          const sectionLabel = sectionForType(page.type);
+          meta.innerHTML = `Section: ${escapeHtml(sectionLabel || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
         }
         // If section changed, clear old mapping and rebuild Category options
         const newKey = sectionKeyForType(page.type || 'note');
@@ -610,6 +676,8 @@ export function enablePageTitleEdit(page) {
         }
         try { setPageBreadcrumb(page); } catch {}
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+        // Rebuild options to ensure correct core selection now that page.type changed
+        buildTypeFolderOptions();
       } catch (e) {
         console.error('Failed to update type', e);
       }
