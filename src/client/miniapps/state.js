@@ -1,5 +1,5 @@
 // Backwards-compatible user state helpers for mini apps, built on existing store.
-import { getState, updateState } from '../lib/state.js';
+import { getState, updateState, saveStateNow, reloadStateFromServer } from '../lib/state.js';
 
 export function getUserState() {
   return getState();
@@ -9,6 +9,12 @@ export function patchUserState(partial) {
   // Merge + persist via existing debounced mechanism
   return updateState(partial);
 }
+
+// Expose immediate flush for callers that need synchronous persistence
+export function flushUserState() { return saveStateNow(); }
+
+// Reload user state from server (wrapper for miniapps callers)
+export function reloadUserState() { return reloadStateFromServer(); }
 
 // Namespaced app state with backwards compatibility.
 export function getAppState(appId, fallback = undefined) {

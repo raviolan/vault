@@ -20,6 +20,10 @@ const KEY_TO_LABEL = new Map([
 
 export async function render(outlet, { key }) {
   if (!outlet) return;
+  // Store section key on the outlet for delegated handlers
+  outlet.dataset.sectionKey = String(key || '');
+  // Local cleanup for header media click binding
+  let cleanupHeaderMedia = null;
   const pages = await loadPages();
   const label = KEY_TO_LABEL.get(String(key).toLowerCase()) || 'Section';
   try { setBreadcrumb(label); } catch {}
@@ -46,9 +50,11 @@ export async function render(outlet, { key }) {
   const listHtml = filtered.length
     ? filtered.map(p => {
         const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+        const currentGroupId = pageToGroup[p.id] != null ? String(pageToGroup[p.id]) : '';
+        const valid = !!(currentGroupId && (groups || []).some(g => String(g.id) === String(currentGroupId)));
         const opts = [
-          `<option value="">Ungrouped</option>`,
-          ...groups.map(g => `<option value="${escapeHtml(g.id)}" ${pageToGroup[p.id]===g.id?'selected':''}>${escapeHtml(g.name)}</option>`),
+          `<option value="" ${!valid ? 'selected' : ''}>Ungrouped</option>`,
+          ...groups.map(g => `<option value="${String(g.id)}" ${valid && String(g.id)===String(currentGroupId)?'selected':''}>${escapeHtml(g.name)}</option>`),
         ].join('');
         return `<li style="display:flex; align-items:center; gap:8px;">
           <a href="${href}" data-link style="flex:1 1 auto; min-width:0;">${escapeHtml(p.title)}</a>
@@ -69,6 +75,9 @@ export async function render(outlet, { key }) {
       <ul>${listHtml}</ul>
     </section>
   `;
+
+  // Rerender helper after organizer changes
+  const rerender = async () => { await render(outlet, { key }); };
 
   // Render widgets area for this section surface
   try {
@@ -117,17 +126,29 @@ export async function render(outlet, { key }) {
       try { setUiMode(customizing ? 'edit' : null); } catch {}
       void refresh();
     };
-    // Initialize button state and listener
+    // Initialize button state and listener (dedup across re-renders)
     if (topEditBtn) {
       topEditBtn.textContent = customizing ? 'Done' : 'Edit';
+      if (topEditBtn.__sectionHeaderMediaClick) {
+        topEditBtn.removeEventListener('click', topEditBtn.__sectionHeaderMediaClick);
+      }
+      topEditBtn.__sectionHeaderMediaClick = onTopEditClick;
       topEditBtn.addEventListener('click', onTopEditClick);
     }
     void refresh();
-    // Cleanup on route change
-    return () => { try { topEditBtn?.removeEventListener('click', onTopEditClick); } catch {} };
+    // Provide cleanup without exiting render early
+    cleanupHeaderMedia = () => {
+      try {
+        if (topEditBtn) {
+          const h = topEditBtn.__sectionHeaderMediaClick;
+          if (h) topEditBtn.removeEventListener('click', h);
+          delete topEditBtn.__sectionHeaderMediaClick;
+        }
+      } catch {}
+    };
   } catch {}
 
-  // Bind organizer controls
+  // Render organizer controls (events bound via delegation below)
   const ngGroups = $('#ngGroups');
   if (ngGroups) {
     const renderGroups = () => {
@@ -142,54 +163,106 @@ export async function render(outlet, { key }) {
       `).join('');
     };
     renderGroups();
+  }
 
-    $('#ngAddBtn')?.addEventListener('click', async () => {
-      const inp = $('#ngNewName');
-      const v = inp?.value || '';
-      const id = await addGroup(key, v);
-      if (inp) inp.value = '';
-      renderGroups();
-      try { await refreshNav(); } catch {}
-    });
-    $('#ngNewName')?.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const inp = e.currentTarget;
-        const v = inp?.value || '';
-        await addGroup(key, v);
-        inp.value = '';
-        renderGroups();
-        try { await refreshNav(); } catch {}
+  // One-time delegated event bindings to avoid lost listeners on rerender
+  if (!outlet.__sectionLandingBound) {
+    // Change handler for selects (capture=true to beat link handlers)
+    outlet.addEventListener('change', async (e) => {
+      const sel = e.target?.closest?.('select[data-pid]');
+      if (!sel) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const sectionKey = outlet.dataset.sectionKey || '';
+      const pid = sel.getAttribute('data-pid');
+      const gid = sel.value || null;
+      console.log('[navGroups] setGroupForPage', { sectionKey, pid, gid });
+
+      let badge = sel.parentElement?.querySelector?.('.ngStatus');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ngStatus meta';
+        badge.style.marginLeft = '6px';
+        sel.parentElement?.appendChild(badge);
       }
-    });
-    ngGroups.addEventListener('click', async (e) => {
+      sel.disabled = true;
+      badge.textContent = 'Saving…';
+
+      try {
+        await setGroupForPage(sectionKey, pid, gid);
+        const { reloadUserState } = await import('../miniapps/state.js');
+        await reloadUserState();
+        const { getNavGroupsForSection } = await import('../features/navGroups.js');
+        const { pageToGroup } = getNavGroupsForSection(sectionKey);
+        const persisted = pageToGroup?.[pid] || null;
+        const expected = gid ? String(gid) : null;
+        if (persisted !== expected) {
+          console.error('Nav group did not persist', { sectionKey, pid, expected, persisted });
+          badge.textContent = 'Failed';
+        } else {
+          badge.textContent = 'Saved';
+        }
+        await refreshNav();
+        await render(outlet, { key: sectionKey });
+      } catch (err) {
+        console.error('Failed to set nav group', err);
+        try { if (badge) badge.textContent = 'Failed'; } catch {}
+      } finally {
+        sel.disabled = false;
+        setTimeout(() => {
+          try {
+            const b = sel.parentElement?.querySelector?.('.ngStatus');
+            if (b && (b.textContent === 'Saved')) b.textContent = '';
+          } catch {}
+        }, 1200);
+      }
+    }, true);
+
+    // Organizer buttons: Add/Rename/Delete via delegation
+    outlet.addEventListener('click', async (e) => {
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
-      const row = el.closest('[data-gid]');
-      if (!row) return;
-      const gid = row.getAttribute('data-gid');
-      if (el.classList.contains('ngRename')) {
+      const sectionKey = outlet.dataset.sectionKey || '';
+
+      if (el.id === 'ngAddBtn') {
+        e.preventDefault();
+        const inp = outlet.querySelector('#ngNewName');
+        const v = inp?.value || '';
+        await addGroup(sectionKey, v);
+        if (inp) inp.value = '';
+        await refreshNav();
+        await render(outlet, { key: sectionKey });
+        return;
+      }
+
+      if (el.closest('.ngRename')) {
+        e.preventDefault();
+        const row = el.closest('[data-gid]');
+        if (!row) return;
+        const gid = row.getAttribute('data-gid');
         const nameEl = row.querySelector('.ngName');
         const v = nameEl?.value || '';
-        await renameGroup(key, gid, v);
-        renderGroups();
-        try { await refreshNav(); } catch {}
-      } else if (el.classList.contains('ngDelete')) {
-        await deleteGroup(key, gid);
-        renderGroups();
-        try { await refreshNav(); } catch {}
+        await renameGroup(sectionKey, gid, v);
+        await refreshNav();
+        await render(outlet, { key: sectionKey });
+        return;
+      }
+
+      if (el.closest('.ngDelete')) {
+        e.preventDefault();
+        const row = el.closest('[data-gid]');
+        if (!row) return;
+        const gid = row.getAttribute('data-gid');
+        await deleteGroup(sectionKey, gid);
+        await refreshNav();
+        await render(outlet, { key: sectionKey });
+        return;
       }
     });
-  }
 
-  // Bind per-page selectors
-  for (const sel of outlet.querySelectorAll('select[data-pid]')) {
-    sel.addEventListener('change', async (e) => {
-      const s = e.currentTarget;
-      const pid = s.getAttribute('data-pid');
-      const gid = s.value || null;
-      await setGroupForPage(key, pid, gid);
-      try { await refreshNav(); } catch {}
-    });
+    outlet.__sectionLandingBound = true;
   }
+  // Return cleanup that includes header media cleanup
+  return () => { try { cleanupHeaderMedia?.(); } catch {} };
 }

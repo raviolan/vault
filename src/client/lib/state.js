@@ -59,3 +59,22 @@ export function setState(next) {
   if (loaded) scheduleSave();
   return state;
 }
+
+// Flush/save immediately without debounce
+export async function saveStateNow() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!loaded) return state;
+  try {
+    await fetchJson('/api/user/state', { method: 'PUT', body: JSON.stringify(state) });
+  } catch (e) {
+    console.error('Failed to save state (immediate)', e);
+  }
+  return state;
+}
+
+// Reload fresh state from the server and return it
+export async function reloadStateFromServer() {
+  await loadState();
+  return state;
+}

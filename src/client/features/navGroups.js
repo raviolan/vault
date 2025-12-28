@@ -1,4 +1,4 @@
-import { getUserState, patchUserState } from '../miniapps/state.js';
+import { getUserState, patchUserState, flushUserState } from '../miniapps/state.js';
 
 function normKey(key) {
   return String(key || '').toLowerCase();
@@ -31,14 +31,43 @@ export function getNavGroupsForSection(sectionKey) {
   const entry = all[key] || { groups: [], pageToGroup: {} };
   const groups = sortGroups(entry.groups);
   const pageToGroup = entry.pageToGroup && typeof entry.pageToGroup === 'object' ? entry.pageToGroup : {};
-  return { groups, pageToGroup };
+
+  // One-time repair: coerce any name-based mappings to id-based
+  const { nextPageToGroup, changed } = coerceGroupMappingToIds(groups, pageToGroup);
+  if (changed) {
+    // Persist repaired mapping without awaiting to avoid changing sync API
+    const next = { groups: entry.groups || [], pageToGroup: nextPageToGroup };
+    void setAllForSection(key, next);
+  }
+  return { groups, pageToGroup: nextPageToGroup };
 }
 
-function setAllForSection(sectionKey, next) {
+// Repair mapping values: if a value matches a group name, convert to that group's id
+function coerceGroupMappingToIds(groups, pageToGroup) {
+  const nameToId = new Map((Array.isArray(groups) ? groups : []).map(g => [String(g.name), String(g.id)]));
+  const ptg = { ...(pageToGroup || {}) };
+  let changed = false;
+  for (const [pid, v] of Object.entries(ptg)) {
+    const sv = String(v || '');
+    if (!sv) continue;
+    // If already matches an id, keep it
+    if ((Array.isArray(groups) ? groups : []).some(g => String(g.id) === sv)) continue;
+    // If matches a name, convert
+    if (nameToId.has(sv)) {
+      ptg[pid] = nameToId.get(sv);
+      changed = true;
+    }
+  }
+  return { nextPageToGroup: ptg, changed };
+}
+
+async function setAllForSection(sectionKey, next) {
   const key = normKey(sectionKey);
   const all = getAll();
   const patch = { navGroupsV1: { ...all, [key]: next } };
-  return patchUserState(patch);
+  patchUserState(patch);
+  await flushUserState();
+  return true;
 }
 
 export async function addGroup(sectionKey, name) {
@@ -87,7 +116,6 @@ export async function setGroupForPage(sectionKey, pageId, groupId) {
   const all = getAll();
   const cur = all[key] || { groups: [], pageToGroup: {} };
   const ptg = { ...(cur.pageToGroup || {}) };
-  ptg[pid] = gid;
+  if (gid) ptg[pid] = gid; else delete ptg[pid];
   await setAllForSection(key, { groups: [...(cur.groups || [])], pageToGroup: ptg });
 }
-
