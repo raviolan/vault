@@ -119,6 +119,13 @@ export function renderNavSections(pages, navCfg) {
     `;
     const list = li.querySelector('.nav-list');
     const details = li.querySelector('details.nav-details');
+    // Apply per-section accent color from user state if set
+    try {
+      const st = getState();
+      const surfId = `section:${String(key)}`;
+      const hex = st?.surfaceStyleV1?.surfaces?.[surfId]?.color || '';
+      if (hex) details.style.setProperty('--section-accent', hex);
+    } catch {}
     // Restore persisted open/closed state for this section
     try {
       const st = getState();
@@ -312,6 +319,13 @@ export function renderUserSections(pages) {
 
     const details = li.querySelector('details.nav-details');
     const list = li.querySelector('.nav-list');
+    // Apply per-user accent for custom section
+    try {
+      const st = getState();
+      const surfId = `section:${String(key)}`;
+      const hex = st?.surfaceStyleV1?.surfaces?.[surfId]?.color || '';
+      if (hex) details.style.setProperty('--section-accent', hex);
+    } catch {}
 
     // Restore persisted open/closed state for this section using stable id-based key
     try {

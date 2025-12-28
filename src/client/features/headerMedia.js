@@ -175,14 +175,29 @@ export function renderHeaderMedia(hostEl, opts) {
     footerRight.appendChild(ctl);
   }
 
-  // Profile image (view if present, edit supports add/change/remove only)
+  // Profile image (view if present; edit supports add/change/remove and reposition/zoom)
   if (showProfile && (profile || mode === 'edit')) {
-    if (profile && profile.url) {
+    const hasProfile = !!(profile && profile.url);
+    if (hasProfile) {
+      // Wrapper provides circular clip and border/shadow; inner image can transform
+      const clip = document.createElement('div');
+      clip.className = 'profileWrap';
+      // Apply CSS vars for position and zoom (fallbacks handled in CSS)
+      const posX = Number(profile?.posX ?? 50);
+      const posY = Number(profile?.posY ?? 50);
+      const zoom = Number(profile?.zoom ?? 1);
+      clip.style.setProperty('--profile-pos', `${posX}% ${posY}%`);
+      clip.style.setProperty('--profile-zoom', String(zoom));
       const img = document.createElement('img');
       img.className = 'profile';
       img.src = profile.url;
       img.alt = '';
-      wrap.appendChild(img);
+      // Inline styles for modern browsers without waiting on CSS
+      img.style.objectPosition = `${posX}% ${posY}%`;
+      img.style.transformOrigin = `${posX}% ${posY}%`;
+      img.style.transform = `scale(${zoom})`;
+      clip.appendChild(img);
+      wrap.appendChild(clip);
     }
     if (mode === 'edit') {
       const pCtl = document.createElement('div');
@@ -203,6 +218,111 @@ export function renderHeaderMedia(hostEl, opts) {
         const rm = document.createElement('button'); rm.className = 'chip'; rm.type = 'button'; rm.textContent = 'Remove profile';
         rm.onclick = async () => { try { await onRemoveProfile?.(); } catch (e) { console.error(e); } };
         pCtl.appendChild(rm);
+
+        // Reposition + Zoom controls when a profile image exists
+        if (typeof onSavePosition === 'function') {
+          const adjustBtn = document.createElement('button');
+          adjustBtn.className = 'chip'; adjustBtn.type = 'button'; adjustBtn.textContent = 'Reposition';
+          pCtl.appendChild(adjustBtn);
+
+          adjustBtn.onclick = () => {
+            // Find current clip/img
+            const clip = wrap.querySelector('.profileWrap');
+            const img = wrap.querySelector('.profileWrap > img.profile');
+            if (!clip || !img) return;
+            // Working values
+            let curX = Number(profile?.posX ?? 50);
+            let curY = Number(profile?.posY ?? 50);
+            let curZ = Number(profile?.zoom ?? 1);
+            let baseX = curX, baseY = curY;
+            let ptStart = null;
+
+            // Build adjustment bar: Zoom slider + Save/Cancel
+            const bar = document.createElement('div');
+            bar.className = 'headerMediaRepositionBar';
+            bar.style.padding = '8px';
+            bar.style.display = 'flex'; bar.style.gap = '8px'; bar.style.alignItems = 'center';
+            const zoomLabel = document.createElement('span'); zoomLabel.className = 'meta'; zoomLabel.textContent = 'Zoom';
+            const zoomInput = document.createElement('input');
+            zoomInput.type = 'range'; zoomInput.min = '0.5'; zoomInput.max = '3'; zoomInput.step = '0.01';
+            zoomInput.value = String(curZ);
+            const saveBtn = document.createElement('button'); saveBtn.className = 'chip'; saveBtn.textContent = 'Save';
+            const cancelBtn = document.createElement('button'); cancelBtn.className = 'chip'; cancelBtn.textContent = 'Cancel';
+            bar.appendChild(zoomLabel); bar.appendChild(zoomInput); bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
+            footerLeft.appendChild(bar);
+
+            // Visual overlay over the clip to allow dragging
+            const overlay = document.createElement('div');
+            overlay.style.position = 'absolute';
+            overlay.style.inset = 'auto auto 0 0';
+            overlay.style.width = '140px';
+            overlay.style.height = '140px';
+            overlay.style.left = '16px';
+            overlay.style.cursor = 'grab';
+            overlay.style.zIndex = '4';
+            overlay.style.borderRadius = '999px';
+            overlay.style.background = 'rgba(0,0,0,0.0)';
+            wrap.appendChild(overlay);
+
+            const apply = () => {
+              img.style.objectPosition = `${curX}% ${curY}%`;
+              img.style.transformOrigin = `${curX}% ${curY}%`;
+              img.style.transform = `scale(${curZ})`;
+              clip.style.setProperty('--profile-pos', `${curX}% ${curY}%`);
+              clip.style.setProperty('--profile-zoom', String(curZ));
+            };
+            apply();
+
+            overlay.addEventListener('pointerdown', (e) => {
+              overlay.setPointerCapture(e.pointerId);
+              overlay.style.cursor = 'grabbing';
+              const r = clip.getBoundingClientRect();
+              ptStart = { x: e.clientX, y: e.clientY, w: r.width, h: r.height };
+              baseX = curX; baseY = curY;
+              e.preventDefault();
+            });
+            overlay.addEventListener('pointermove', (e) => {
+              if (!ptStart) return;
+              const dx = e.clientX - ptStart.x;
+              const dy = e.clientY - ptStart.y;
+              curX = clamp(baseX + (dx / ptStart.w) * 100, 0, 100);
+              curY = clamp(baseY + (dy / ptStart.h) * 100, 0, 100);
+              apply();
+            });
+            overlay.addEventListener('pointerup', (e) => {
+              try { overlay.releasePointerCapture(e.pointerId); } catch {}
+              overlay.style.cursor = 'grab';
+              ptStart = null;
+            });
+            zoomInput.addEventListener('input', () => {
+              const z = Number(zoomInput.value);
+              curZ = clamp(z, 0.5, 3);
+              apply();
+            });
+
+            cancelBtn.onclick = () => {
+              try { overlay.remove(); } catch {}
+              try { bar.remove(); } catch {}
+              // Restore original
+              curX = Number(profile?.posX ?? 50);
+              curY = Number(profile?.posY ?? 50);
+              curZ = Number(profile?.zoom ?? 1);
+              apply();
+            };
+            saveBtn.onclick = async () => {
+              saveBtn.disabled = true;
+              try {
+                await onSavePosition('profile', curX, curY, curZ);
+                if (profile) { profile.posX = curX; profile.posY = curY; profile.zoom = curZ; }
+                try { overlay.remove(); } catch {}
+                try { bar.remove(); } catch {}
+              } catch (e) {
+                console.error('[media] failed to save position', e);
+                saveBtn.disabled = false;
+              }
+            };
+          };
+        }
       }
       wrap.appendChild(fileInput);
       footerLeft.appendChild(pCtl);

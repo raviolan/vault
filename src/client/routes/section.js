@@ -130,10 +130,26 @@ export async function render(outlet, { key }) {
     const topEditBtn = document.getElementById('btnEditPage');
     let customizing = false;
     let media = null;
+    let colorCtl = null;
+    const SWATCHES = ['#8b5cf6','#22d3ee','#f472b6','#a3e635','#f59e0b','#ef4444','#3b82f6','#10b981','#eab308','#94a3b8'];
+    const normalizeHex = (v) => {
+      if (!v) return null;
+      let s = String(v).trim();
+      if (s.startsWith('#')) s = s.slice(1);
+      if (/^[0-9a-f]{3}$/i.test(s)) {
+        s = s.split('').map(c => c + c).join('');
+      }
+      if (/^[0-9a-f]{6}$/i.test(s)) return `#${s.toLowerCase()}`;
+      return null;
+    };
     const refresh = async () => {
       const state = await loadState();
       const surf = state?.surfaceMediaV1?.surfaces?.[surfId] || null;
-      media = surf && surf.header ? { url: `/media/${surf.header.path}`, posX: surf.header.posX, posY: surf.header.posY } : null;
+      media = surf && surf.header ? { url: `/media/${surf.header.path}`, posX: surf.header.posX, posY: surf.header.posY, zoom: Number(surf.header.zoom ?? 1) } : null;
+      // Section color state
+      const curColor = state?.surfaceStyleV1?.surfaces?.[surfId]?.color || null;
+      // Apply color immediately to the header host (CSS can read --section-accent)
+      try { if (curColor) hmHost.style.setProperty('--section-accent', curColor); else hmHost.style.removeProperty('--section-accent'); } catch {}
       renderHeaderMedia(hmHost, {
         mode: customizing ? 'edit' : 'view',
         cover: media,
@@ -142,19 +158,65 @@ export async function render(outlet, { key }) {
         variant: 'tall',
         async onUploadCover(file) {
           const resp = await uploadMedia({ scope: 'surface', surfaceId: surfId, slot: 'header', file });
-          media = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          media = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
           refresh();
         },
         async onRemoveCover() {
           await deleteMedia({ scope: 'surface', surfaceId: surfId, slot: 'header' });
           media = null; refresh();
         },
-        async onSavePosition(slot, x, y) {
-          await updatePosition({ scope: 'surface', surfaceId: surfId, slot: 'header', posX: x, posY: y });
-          if (media) { media.posX = x; media.posY = y; }
+        async onSavePosition(slot, x, y, zoom) {
+          await updatePosition({ scope: 'surface', surfaceId: surfId, slot: 'header', posX: x, posY: y, ...(zoom !== undefined ? { zoom } : {}) });
+          if (media) { media.posX = x; media.posY = y; if (zoom !== undefined) media.zoom = zoom; }
           refresh();
         }
       });
+
+      // Render/refresh Section color controls below header when customizing
+      if (customizing) {
+        if (!colorCtl) {
+          colorCtl = document.createElement('div');
+          colorCtl.id = 'sectionColorControls';
+          colorCtl.style.display = 'flex';
+          colorCtl.style.alignItems = 'center';
+          colorCtl.style.gap = '8px';
+          colorCtl.style.margin = '8px 0 12px 0';
+          hmHost.after(colorCtl);
+        }
+        const state2 = getState();
+        const cur = state2?.surfaceStyleV1?.surfaces?.[surfId]?.color || '';
+        const sw = SWATCHES.map(c => `<button type="button" class="theme-swatch" data-color="${c}" title="${c}" style="width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:${c}"></button>`).join('');
+        colorCtl.innerHTML = `
+          <span class="meta">Section color</span>
+          <input id="sectionColorHex" placeholder="#rrggbb" value="${escapeHtml(cur)}" style="width:110px;" />
+          <div style="display:flex;gap:6px;align-items:center;">${sw}</div>
+        `;
+        const inp = colorCtl.querySelector('#sectionColorHex');
+        const applyColor = (hex) => {
+          const st = getState();
+          const block = { ...(st.surfaceStyleV1 || { surfaces: {} }) };
+          const surfaces = { ...(block.surfaces || {}) };
+          const prev = surfaces[surfId] || {};
+          surfaces[surfId] = { ...prev, color: hex };
+          updateState({ surfaceStyleV1: { surfaces } });
+          // Apply live
+          if (hex) hmHost.style.setProperty('--section-accent', hex); else hmHost.style.removeProperty('--section-accent');
+        };
+        inp?.addEventListener('change', () => {
+          const v = normalizeHex(inp.value);
+          if (v) { inp.value = v; applyColor(v); }
+        });
+        colorCtl.querySelectorAll('button.theme-swatch').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const hex = btn.getAttribute('data-color');
+            if (hex) { applyColor(hex); const inputEl = colorCtl.querySelector('#sectionColorHex'); if (inputEl) inputEl.value = hex; }
+          });
+        });
+      } else if (colorCtl) {
+        // Remove control when not customizing
+        try { colorCtl.remove(); } catch {}
+        colorCtl = null;
+      }
     };
     // Wire top toolbar Edit button to toggle section header edit mode
     const onTopEditClick = () => {

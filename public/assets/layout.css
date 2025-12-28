@@ -57,6 +57,23 @@ a:hover {
     padding: 16px 16px 16px 24px
 }
 
+/* Hide visible scrollbar indicators in left sidebar while preserving scrollability */
+/* Firefox */
+.left,
+.left .drawer-content,
+.left .sidebar,
+.left .nav { scrollbar-width: none; }
+/* Legacy IE/Edge */
+.left,
+.left .drawer-content,
+.left .sidebar,
+.left .nav { -ms-overflow-style: none; }
+/* WebKit */
+.left::-webkit-scrollbar,
+.left .drawer-content::-webkit-scrollbar,
+.left .sidebar::-webkit-scrollbar,
+.left .nav::-webkit-scrollbar { width: 0; height: 0; }
+
 .left .tree {
     font-size: 16px
 }

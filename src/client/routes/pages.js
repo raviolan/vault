@@ -92,14 +92,14 @@ export async function renderPage({ match }) {
         async onUploadCover(file) {
           const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
           page.media = page.media || {};
-          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
           renderHM();
         },
         async onUploadProfile(file) {
           if (!showProfile) return;
           const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
           page.media = page.media || {};
-          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
           renderHM();
         },
         async onRemoveCover() {
@@ -112,11 +112,15 @@ export async function renderPage({ match }) {
           if (page.media) page.media.profile = null;
           renderHM();
         },
-        async onSavePosition(slot, x, y) {
-          await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y });
-          if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; }
-          if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; }
-          renderHM();
+        async onSavePosition(slot, x, y, zoom) {
+          try {
+            await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y, ...(Number.isFinite(zoom) ? { zoom } : {}) });
+            if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; if (Number.isFinite(zoom)) page.media.header.zoom = zoom; }
+            if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; if (Number.isFinite(zoom)) page.media.profile.zoom = zoom; }
+            renderHM();
+          } catch (e) {
+            console.error('[media] failed to save position', e);
+          }
         },
       });
     };
@@ -327,14 +331,14 @@ export async function renderPageBySlug({ match }) {
         async onUploadCover(file) {
           const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
           page.media = page.media || {};
-          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
           renderHM();
         },
         async onUploadProfile(file) {
           if (!showProfile) return;
           const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
           page.media = page.media || {};
-          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY };
+          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
           renderHM();
         },
         async onRemoveCover() {
@@ -347,11 +351,15 @@ export async function renderPageBySlug({ match }) {
           if (page.media) page.media.profile = null;
           renderHM();
         },
-        async onSavePosition(slot, x, y) {
-          await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y });
-          if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; }
-          if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; }
-          renderHM();
+        async onSavePosition(slot, x, y, zoom) {
+          try {
+            await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y, ...(Number.isFinite(zoom) ? { zoom } : {}) });
+            if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; if (Number.isFinite(zoom)) page.media.header.zoom = zoom; }
+            if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; if (Number.isFinite(zoom)) page.media.profile.zoom = zoom; }
+            renderHM();
+          } catch (e) {
+            console.error('[media] failed to save position', e);
+          }
         },
       });
     };

@@ -18,11 +18,19 @@ export async function uploadMedia({ scope, pageId, surfaceId, slot, file }) {
   return res.json();
 }
 
-export async function updatePosition({ scope, pageId, surfaceId, slot, posX, posY }) {
+export async function updatePosition({ scope, pageId, surfaceId, slot, posX, posY, zoom }) {
   const res = await fetch('/api/media/position', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scope, pageId, surfaceId, slot, posX, posY })
+    body: JSON.stringify({
+      scope,
+      pageId,
+      surfaceId,
+      slot,
+      posX,
+      posY,
+      ...(Number.isFinite(zoom) ? { zoom } : {})
+    })
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
@@ -38,4 +46,3 @@ export async function deleteMedia({ scope, pageId, surfaceId, slot }) {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
-

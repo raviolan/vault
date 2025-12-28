@@ -409,6 +409,14 @@ body[data-mode='edit'] .editor-add-controls .chip {
     flex: 1 1 auto;
 }
 
+/* Ensure To-Do panel forms a proper flex column chain that allows internal scrolling */
+.right-drawer-content .right-panel[data-panel='todo'] { display: flex; flex-direction: column; min-height: 0; }
+/* In both single and split modes, make the slot and native container flex columns with a shrinkable height */
+#rightTodoSlot { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#todoNative { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* Make the list itself the scroll region and contain overscroll */
+#todoList { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+
 /* Split view: Notepad (top ~40%), To-Do (bottom ~60%) */
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='notepad'] {
     flex: 0 0 auto;
@@ -584,6 +592,14 @@ body.dragging-right-split textarea#notepad {
     min-height: 0;
     overflow: auto;
 }
+
+/* Ensure To-Do layout flexes and scrolls properly in both single and split modes */
+/* Single mode: make the slot a flex column container so the list can flex */
+.right-drawer-content #rightTodoSlot { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+/* Generic safety: if hosted in pane layouts, ensure the panel acts as a flex column */
+.right .pane-body [data-panel='todo'] { display: flex; flex-direction: column; min-height: 0; }
+.right .pane-body [data-panel='todo'] #todoList, 
+.right .pane-body [data-panel='todo'] .todo-list-container { flex: 1 1 auto; min-height: 0; overflow: auto; }
 
 /* To-Do header spacing + compact toolbar */
 .right-drawer-content [data-panel='todo'] h3.meta { margin: 0 0 6px 0; }
@@ -2595,6 +2611,9 @@ body[data-theme='light'] .page-header::after {
 
 /* Header Media */
 .headerMedia { margin: 10px 0 14px; position: relative; }
+#surfaceHeader[style*='--section-accent'] .headerMedia .cover {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--section-accent) 22%, transparent);
+}
 .headerMedia .cover {
   height: var(--headerMediaCoverH, 240px);
   border-radius: 14px;
@@ -2611,9 +2630,29 @@ body[data-theme='light'] .page-header::after {
   object-fit: cover;
   position: absolute;
   left: 16px; bottom: -48px;
+  z-index: 3;
+  /* Apply position + zoom; allow inline override */
+  object-position: var(--profile-pos, 50% 50%);
+  transform: scale(var(--profile-zoom, 1));
+  transform-origin: var(--profile-pos, 50% 50%);
+}
+
+/* Wrapper to clip zoomed image to circle and show border/shadow */
+.headerMedia .profileWrap {
+  position: absolute;
+  left: 16px; bottom: -48px;
+  width: 140px; height: 140px;
+  border-radius: 999px;
+  overflow: hidden;
   border: 4px solid var(--panel);
   box-shadow: 0 6px 16px rgba(0,0,0,0.4);
   z-index: 3;
+}
+.headerMedia .profileWrap > img.profile {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 /* Add spacing when profile overlaps */

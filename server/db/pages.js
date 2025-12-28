@@ -37,7 +37,7 @@ export function getPageWithBlocks(db, id) {
   const media = (() => {
     try {
       const m = dbGetPageMedia(db, id);
-      const map = (slot) => slot ? ({ url: `/media/${slot.path}`, posX: slot.posX, posY: slot.posY }) : null;
+      const map = (slot) => slot ? ({ url: `/media/${slot.path}`, posX: slot.posX, posY: slot.posY, zoom: Number(slot.zoom ?? 1) }) : null;
       return m ? { header: map(m.header), profile: map(m.profile) } : { header: null, profile: null };
     } catch { return { header: null, profile: null }; }
   })();

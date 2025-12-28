@@ -84,7 +84,7 @@ export function routeMedia(req, res, ctx) {
       const full = path.join(dir, name);
       fs.writeFileSync(full, buf);
 
-      let posX = 50, posY = 50;
+      let posX = 50, posY = 50, zoom = 1;
 
       if (scope === 'page') {
         // Optional cleanup of old file
@@ -96,10 +96,10 @@ export function routeMedia(req, res, ctx) {
             if (p.startsWith(dir) && fs.existsSync(p)) fs.unlinkSync(p);
           }
         } catch {}
-        const patch = (slot === 'header') ? { header: { path: name, posX, posY } } : { profile: { path: name, posX, posY } };
+        const patch = (slot === 'header') ? { header: { path: name, posX, posY, zoom } } : { profile: { path: name, posX, posY, zoom } };
         const rec = ctx.dbSetPageMedia(ctx.db, pageId, patch);
-        if (slot === 'header' && rec?.header) { posX = rec.header.posX; posY = rec.header.posY; }
-        if (slot === 'profile' && rec?.profile) { posX = rec.profile.posX; posY = rec.profile.posY; }
+        if (slot === 'header' && rec?.header) { posX = rec.header.posX; posY = rec.header.posY; zoom = Number(rec.header.zoom ?? 1); }
+        if (slot === 'profile' && rec?.profile) { posX = rec.profile.posX; posY = rec.profile.posY; zoom = Number(rec.profile.zoom ?? 1); }
       } else if (scope === 'surface') {
         const state = loadUserState(ctx.USER_DIR);
         const cur = state.surfaceMediaV1 && state.surfaceMediaV1.surfaces ? state.surfaceMediaV1 : { surfaces: {} };
@@ -113,13 +113,13 @@ export function routeMedia(req, res, ctx) {
             if (p.startsWith(dir) && fs.existsSync(p)) fs.unlinkSync(p);
           }
         } catch {}
-        s[surfaceId] = { ...(prev || {}), header: { path: name, posX, posY } };
+        s[surfaceId] = { ...(prev || {}), header: { path: name, posX, posY, zoom } };
         const next = { ...state, surfaceMediaV1: { surfaces: s } };
         const p = path.join(ctx.USER_DIR, 'state.json');
         writeJsonAtomic(p, next);
       }
 
-      sendJson(res, 200, { ok: true, slot, path: name, url: `/media/${name}`, posX, posY });
+      sendJson(res, 200, { ok: true, slot, path: name, url: `/media/${name}`, posX, posY, zoom });
       return true;
     })();
   }
@@ -129,14 +129,16 @@ export function routeMedia(req, res, ctx) {
     return (async () => {
       let body = {};
       try { body = JSON.parse(String(await readBuffer(req, 256 * 1024))); } catch {}
-      const { scope, pageId, surfaceId, slot, posX, posY } = body || {};
+      const { scope, pageId, surfaceId, slot, posX, posY, zoom } = body || {};
       if (!['page', 'surface'].includes(scope)) { sendJson(res, 400, { error: 'invalid scope' }); return true; }
       if (!['header', 'profile'].includes(slot)) { sendJson(res, 400, { error: 'invalid slot' }); return true; }
       const x = Number(posX), y = Number(posY);
       if (!(x >= 0 && x <= 100 && y >= 0 && y <= 100)) { sendJson(res, 400, { error: 'invalid pos' }); return true; }
+      const z = (zoom === undefined || zoom === null) ? undefined : Number(zoom);
+      if (z !== undefined && !(z >= 0.5 && z <= 3.0)) { sendJson(res, 400, { error: 'invalid zoom' }); return true; }
       if (scope === 'page') {
         if (!pageId) { sendJson(res, 400, { error: 'pageId required' }); return true; }
-        const patch = (slot === 'header') ? { header: { posX: x, posY: y } } : { profile: { posX: x, posY: y } };
+        const patch = (slot === 'header') ? { header: { posX: x, posY: y, ...(z !== undefined ? { zoom: z } : {}) } } : { profile: { posX: x, posY: y, ...(z !== undefined ? { zoom: z } : {}) } };
         ctx.dbSetPageMedia(ctx.db, pageId, patch);
       } else {
         if (!surfaceId) { sendJson(res, 400, { error: 'surfaceId required' }); return true; }
@@ -146,6 +148,7 @@ export function routeMedia(req, res, ctx) {
         const prev = s[surfaceId] || {};
         if (slot === 'header') {
           const header = prev.header ? { ...prev.header, posX: x, posY: y } : { path: null, posX: x, posY: y };
+          if (z !== undefined) header.zoom = z;
           s[surfaceId] = { ...(prev || {}), header };
         }
         const next = { ...state, surfaceMediaV1: { surfaces: s } };
@@ -207,4 +210,3 @@ export function routeMedia(req, res, ctx) {
 
   return false;
 }
-

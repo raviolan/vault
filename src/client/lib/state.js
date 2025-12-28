@@ -9,6 +9,7 @@ const DEFAULT_STATE = {
   notepadText: '',
   todoItems: [],
   surfaceMediaV1: { surfaces: {} },
+  surfaceStyleV1: { surfaces: {} },
 };
 
 let state = { ...DEFAULT_STATE };

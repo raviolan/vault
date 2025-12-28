@@ -12,6 +12,7 @@ function defaultUserState() {
     notepadText: '',
     todoItems: [],
     surfaceMediaV1: { surfaces: {} },
+    surfaceStyleV1: { surfaces: {} },
   };
 }
 

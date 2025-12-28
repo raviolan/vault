@@ -239,6 +239,45 @@
             rgba(var(--section-rgb, 148, 163, 184), 0) 70%);
 }
 
+/* Per-section custom accent override using --section-accent (hex color) */
+.left details.nav-details[style*='--section-accent'] > summary.nav-label {
+    border-left-color: color-mix(in srgb, var(--section-accent) 85%, transparent);
+}
+.left details.nav-details[style*='--section-accent'] > summary.nav-label:hover {
+    background-image: linear-gradient(90deg,
+        color-mix(in srgb, var(--section-accent) 45%, transparent) 0%,
+        color-mix(in srgb, var(--section-accent) 18%, transparent) 28%,
+        transparent 70%);
+}
+.left details.nav-details[style*='--section-accent'] .nav-item:hover {
+    background-image: linear-gradient(90deg,
+        color-mix(in srgb, var(--section-accent) 45%, transparent) 0%,
+        color-mix(in srgb, var(--section-accent) 18%, transparent) 28%,
+        transparent 70%);
+}
+
+/* Open container tint/border with custom accent */
+.left details.nav-details[open][style*='--section-accent'] {
+  background: color-mix(in srgb, var(--section-accent) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--section-accent) 14%, transparent);
+}
+.left details.nav-details[open][style*='--section-accent'] > summary.nav-label {
+  background-color: color-mix(in srgb, var(--section-accent) 8%, transparent);
+}
+
+/* Nested subsection headers respect custom accent */
+.left details[data-section] .nav-details[style*='--section-accent'] > summary.nav-label {
+  border-left-color: color-mix(in srgb, var(--section-accent) 55%, transparent);
+  background-color: color-mix(in srgb, var(--section-accent) 6%, transparent);
+}
+.left details[data-section] .nav-details:not([open])[style*='--section-accent'] > summary.nav-label {
+  background-image: linear-gradient(90deg,
+    color-mix(in srgb, var(--section-accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--section-accent) 8%, transparent) 28%,
+    transparent 70%);
+  border-left-color: color-mix(in srgb, var(--section-accent) 65%, transparent);
+}
+
 /* Right-half clickable overlay inside the header for landing page */
 .nav-open-link {
     position: absolute;
