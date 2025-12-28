@@ -66,8 +66,27 @@ export function renderNavSections(pages, navCfg) {
   if (!ul) return;
   ul.innerHTML = '';
 
+  // Helper: build a Set of page ids that belong to user folders
+  function getFolderPageIdSet() {
+    const st = getState();
+    const { sections } = normalizeSections(st || {});
+    const set = new Set();
+    for (const sec of sections || []) {
+      const title = String(sec.title || '').trim().toLowerCase();
+      // ignore special/hidden sections
+      if (!title) continue;
+      if (title === 'enemies') continue;
+      if (title === 'favorites') continue;
+      for (const id of (Array.isArray(sec.pageIds) ? sec.pageIds : [])) set.add(id);
+    }
+    return set;
+  }
+
+  const folderIds = getFolderPageIdSet();
+  const corePages = pages.filter(p => !folderIds.has(p.id));
+
   const bySection = new Map();
-  for (const p of pages) {
+  for (const p of corePages) {
     const label = sectionForType(p.type);
     if (!bySection.has(label)) bySection.set(label, []);
     bySection.get(label).push(p);

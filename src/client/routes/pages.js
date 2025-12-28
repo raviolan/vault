@@ -15,10 +15,27 @@ import { sectionForType, sectionKeyForType } from '../features/nav.js';
 import { getNavGroupsForSection, setGroupForPage, addGroup } from '../features/navGroups.js';
 import { flushDebouncedPatches } from '../blocks/edit/state.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
-import { addPageToSection, removePageFromSection } from '../lib/sections.js';
+import { addPageToSection, removePageFromSection, normalizeSections } from '../lib/sections.js';
+
+function getFolderTitleForPage(pageId) {
+  const st = getState();
+  const { sections } = normalizeSections(st || {});
+  for (const sec of (sections || [])) {
+    const title = String(sec.title || '').trim();
+    const t = title.toLowerCase();
+    if (!title) continue;
+    if (t === 'enemies') continue;
+    if (t === 'favorites') continue;
+    const ids = Array.isArray(sec.pageIds) ? sec.pageIds : [];
+    if (ids.includes(pageId)) return title;
+  }
+  return null;
+}
 
 function setPageBreadcrumb(page) {
   try {
+    const folderTitle = getFolderTitleForPage(page.id);
+    if (folderTitle) { setBreadcrumb(`${folderTitle} • ${page.title}`); return; }
     const sectionLabel = sectionForType(page.type);
     const secKey = sectionKeyForType(page.type);
     let groupName = null;
@@ -46,7 +63,8 @@ export async function renderPage({ match }) {
   // Stable re-render hook for Header Media
   let rerenderHeaderMedia = null;
 
-  const sectionLabel = sectionForType(page.type);
+  const folderTitle = getFolderTitleForPage(page.id);
+  const sectionLabel = folderTitle || sectionForType(page.type);
   outlet.innerHTML = `
     <article class="page">
       <div id=\"pageHeaderMedia\"></div>
@@ -281,7 +299,8 @@ export async function renderPageBySlug({ match }) {
   // Stable re-render hook for Header Media
   let rerenderHeaderMedia = null;
 
-  const sectionLabel2 = sectionForType(page.type);
+  const folderTitle2 = getFolderTitleForPage(page.id);
+  const sectionLabel2 = folderTitle2 || sectionForType(page.type);
   outlet.innerHTML = `
     <article class=\"page\"> 
       <div id=\"pageHeaderMedia\"></div>
@@ -637,6 +656,17 @@ export function enablePageTitleEdit(page) {
           try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
           // Rebuild options to reflect new selection state
           buildTypeFolderOptions();
+          // Update breadcrumb and meta to reflect folder as primary section
+          try { setPageBreadcrumb(page); } catch {}
+          try {
+            const meta = document.querySelector('article.page p.meta');
+            if (meta) {
+              const updatedAt = String(page.updatedAt || page.createdAt || '');
+              const folderTitleNow = getFolderTitleForPage(page.id);
+              const sectionLabelNow = folderTitleNow || sectionForType(page.type);
+              meta.innerHTML = `Section: ${escapeHtml(sectionLabelNow || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
+            }
+          } catch {}
         } catch (e) {
           console.error('Failed to move page to folder', e);
         }
@@ -663,7 +693,8 @@ export function enablePageTitleEdit(page) {
         const meta = document.querySelector('article.page p.meta');
         if (meta) {
           const updatedAt = (updated.updatedAt || updated.createdAt || '').toString();
-          const sectionLabel = sectionForType(page.type);
+          const folderTitleNow = getFolderTitleForPage(page.id);
+          const sectionLabel = folderTitleNow || sectionForType(page.type);
           meta.innerHTML = `Section: ${escapeHtml(sectionLabel || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
         }
         // If section changed, clear old mapping and rebuild Category options

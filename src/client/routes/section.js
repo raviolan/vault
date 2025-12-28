@@ -2,6 +2,8 @@ import { $, escapeHtml } from '../lib/dom.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { setUiMode } from '../lib/uiMode.js';
 import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
+import { getState } from '../lib/state.js';
+import { normalizeSections } from '../lib/sections.js';
 import { getNavGroupsForSection, addGroup, renameGroup, deleteGroup, setGroupForPage } from '../features/navGroups.js';
 import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
@@ -29,7 +31,23 @@ export async function render(outlet, { key }) {
   try { setBreadcrumb(label); } catch {}
   try { setPageActionsEnabled({ canEdit: true, canDelete: false }); } catch {}
 
-  const filtered = pages.filter(p => sectionForType(p.type) === label)
+  // Build set of page ids that belong to user folders; exclude them from core section listings
+  function getFolderPageIdSet() {
+    const st = getState();
+    const { sections } = normalizeSections(st || {});
+    const set = new Set();
+    for (const sec of sections || []) {
+      const title = String(sec.title || '').trim().toLowerCase();
+      if (!title) continue;
+      if (title === 'enemies') continue;
+      if (title === 'favorites') continue;
+      for (const id of (Array.isArray(sec.pageIds) ? sec.pageIds : [])) set.add(id);
+    }
+    return set;
+  }
+  const folderIds = getFolderPageIdSet();
+
+  const filtered = pages.filter(p => sectionForType(p.type) === label && !folderIds.has(p.id))
     .slice()
     .sort((a,b) => a.title.localeCompare(b.title));
 
