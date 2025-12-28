@@ -49,3 +49,11 @@ export function removePageFromSection(st, sectionId, pageId) {
   return updated;
 }
 
+// Remove a user-created section by id. Does not modify schema or migrate.
+export function removeSection(userState, sectionId) {
+  const st = { ...(userState || {}) };
+  const secs = Array.isArray(st.sections) ? st.sections.slice() : [];
+  const next = secs.filter(s => String(s.id) !== String(sectionId));
+  st.sections = next;
+  return st;
+}

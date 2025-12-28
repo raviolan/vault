@@ -2,8 +2,9 @@ import { $, escapeHtml } from '../lib/dom.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { setUiMode } from '../lib/uiMode.js';
 import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
-import { getState } from '../lib/state.js';
-import { normalizeSections } from '../lib/sections.js';
+import { getState, updateState, saveStateNow } from '../lib/state.js';
+import { normalizeSections, removeSection } from '../lib/sections.js';
+import { navigate } from '../lib/router.js';
 import { getNavGroupsForSection, addGroup, renameGroup, deleteGroup, setGroupForPage } from '../features/navGroups.js';
 import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
@@ -106,6 +107,7 @@ export async function render(outlet, { key }) {
     <section class="card">
       <div style="display:flex; align-items:center; gap:8px; margin: 4px 0;">
         <h2 style="flex:1 1 auto;">${escapeHtml(label)}</h2>
+        ${isCustom ? '<button id="btnDeleteCustomSection" type="button" class="chip" title="Delete section">Delete section</button>' : ''}
       </div>
       <ul>${listHtml}</ul>
     </section>
@@ -267,6 +269,29 @@ export async function render(outlet, { key }) {
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
       const sectionKey = outlet.dataset.sectionKey || '';
+
+      if (el.id === 'btnDeleteCustomSection') {
+        e.preventDefault();
+        e.stopPropagation();
+        // Only applicable for custom sections
+        if (!sectionKey.startsWith('u-')) return;
+        const name = label || 'this section';
+        const ok = window.confirm(`Delete section "${name}"?\n\nPages inside will return to their core section lists.`);
+        if (!ok) return;
+        try {
+          let st = getState();
+          const id = sectionKey.replace(/^u-/, '');
+          st = removeSection(st, id);
+          updateState(st);
+          await saveStateNow();
+          await refreshNav();
+          navigate('/');
+          return;
+        } catch (err) {
+          console.error('Failed to delete section', err);
+          return;
+        }
+      }
 
       if (el.id === 'ngAddBtn') {
         e.preventDefault();

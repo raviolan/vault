@@ -401,3 +401,5 @@ export function renderUserSections(pages) {
     ul.appendChild(li);
   }
 }
+
+// (Nav delete control removed; deletion handled on section landing page.)
