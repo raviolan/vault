@@ -553,9 +553,9 @@ export function enablePageTitleEdit(page) {
         ogCore.appendChild(o);
       }
       sel.appendChild(ogCore);
-      // Folders
+      // Custom sections
       const ogFolders = document.createElement('optgroup');
-      ogFolders.label = 'Folders';
+      ogFolders.label = 'Custom sections';
       const folderList = secs.map(s => ({ id: String(s.id), title: s.title || '', pageIds: Array.isArray(s.pageIds) ? s.pageIds : [] }))
         .sort((a, b) => String(a.title).localeCompare(String(b.title), undefined, { sensitivity: 'base' }));
       for (const s of folderList) {

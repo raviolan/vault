@@ -277,25 +277,43 @@ export function renderUserSections(pages) {
   const st = getState();
   const { sections } = normalizeSections(st || {});
   if (!sections.length) return;
-  // Render each user section after existing ones
+
+  const pageMap = new Map(pages.map(p => [p.id, p]));
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+  // Render each user-created section like a first-class section
   for (const sec of sections) {
-    // Skip the special ENEMIES section from sidebar
-    const title = String(sec.title || '').trim();
-    if (title.toLowerCase() === 'enemies') continue;
+    const rawTitle = String(sec.title || '').trim();
+    const t = rawTitle.toLowerCase();
+    if (!rawTitle) continue;
+    // Exclude special/hidden sections
+    if (t === 'enemies') continue;
+    if (t === 'favorites') continue;
+
+    const key = `u-${String(sec.id)}`;
+    const label = rawTitle || 'Section';
+    const items = (Array.isArray(sec.pageIds) ? sec.pageIds : [])
+      .map(id => pageMap.get(id)).filter(Boolean)
+      .slice()
+      .sort((a, b) => collator.compare(a?.title || '', b?.title || ''));
+
     const li = document.createElement('li');
     li.className = 'nav-section';
     li.innerHTML = `
-      <details class="nav-details" open>
+      <details class="nav-details" data-section="${escapeHtml(key)}" open>
         <summary class="nav-label nav-section-header">
           <span class="nav-icon">📁</span>
-          <span>${escapeHtml(sec.title || 'Section')}</span>
+          <span>${escapeHtml(label)}</span>
+          <a class="nav-open-link" href="/section/${encodeURIComponent(key)}" data-link title="Open ${escapeHtml(label)}" aria-label="Open ${escapeHtml(label)}"></a>
         </summary>
         <ul class="nav-list"></ul>
       </details>
     `;
-    // Persist open/closed state for this user section using a stable key
+
     const details = li.querySelector('details.nav-details');
-    const key = 'user:' + (String(sec.title || 'Section').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section');
+    const list = li.querySelector('.nav-list');
+
+    // Restore persisted open/closed state for this section using stable id-based key
     try {
       const st2 = getState();
       const openMap = st2?.navOpenSections || {};
@@ -312,17 +330,74 @@ export function renderUserSections(pages) {
         updateState({ navOpenSections: openMap });
       } catch {}
     });
-    const list = li.querySelector('.nav-list');
-    const pageMap = new Map(pages.map(p => [p.id, p]));
-    const items = (Array.isArray(sec.pageIds) ? sec.pageIds : []).map(id => pageMap.get(id)).filter(Boolean);
-    for (const p of items) {
-      const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
-      const item = document.createElement('li');
-      item.innerHTML = `<a class="nav-item" href="${href}" data-link>
-        <span class="nav-text">${escapeHtml(p.title)}</span>
-      </a>`;
-      list.appendChild(item);
+
+    // Support per-section nav groups using the same contract as core sections
+    const { groups, pageToGroup } = getNavGroupsForSection(key);
+    const hasGroups = Array.isArray(groups) && groups.length > 0;
+    if (hasGroups) {
+      const byGroup = new Map(groups.map(g => [g.id, []]));
+      const ungrouped = [];
+      for (const p of items) {
+        const gid = pageToGroup && pageToGroup[p.id] ? pageToGroup[p.id] : null;
+        if (gid && byGroup.has(gid)) byGroup.get(gid).push(p);
+        else ungrouped.push(p);
+      }
+      const sortedGroups = groups.slice().sort((a, b) => collator.compare(a?.name || '', b?.name || ''));
+      for (const g of sortedGroups) {
+        const gi = document.createElement('li');
+        const pagesInGroup = (byGroup.get(g.id) || [])
+          .slice()
+          .sort((a, b) => collator.compare(a?.title || '', b?.title || ''));
+        const count = pagesInGroup.length;
+        gi.innerHTML = `
+          <details class="nav-details" open>
+            <summary class="nav-label">
+              <span>${escapeHtml(g.name || 'Group')}</span>
+              <span class="meta" style="margin-left:auto;">${count}</span>
+            </summary>
+            <ul class="nav-list"></ul>
+          </details>
+        `;
+        const glist = gi.querySelector('.nav-list');
+        for (const p of pagesInGroup) {
+          const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+          const item = document.createElement('li');
+          item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+            <span class="nav-text">${escapeHtml(p.title)}</span>
+          </a>`;
+          glist.appendChild(item);
+        }
+        list.appendChild(gi);
+      }
+      const sortedUngrouped = ungrouped.slice().sort((a, b) => collator.compare(a?.title || '', b?.title || ''));
+      for (const p of sortedUngrouped) {
+        const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+        const item = document.createElement('li');
+        item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+          <span class="nav-text">${escapeHtml(p.title)}</span>
+        </a>`;
+        list.appendChild(item);
+      }
+    } else {
+      for (const p of items) {
+        const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+        const item = document.createElement('li');
+        item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+          <span class="nav-text">${escapeHtml(p.title)}</span>
+        </a>`;
+        list.appendChild(item);
+      }
     }
+
+    // Clicking the open-link navigates without toggling the summary
+    const openLink = li.querySelector('.nav-open-link');
+    if (openLink) openLink.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const href = openLink.getAttribute('href');
+      if (href) navigate(href);
+    });
+
     ul.appendChild(li);
   }
 }

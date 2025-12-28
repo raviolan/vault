@@ -27,7 +27,13 @@ export async function render(outlet, { key }) {
   // Local cleanup for header media click binding
   let cleanupHeaderMedia = null;
   const pages = await loadPages();
-  const label = KEY_TO_LABEL.get(String(key).toLowerCase()) || 'Section';
+  const lowerKey = String(key || '').toLowerCase();
+  const labelFromMap = KEY_TO_LABEL.get(lowerKey) || 'Section';
+  const st = getState();
+  const { sections: userSections } = normalizeSections(st || {});
+  const isCustom = lowerKey.startsWith('u-');
+  const matchedCustom = isCustom ? (userSections || []).find(s => (`u-${String(s.id)}`) === lowerKey) : null;
+  const label = isCustom ? (matchedCustom?.title || 'Section') : labelFromMap;
   try { setBreadcrumb(label); } catch {}
   try { setPageActionsEnabled({ canEdit: true, canDelete: false }); } catch {}
 
@@ -47,9 +53,20 @@ export async function render(outlet, { key }) {
   }
   const folderIds = getFolderPageIdSet();
 
-  const filtered = pages.filter(p => sectionForType(p.type) === label && !folderIds.has(p.id))
-    .slice()
-    .sort((a,b) => a.title.localeCompare(b.title));
+  let filtered = [];
+  if (isCustom) {
+    // Custom section: resolve by stored pageIds and show those pages
+    const ids = Array.isArray(matchedCustom?.pageIds) ? matchedCustom.pageIds : [];
+    const pageById = new Map(pages.map(p => [String(p.id), p]));
+    filtered = ids.map(id => pageById.get(String(id))).filter(Boolean)
+      .slice()
+      .sort((a,b) => String(a?.title||'').localeCompare(String(b?.title||'')));
+  } else {
+    // Core section: filter by type-derived label and exclude pages homed in custom sections
+    filtered = pages.filter(p => sectionForType(p.type) === label && !folderIds.has(p.id))
+      .slice()
+      .sort((a,b) => a.title.localeCompare(b.title));
+  }
 
   const { groups, pageToGroup } = getNavGroupsForSection(key);
 
