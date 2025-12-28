@@ -71,8 +71,9 @@ export async function render(outlet, { key }) {
 
   const { groups, pageToGroup } = getNavGroupsForSection(key);
 
-  // Organizer UI
-  const organizer = `
+  const isEditMode = () => (document?.body?.dataset?.mode === 'edit');
+  // Organizer UI (visible only in Edit mode)
+  const organizer = isEditMode() ? `
     <section class="card" style="margin-bottom: 12px;">
       <h2>Organize</h2>
       <div style="display:flex; gap:8px; align-items:center; margin: 8px 0;">
@@ -81,23 +82,48 @@ export async function render(outlet, { key }) {
       </div>
       <div id="ngGroups"></div>
     </section>
-  `;
+  ` : '';
 
-  const listHtml = filtered.length
-    ? filtered.map(p => {
-        const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
-        const currentGroupId = pageToGroup[p.id] != null ? String(pageToGroup[p.id]) : '';
-        const valid = !!(currentGroupId && (groups || []).some(g => String(g.id) === String(currentGroupId)));
-        const opts = [
-          `<option value="" ${!valid ? 'selected' : ''}>Ungrouped</option>`,
-          ...groups.map(g => `<option value="${String(g.id)}" ${valid && String(g.id)===String(currentGroupId)?'selected':''}>${escapeHtml(g.name)}</option>`),
-        ].join('');
-        return `<li class="sectionRow" data-pid="${escapeHtml(p.id)}" style="display:flex; align-items:center; gap:8px;">
-          <a href="${href}" data-link style="flex:1 1 auto; min-width:0;">${escapeHtml(p.title)}</a>
-          <select data-pid="${escapeHtml(p.id)}" title="Group">${opts}</select>
-        </li>`;
-      }).join('')
-    : `<li class="meta">No items yet.</li>`;
+  // Build accordion groups (Nav groups + Ungrouped)
+  const byGroupId = new Map();
+  for (const g of (groups || [])) byGroupId.set(String(g.id), { id: String(g.id), name: String(g.name || ''), pages: [] });
+  const ungrouped = { id: 'ungrouped', name: 'Ungrouped', pages: [] };
+  for (const p of filtered) {
+    const gid = pageToGroup[p.id] ? String(pageToGroup[p.id]) : '';
+    const bucket = gid && byGroupId.has(gid) ? byGroupId.get(gid) : ungrouped;
+    bucket.pages.push(p);
+  }
+  const groupList = [...byGroupId.values(), ungrouped];
+  // Persisted accordion open state
+  const st2 = getState();
+  const accAll = st2?.sectionLandingAccordionV1 || {};
+  const acc = accAll[String(key)] || {};
+  // Default: open first group with pages if no stored state
+  const hasStored = Object.keys(acc).length > 0;
+  const defaultOpenId = groupList.find(g => g.pages.length)?.id || (groupList[0]?.id || '');
+  const isOpen = (gid) => hasStored ? (acc[gid] !== false) : (gid === defaultOpenId);
+  const rowsFor = (p) => {
+    const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+    const currentGroupId = pageToGroup[p.id] != null ? String(pageToGroup[p.id]) : '';
+    const valid = !!(currentGroupId && (groups || []).some(g => String(g.id) === String(currentGroupId)));
+    const opts = [
+      `<option value="" ${!valid ? 'selected' : ''}>Ungrouped</option>`,
+      ...groups.map(g => `<option value="${String(g.id)}" ${valid && String(g.id)===String(currentGroupId)?'selected':''}>${escapeHtml(g.name)}</option>`),
+    ].join('');
+    return `<li class="sectionRow" data-pid="${escapeHtml(p.id)}" style="display:flex; align-items:center; gap:8px;">
+      <a href="${href}" data-link style="flex:1 1 auto; min-width:0;">${escapeHtml(p.title)}</a>
+      ${isEditMode() ? `<select data-pid="${escapeHtml(p.id)}" title="Group">${opts}</select>` : ''}
+    </li>`;
+  };
+  const listHtml = groupList.length ? groupList.map(g => `
+    <details class="section-acc" data-acc-id="${escapeHtml(String(g.id))}" ${isOpen(String(g.id)) ? 'open' : ''}>
+      <summary class="meta" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
+        <span style="flex:1 1 auto;min-width:0;">${escapeHtml(g.name)}</span>
+        <span class="meta" style="opacity:.8;">${String(g.pages.length)}</span>
+      </summary>
+      <ul style="margin-top:8px;">${g.pages.length ? g.pages.map(rowsFor).join('') : '<li class="meta">No items</li>'}</ul>
+    </details>
+  `).join('') : `<li class="meta">No items yet.</li>`;
 
   const widgetsHostId = 'sectionWidgetsHost';
   outlet.innerHTML = `
@@ -109,7 +135,7 @@ export async function render(outlet, { key }) {
         <h2 style="flex:1 1 auto;">${escapeHtml(label)}</h2>
         ${isCustom ? '<button id="btnDeleteCustomSection" type="button" class="chip" title="Delete section">Delete section</button>' : ''}
       </div>
-      <ul>${listHtml}</ul>
+      ${listHtml}
     </section>
   `;
 
@@ -120,7 +146,7 @@ export async function render(outlet, { key }) {
   try {
     const host = $('#' + widgetsHostId, outlet);
     const surfaceId = `section:${String(key)}`;
-    renderWidgetsArea(host, { surfaceId, title: 'Widgets' });
+    renderWidgetsArea(host, { surfaceId });
   } catch {}
 
   // Render header media for this section surface
@@ -128,7 +154,7 @@ export async function render(outlet, { key }) {
     const surfId = `section:${String(key)}`;
     const hmHost = $('#surfaceHeader', outlet);
     const topEditBtn = document.getElementById('btnEditPage');
-    let customizing = false;
+    // Edit mode mirrors the global UI mode (topbar Edit)
     let media = null;
     let colorCtl = null;
     const SWATCHES = ['#8b5cf6','#22d3ee','#f472b6','#a3e635','#f59e0b','#ef4444','#3b82f6','#10b981','#eab308','#94a3b8'];
@@ -143,6 +169,7 @@ export async function render(outlet, { key }) {
       return null;
     };
     const refresh = async () => {
+      const customizing = document?.body?.dataset?.mode === 'edit';
       const state = await loadState();
       const surf = state?.surfaceMediaV1?.surfaces?.[surfId] || null;
       media = surf && surf.header ? { url: `/media/${surf.header.path}`, posX: surf.header.posX, posY: surf.header.posY, zoom: Number(surf.header.zoom ?? 1) } : null;
@@ -220,13 +247,16 @@ export async function render(outlet, { key }) {
     };
     // Wire top toolbar Edit button to toggle section header edit mode
     const onTopEditClick = () => {
-      customizing = !customizing;
-      if (topEditBtn) topEditBtn.textContent = customizing ? 'Done' : 'Edit';
-      try { setUiMode(customizing ? 'edit' : null); } catch {}
-      void refresh();
+      const currentlyEdit = document?.body?.dataset?.mode === 'edit';
+      const nextMode = currentlyEdit ? null : 'edit';
+      if (topEditBtn) topEditBtn.textContent = nextMode ? 'Done' : 'Edit';
+      try { setUiMode(nextMode); } catch {}
+      // Re-render whole route to reveal/hide organizer and widget controls
+      void rerender();
     };
     // Initialize button state and listener (dedup across re-renders)
     if (topEditBtn) {
+      const customizing = document?.body?.dataset?.mode === 'edit';
       topEditBtn.textContent = customizing ? 'Done' : 'Edit';
       if (topEditBtn.__sectionHeaderMediaClick) {
         topEditBtn.removeEventListener('click', topEditBtn.__sectionHeaderMediaClick);
@@ -325,6 +355,22 @@ export async function render(outlet, { key }) {
         }, 1200);
       }
     }, true);
+
+    // Persist accordion open/closed state for groups
+    outlet.addEventListener('toggle', (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      const det = el.closest('details.section-acc');
+      if (!det || det !== el) return;
+      const gid = det.getAttribute('data-acc-id') || '';
+      const sectionKey = outlet.dataset.sectionKey || '';
+      const st = getState() || {};
+      const all = { ...(st.sectionLandingAccordionV1 || {}) };
+      const cur = { ...(all[sectionKey] || {}) };
+      cur[gid] = det.open ? true : false;
+      all[sectionKey] = cur;
+      updateState({ sectionLandingAccordionV1: all });
+    });
 
     // Organizer buttons: Add/Rename/Delete via delegation
     outlet.addEventListener('click', async (e) => {

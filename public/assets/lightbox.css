@@ -1,0 +1,72 @@
+/* DM Vault — Global Image Lightbox (scoped classes to avoid conflicts) */
+
+/* Lock page scroll when open */
+body.dmv-lightbox-open {
+  overflow: hidden;
+}
+
+/* Root container */
+.dmv-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000; /* above app UI */
+  display: none;
+}
+
+.dmv-lightbox[aria-hidden="false"] {
+  display: block;
+}
+
+/* Backdrop with same blur as Option+B overlay */
+.dmv-lightbox__backdrop {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* Subtle tint that harmonizes with themes (mirrors Option+B) */
+  background: rgba(0,0,0,0.18);
+}
+
+/* Centered figure */
+.dmv-lightbox__figure {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 92vw;
+  max-height: 90vh;
+  margin: 0;
+}
+
+.dmv-lightbox__img {
+  display: block;
+  max-width: 92vw;
+  max-height: 90vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-4, 10px);
+  box-shadow: var(--shadow-img, 0 12px 40px rgba(0,0,0,0.6));
+}
+
+.dmv-lightbox__caption {
+  margin-top: 8px;
+  text-align: center;
+  color: var(--muted, #aaa);
+  font-size: 13px;
+}
+
+/* Close button */
+.dmv-lightbox__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: 1px solid var(--ui-hairline, rgba(255,255,255,0.2));
+  background: var(--ui-control-bg, rgba(0,0,0,0.35));
+  color: var(--text, #fff);
+  border-radius: var(--radius-4, 10px);
+  padding: 6px 10px;
+  cursor: pointer;
+  z-index: 10001; /* above backdrop */
+}
+

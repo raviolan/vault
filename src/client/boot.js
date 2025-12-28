@@ -25,6 +25,7 @@ import * as EnemyGenerator from './tools/enemyGenerator/index.js';
 import { renderFavorites } from './features/favorites.js';
 import { initPanels } from './features/panelControls.js';
 import { initGlobalShortcuts } from './features/shortcuts.js';
+import { installGlobalLightbox } from './features/lightbox.js';
 import { getUserState, patchUserState } from './miniapps/state.js';
 
 export async function boot() {
@@ -71,6 +72,8 @@ export async function boot() {
   mountLeftPanelWeather();
   // Global shortcuts (document-level)
   try { initGlobalShortcuts({ navigate, patchUserState, getUserState }); } catch {}
+  // Global lightbox (meaningful <img> + cover backgrounds)
+  try { installGlobalLightbox(); } catch {}
 
   // Bind theme mode toggle (switch)
   const btnDark = document.getElementById('themeModeDark');

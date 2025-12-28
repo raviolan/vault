@@ -363,6 +363,9 @@ body[data-mode='edit'] .editor-add-controls .chip {
     flex: 0 0 auto;
 }
 
+/* Compact spacing for the top-app toggle next to Tools */
+.right .right-drawer-handle .panelToggleCond { margin-left: 6px; }
+
 .drawer-content {
     overflow-x: hidden;
     flex: 1;
@@ -2881,39 +2884,199 @@ body[data-theme='light'] .page-header::after {
     gap: var(--space-6);
     margin-top: var(--space-6);
 }
-.widgetCard {
-    display: block;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-5);
-    padding: var(--space-6);
-    color: inherit;
-    text-decoration: none;
-    position: relative;
+/* New clean grid for widgets editor */
+.widgetsGrid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+  margin-top: 12px;
 }
-.widgetCard:hover {
-    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+/* Card anchor reset and behavior */
+.widgetCard{
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  height: 100%;
 }
-.widgetCardTitle {
-    font-weight: 700;
-    margin-bottom: 6px;
+/* Inner card visual */
+.widgetCardInner{
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel, rgba(255,255,255,0.6));
+  min-height: 108px;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  height: 100%;
 }
-.widgetCardContext {
-    color: var(--muted);
-    font-size: var(--text-md);
-    max-height: 3.2em;
-    overflow: hidden;
+/* Large variant: image cover on top, taller min height */
+.widgetCardInner.widgetCardLarge{
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  min-height: 380px;
 }
-.widgetControls {
-    position: absolute;
-    right: 8px;
-    top: 8px;
-    display: inline-flex;
-    gap: 6px;
+.widgetCardLarge .widgetCover{
+  height: 220px;
+  background: rgba(127,127,127,0.08);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
-.widgetControls button {
-    font-size: 12px;
-    padding: 3px 6px;
+/* Keep sane on very small screens */
+@media (max-width: 520px){
+  .widgetCardLarge .widgetCover{
+    height: 180px;
+  }
+}
+.widgetCoverImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.widgetCard:hover .widgetCardInner{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+.widgetThumb{
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 52px;
+  border: 1px solid var(--border);
+  background: rgba(127,127,127,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+.widgetThumbImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Body */
+.widgetCardBody{
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Add inner padding for large card body */
+.widgetCardLarge .widgetCardBody{
+  padding: 14px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+/* Title row + actions */
+.widgetCardTitleRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.widgetCardTitle{
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Meta + excerpt */
+.widgetCardMeta{
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.widgetCardContext{
+  font-size: 14px;
+  color: var(--text);
+  opacity: 0.85;
+  line-height: 1.35;
+  max-height: calc(1.35em * 3);
+  overflow: hidden;
+}
+/* In large variant, let excerpt flex and clamp lines for equal heights */
+.widgetCardLarge .widgetCardContext{
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  max-height: none;
+}
+/* Actions: small, non-invasive */
+.widgetCardActions{
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.widgetAction{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.65);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+}
+/* Hide actions until hover/focus for cleanliness */
+.widgetCardActions{
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.widgetCard:hover .widgetCardActions,
+.widgetCard:focus-within .widgetCardActions{
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Prefer always-visible on touch devices */
+@media (hover: none){
+  .widgetCardActions{
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+/* Prevent buttons from inheriting anchor styles */
+.widgetCard button{ color: inherit; }
+
+/* Add row */
+.widgetAddRow{
+  display:flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.widgetAddRow select{
+  flex: 1;
+  min-width: 0;
+}
+.widgetAddRow button{
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Header Media */
@@ -2922,7 +3085,7 @@ body[data-theme='light'] .page-header::after {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--section-accent) 22%, transparent);
 }
 .headerMedia .cover {
-  height: var(--headerMediaCoverH, 240px);
+  height: var(--headerMediaCoverH, 360px);
   border-radius: 14px;
   background-size: cover;
   background-repeat: no-repeat;
@@ -2930,7 +3093,7 @@ body[data-theme='light'] .page-header::after {
   position: relative;
   overflow: hidden;
 }
-.headerMedia.headerMedia--tall { --headerMediaCoverH: 480px; }
+.headerMedia.headerMedia--tall { --headerMediaCoverH: 720px; }
 .headerMedia .profile {
   width: 140px; height: 140px;
   border-radius: 999px;

@@ -156,6 +156,41 @@ export async function resolveLegacyAndUpgrade(title, blockId, tokenString) {
   }
 }
 
+function normalizeLabel(s) {
+  try {
+    return String(s || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[\.;:!?’"()\[\]{}]/g, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/\s+/g, ' ');
+  } catch { return String(s || '').toLowerCase().trim(); }
+}
+
+async function linkWikilinkToExisting({ title, blockId, token, page }) {
+  try {
+    const id = page.id;
+    if (blockId) {
+      const blk = getCurrentPageBlocks().find(b => b.id === blockId);
+      const content = parseMaybeJson(blk?.contentJson);
+      const text = String(content?.text || '');
+      const idx = text.indexOf(token);
+      let newText = text;
+      if (idx >= 0) {
+        const upgraded = `[[page:${id}|${title}]]`;
+        newText = text.slice(0, idx) + upgraded + text.slice(idx + token.length);
+      }
+      await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
+      updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
+    }
+    // Re-render to reflect link resolution; don't navigate automatically
+    rerenderReadOnly();
+  } catch (e) {
+    console.error('Failed to link wikilink to existing page', e);
+    alert('Failed to link: ' + (e?.message || e));
+  }
+}
+
 export function installWikiLinkHandler() {
   document.addEventListener('click', (e) => {
     const a = e.target?.closest?.('a[data-wiki]');
@@ -222,6 +257,11 @@ async function createPageForWikilink({ title, blockId, token, type }) {
       await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
       updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
     }
+    // Optionally apply bulk resolution if requested via modal controls
+    try {
+      const modal = document.getElementById('wikilinkCreateModal');
+      if (modal) await applyBulkIfRequested({ label: title, targetPageId: id, modal });
+    } catch {}
     await refreshNav();
     navigate(`/page/${encodeURIComponent(id)}`);
   } catch (e) {
@@ -245,8 +285,8 @@ function openWikilinkModal({ title, blockId, token }) {
   // set default type to note
   const sel = modal.querySelector('select[name="wikiCreateType"]');
   if (sel) sel.value = sel.value || 'note';
-  const btnCreate = modal.querySelector('.modal-confirm');
-  const btnCancel = modal.querySelector('.modal-cancel');
+  const btnCreate = modal.querySelector('.wiki-create .modal-confirm');
+  const btnCancel = modal.querySelector('.wiki-create .modal-cancel');
   if (btnCreate) {
     btnCreate.onclick = async () => {
       const type = sel?.value || 'note';
@@ -260,5 +300,215 @@ function openWikilinkModal({ title, blockId, token }) {
       await revertWikilinkToPlain({ title, blockId, token });
     };
   }
+
+  // Resolve section
+  const input = modal.querySelector('input[name="wikiResolveQuery"]');
+  const resultsEl = modal.querySelector('.wikiResolveResults');
+  const autoEl = modal.querySelector('.wikiResolveAuto');
+  const linkBtn = modal.querySelector('.wikiResolveConfirm');
+  // Apply controls
+  setupApplyControls({ modal, label: title });
+  let selected = null; // { id, title, slug, type }
+  const setSelected = (item) => {
+    selected = item;
+    // update selection UI
+    resultsEl?.querySelectorAll('.result').forEach(n => n.classList.remove('is-selected'));
+    if (item && resultsEl) {
+      const node = resultsEl.querySelector(`.result[data-id="${CSS.escape(item.id)}"]`);
+      if (node) node.classList.add('is-selected');
+    }
+    if (linkBtn) linkBtn.disabled = !selected;
+  };
+
+  const renderResults = (arr, qNorm) => {
+    if (!resultsEl) return;
+    resultsEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    for (const r of arr) {
+      const div = document.createElement('div');
+      div.className = 'result';
+      div.setAttribute('data-id', r.id);
+      div.style.padding = '6px 8px';
+      div.style.borderRadius = '6px';
+      div.style.cursor = 'pointer';
+      div.innerHTML = `<div style="font-weight:700;">${r.title}</div>
+        <div style="font-size:12px; color: var(--muted);">${r.type || 'page'}${r.slug ? ` • ${r.slug}` : ''}</div>`;
+      div.addEventListener('click', () => setSelected(r));
+      div.addEventListener('dblclick', async () => {
+        await linkWikilinkToExisting({ title, blockId, token, page: r });
+        await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
+        closeModal('wikilinkCreateModal');
+      });
+      div.addEventListener('mouseenter', () => { resultsEl.querySelectorAll('.result').forEach(n => n.classList.remove('hover')); div.classList.add('hover'); });
+      div.addEventListener('mouseleave', () => div.classList.remove('hover'));
+      frag.appendChild(div);
+    }
+    resultsEl.appendChild(frag);
+    // Auto-suggest exact match
+    if (autoEl) {
+      const exact = arr.filter(r => normalizeLabel(r.title) === qNorm);
+      if (exact.length === 1) {
+        const r = exact[0];
+        autoEl.style.display = '';
+        autoEl.innerHTML = `<button type="button" class="chip" data-id="${r.id}">Link to \u201C${r.title}\u201D</button>`;
+        autoEl.querySelector('button')?.addEventListener('click', async () => {
+          await linkWikilinkToExisting({ title, blockId, token, page: r });
+          await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
+          closeModal('wikilinkCreateModal');
+        });
+        // Prefer existing when exact match found
+        setSelected(r);
+      } else {
+        autoEl.style.display = 'none';
+        autoEl.innerHTML = '';
+      }
+    }
+  };
+
+  let lastQ = '';
+  let tmr = null;
+  const doSearch = async (q) => {
+    const qTrim = String(q || '').trim();
+    lastQ = qTrim;
+    if (!qTrim) { renderResults([], ''); setSelected(null); return; }
+    try {
+      const res = await fetchJson(`/api/search?q=${encodeURIComponent(qTrim)}`);
+      const arr = Array.isArray(res?.results) ? res.results : [];
+      // prioritize title matches first
+      const qNorm = normalizeLabel(qTrim);
+      const sorted = arr.slice().sort((a, b) => {
+        const an = normalizeLabel(a.title);
+        const bn = normalizeLabel(b.title);
+        const ae = an === qNorm ? 0 : 1;
+        const be = bn === qNorm ? 0 : 1;
+        if (ae !== be) return ae - be;
+        return (a.title || '').localeCompare(b.title || '');
+      }).slice(0, 20);
+      renderResults(sorted, qNorm);
+    } catch {
+      renderResults([], '');
+    }
+  };
+
+  if (input) {
+    input.value = title || '';
+    input.oninput = () => {
+      const v = input.value;
+      if (tmr) clearTimeout(tmr);
+      tmr = setTimeout(() => doSearch(v), 160);
+    };
+  }
+  if (linkBtn) {
+    linkBtn.onclick = async () => {
+      if (!selected) return;
+      await linkWikilinkToExisting({ title, blockId, token, page: selected });
+      await applyBulkIfRequested({ label: title, targetPageId: selected.id, modal });
+      closeModal('wikilinkCreateModal');
+    };
+  }
+
   openModal('wikilinkCreateModal');
+  // Kick off initial search
+  setTimeout(() => doSearch(title || ''), 0);
+}
+
+function currentPageIdFromBlocks() {
+  try { return getCurrentPageBlocks()[0]?.pageId || null; } catch { return null; }
+}
+
+function setupApplyControls({ modal, label }) {
+  const applyPageCb = modal.querySelector('input[name="wikiApplyPage"]');
+  const applyGlobalCb = modal.querySelector('input[name="wikiApplyGlobal"]');
+  const applyStatus = modal.querySelector('.wikiApplyGlobalStatus');
+  const applyReview = modal.querySelector('.wikiApplyReview');
+  const applyToggle = modal.querySelector('.wikiApplyToggle');
+  const applyList = modal.querySelector('.wikiApplyList');
+  if (applyStatus) { applyStatus.textContent = 'checking…'; }
+
+  const updateReviewVisibility = () => {
+    if (!applyReview) return;
+    applyReview.style.display = applyGlobalCb?.checked ? '' : 'none';
+    if (!applyGlobalCb?.checked && applyList) applyList.style.display = 'none';
+  };
+  applyGlobalCb?.addEventListener('change', updateReviewVisibility);
+  updateReviewVisibility();
+
+  applyToggle?.addEventListener('click', () => {
+    if (!applyList) return;
+    applyList.style.display = (applyList.style.display === 'none' || !applyList.style.display) ? '' : 'none';
+  });
+
+  // Fetch occurrences to populate counts and review list
+  fetchJson(`/api/wikilinks/occurrences?label=${encodeURIComponent(label)}&limit=100`).then((arr) => {
+    const results = Array.isArray(arr) ? arr : [];
+    const n = results.length;
+    if (applyStatus) applyStatus.textContent = `Found in ${n} page${n === 1 ? '' : 's'}`;
+    if (applyList) {
+      applyList.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      for (const r of results) {
+        const row = document.createElement('label');
+        row.style.display = 'block';
+        row.style.padding = '4px 2px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.setAttribute('data-page-id', r.pageId);
+        const text = document.createElement('span');
+        text.textContent = ` ${r.title}`;
+        const meta = document.createElement('span');
+        meta.style.color = 'var(--muted)';
+        meta.style.fontSize = '12px';
+        meta.textContent = r.slug ? ` • ${r.slug}` : '';
+        row.appendChild(cb);
+        row.appendChild(text);
+        if (r.slug) row.appendChild(meta);
+        frag.appendChild(row);
+      }
+      applyList.appendChild(frag);
+    }
+  }).catch(() => { if (applyStatus) applyStatus.textContent = 'unavailable'; });
+}
+
+async function applyBulkIfRequested({ label, targetPageId, modal }) {
+  try {
+    const applyPageCb = modal.querySelector('input[name="wikiApplyPage"]');
+    const applyGlobalCb = modal.querySelector('input[name="wikiApplyGlobal"]');
+    const applyList = modal.querySelector('.wikiApplyList');
+    if (!(applyPageCb?.checked || applyGlobalCb?.checked)) return;
+
+    const pageId = currentPageIdFromBlocks();
+    let summary = null;
+
+    if (applyGlobalCb?.checked) {
+      const ids = Array.from(applyList?.querySelectorAll('input[type="checkbox"][data-page-id]') || [])
+        .filter(el => el.checked)
+        .map(el => el.getAttribute('data-page-id'))
+        .filter(Boolean);
+      if (ids.length) {
+        summary = await fetchJson('/api/wikilinks/resolve', {
+          method: 'POST',
+          body: JSON.stringify({ label, targetPageId, scope: 'global', pageIds: ids, replaceMode: 'unresolvedOnly' })
+        });
+      }
+    } else if (applyPageCb?.checked && pageId) {
+      summary = await fetchJson('/api/wikilinks/resolve', {
+        method: 'POST',
+        body: JSON.stringify({ label, targetPageId, scope: 'page', pageId, replaceMode: 'unresolvedOnly' })
+      });
+    }
+
+    if (summary && typeof summary.updatedPages === 'number') {
+      alert(`Updated ${summary.updatedPages} page${summary.updatedPages === 1 ? '' : 's'}`);
+    }
+
+    if (pageId) {
+      const { refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
+      await refreshBlocksFromServer(pageId);
+      rerenderReadOnly();
+    }
+  } catch (e) {
+    console.error('Bulk resolve failed', e);
+    alert('Bulk resolve failed: ' + (e?.message || e));
+  }
 }

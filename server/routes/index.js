@@ -16,6 +16,7 @@ import { routeTags } from './tags.js';
 import { routeUserState } from './userState.js';
 import { routeOpen5e } from './open5e.js';
 import { routeMedia } from './media.js';
+import { routeWikiLinks } from './wikilinks.js';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -118,6 +119,7 @@ const ROUTES = [
   { name: 'media', handle: routeMedia },
   { name: 'export', handle: routeExport },
   { name: 'import', handle: routeImport },
+  { name: 'wikiLinks', handle: routeWikiLinks },
   // Backlinks must precede generic /api/pages/:id
   { name: 'backlinks', handle: routeBacklinks },
   { name: 'blocks', handle: routeBlocks },

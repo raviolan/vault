@@ -1,5 +1,6 @@
 import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
+import { setUiMode } from '../lib/uiMode.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { loadState } from '../lib/state.js';
 
@@ -45,7 +46,12 @@ export function render(container, ctx = {}) {
       }
     });
   }
-  if (btn) btn.onclick = () => { customizing = !customizing; btn.textContent = customizing ? 'Done' : 'Customize'; refresh(); };
+  if (btn) btn.onclick = () => {
+    customizing = !customizing;
+    btn.textContent = customizing ? 'Done' : 'Customize';
+    try { setUiMode(customizing ? 'edit' : null); } catch {}
+    refresh();
+  };
   void refresh();
   const widgetsHost = container.querySelector('#sessionWidgetsHost');
   try { renderWidgetsArea(widgetsHost, { surfaceId, title: 'Widgets' }); } catch {}

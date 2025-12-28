@@ -51,6 +51,7 @@ export function bindRightPanel() {
   const tabs = $$('.right-panel-tabs [data-tab]');
   const panels = $$('[data-panel]');
   const closeBtn = document.getElementById('rightDrawerClose');
+  const toggleTopBtn = document.getElementById('rightToggleTopApp');
   const splitToggle = document.getElementById('rightSplitToggle');
   const splitPicker = document.getElementById('rightSplitPicker');
   const splitTopSelect = document.getElementById('rightSplitTopSelect');
@@ -134,6 +135,46 @@ export function bindRightPanel() {
   });
 
   const drawerContent = drawer; // use attribute on this element to signal split mode
+
+  function updateToggleTopButtonLabel() {
+    if (!toggleTopBtn) return;
+    try {
+      const st = getState() || {};
+      const split = !!st.rightPanelSplitActive;
+      const cur = split ? (st.rightSplitTopApp || 'notepad') : (st.rightPanelTab || 'notepad');
+      const isCond = cur === 'conditions';
+      toggleTopBtn.textContent = isCond ? '⇄ Notes' : '⇄ Cond';
+      toggleTopBtn.setAttribute('title', 'Toggle top app (Conditions)');
+    } catch {}
+  }
+
+  function toggleTopApp() {
+    const st = getState() || {};
+    const split = !!st.rightPanelSplitActive;
+    if (split) {
+      const cur = st.rightSplitTopApp || 'notepad';
+      if (cur !== 'conditions') {
+        updateState({ rightPrevTopApp: cur, rightSplitTopApp: 'conditions' });
+      } else {
+        const back = st.rightPrevTopApp || 'notepad';
+        updateState({ rightSplitTopApp: back });
+      }
+      showSplit();
+    } else {
+      const cur = st.rightPanelTab || 'notepad';
+      if (cur !== 'conditions') {
+        updateState({ rightPrevSingleApp: cur, rightPanelTab: 'conditions', rightPanelLastSingleTab: 'conditions' });
+        show('conditions');
+      } else {
+        const back = st.rightPrevSingleApp || 'notepad';
+        updateState({ rightPanelTab: back, rightPanelLastSingleTab: back });
+        show(back);
+      }
+    }
+    updateToggleTopButtonLabel();
+  }
+
+  toggleTopBtn?.addEventListener('click', toggleTopApp);
 
   function setPanelHeadersDefault() {
     const np = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
@@ -239,6 +280,7 @@ export function bindRightPanel() {
     const cfg = readSplitConfig();
     applySplitUI(cfg);
     mountSplitApps(cfg);
+    updateToggleTopButtonLabel();
   }
 
   const showNotesSplit = ({ focus } = {}) => {
@@ -281,6 +323,7 @@ export function bindRightPanel() {
       notepadHost.show(name === 'notepad' ? 'notepad' : null);
       todoHost.show(name === 'todo' ? 'todo' : null);
       conditionsHost.show(null);
+      updateToggleTopButtonLabel();
       return;
     }
     // Non-note tabs: hide both note panels, unmount hosts, show selected panel
@@ -294,6 +337,7 @@ export function bindRightPanel() {
     conditionsBottomHost.show(null);
     if (name === 'conditions') conditionsHost.show('conditions');
     if (name === 'settings') renderSettingsPanel();
+    updateToggleTopButtonLabel();
   };
   // initialize active tab
   let initial = s.rightPanelTab || 'notepad';
@@ -315,6 +359,7 @@ export function bindRightPanel() {
     splitToggle && splitToggle.setAttribute('aria-pressed', 'false');
     show(initial);
   }
+  updateToggleTopButtonLabel();
   tabs.forEach(btn => btn.addEventListener('click', () => {
     const t = btn.getAttribute('data-tab');
     if ((getState() || {}).rightPanelSplitActive) {

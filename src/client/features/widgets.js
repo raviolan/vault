@@ -53,28 +53,23 @@ export function moveWidget(surfaceId, widgetId, dir) {
 }
 
 // Rendering: widgets area and page snapshot cards
-export async function renderWidgetsArea(hostEl, { surfaceId, title } = {}) {
+export async function renderWidgetsArea(hostEl, { surfaceId } = {}) {
   if (!(hostEl instanceof HTMLElement)) return;
   const items = getWidgets(surfaceId);
 
   const wrap = document.createElement('section');
-  wrap.className = 'widgetsArea card';
+  // No card background, no header/title — only the grid and optional editor (edit mode only)
+  wrap.className = 'widgetsArea';
   wrap.innerHTML = `
-    <div class="widgetsHeader">
-      <h2>${escapeHtml(title || 'Widgets')}</h2>
-      <div class="widgetsHeaderActions">
-        <button type="button" class="widgetsEditToggle">Edit widgets</button>
-      </div>
-    </div>
-    <div class="widgetGrid"></div>
+    <div class="widgetsGrid"></div>
     <div class="widgetsEditor" style="display:none; margin-top: 8px;"></div>
   `;
   hostEl.appendChild(wrap);
 
-  const grid = wrap.querySelector('.widgetGrid');
+  const grid = wrap.querySelector('.widgetsGrid');
   const editor = wrap.querySelector('.widgetsEditor');
-  const toggleBtn = wrap.querySelector('.widgetsEditToggle');
-  let editing = false;
+  // Editing is driven by global topbar Edit mode
+  const isEditMode = () => (document?.body?.dataset?.mode === 'edit');
 
   const renderView = (snapshotsMap) => {
     const curItems = getWidgets(surfaceId);
@@ -86,46 +81,97 @@ export async function renderWidgetsArea(hostEl, { surfaceId, title } = {}) {
         a.setAttribute('data-link', '');
         a.href = `/page/${encodeURIComponent(w.pageId)}`;
 
+        const inner = document.createElement('div');
+        inner.className = 'widgetCardInner widgetCardLarge';
+        a.appendChild(inner);
+
+        // Large cover area on top
+        const cover = document.createElement('div');
+        cover.className = 'widgetCover';
+        inner.appendChild(cover);
+
         const body = document.createElement('div');
         body.className = 'widgetCardBody';
-        body.innerHTML = `
-          <div class="widgetCardTitle">Loading…</div>
-          <div class="widgetCardContext meta">Loading…</div>
-        `;
-        a.appendChild(body);
+        inner.appendChild(body);
 
-        if (editing) {
+        const titleRow = document.createElement('div');
+        titleRow.className = 'widgetCardTitleRow';
+        body.appendChild(titleRow);
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widgetCardTitle';
+        titleEl.textContent = 'Loading…';
+        titleRow.appendChild(titleEl);
+
+        if (isEditMode()) {
           a.addEventListener('click', (e) => { e.preventDefault(); });
-          const controls = document.createElement('div');
-          controls.className = 'widgetControls';
-          controls.innerHTML = `
-            <button type="button" data-act="left" title="Move left">◀</button>
-            <button type="button" data-act="right" title="Move right">▶</button>
-            <button type="button" data-act="remove" title="Remove">Remove</button>
-          `;
-          controls.addEventListener('click', (e) => {
+          const actions = document.createElement('div');
+          actions.className = 'widgetCardActions';
+          actions.setAttribute('data-edit-only', '1');
+          actions.innerHTML = `
+            <button type="button" class="widgetAction widgetMoveLeft" data-act="left" title="Move left" aria-label="Move left">←</button>
+            <button type="button" class="widgetAction widgetMoveRight" data-act="right" title="Move right" aria-label="Move right">→</button>
+            <button type="button" class="widgetAction widgetRemove" data-act="remove" title="Remove" aria-label="Remove">×</button>`;
+          actions.addEventListener('click', (e) => {
             const btn = e.target;
             if (!(btn instanceof HTMLElement)) return;
+            e.preventDefault();
+            e.stopPropagation();
             const act = btn.getAttribute('data-act');
             if (act === 'remove') { removeWidget(surfaceId, w.id); renderAll(); }
             if (act === 'left') { moveWidget(surfaceId, w.id, -1); renderAll(); }
             if (act === 'right') { moveWidget(surfaceId, w.id, +1); renderAll(); }
           });
-          a.appendChild(controls);
+          titleRow.appendChild(actions);
         }
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'widgetCardMeta';
+        body.appendChild(metaEl);
+
+        const ctxEl = document.createElement('div');
+        ctxEl.className = 'widgetCardContext';
+        ctxEl.textContent = 'Loading…';
+        body.appendChild(ctxEl);
 
         grid.appendChild(a);
 
         const snap = snapshotsMap?.get(w.pageId);
         if (snap && !snap.missing) {
           const t = a.querySelector('.widgetCardTitle');
+          const m = a.querySelector('.widgetCardMeta');
           const c = a.querySelector('.widgetCardContext');
           if (t) t.textContent = snap.title || 'Untitled';
+          // Link: prefer slug when present
+          if (snap.slug) a.href = `/p/${encodeURIComponent(snap.slug)}`;
+          // Meta line: Type • ContextTitle (if different)
+          if (m) {
+            const bits = [];
+            if (snap.type) {
+              try { bits.push(String(snap.type).slice(0,1).toUpperCase() + String(snap.type).slice(1)); } catch { bits.push(String(snap.type)); }
+            }
+            if (snap.contextTitle && snap.contextTitle !== snap.title) bits.push(snap.contextTitle);
+            m.textContent = bits.join(' • ');
+          }
           if (c) {
             const lines = [];
-            if (snap.contextTitle && snap.contextTitle !== snap.title) lines.push(snap.contextTitle);
             if (snap.contextText) lines.push(snap.contextText);
             c.textContent = lines.length ? lines.join(' — ') : '';
+          }
+          // Cover image or subtle placeholder
+          const cov = a.querySelector('.widgetCover');
+          if (cov) {
+            cov.innerHTML = '';
+            if (snap.thumbUrl) {
+              const img = document.createElement('img');
+              img.className = 'widgetCoverImg';
+              img.loading = 'lazy';
+              img.alt = '';
+              img.src = snap.thumbUrl;
+              cov.appendChild(img);
+            } else {
+              // leave placeholder background via CSS
+            }
           }
         } else if (snap && snap.missing) {
           const t = a.querySelector('.widgetCardTitle');
@@ -138,7 +184,7 @@ export async function renderWidgetsArea(hostEl, { surfaceId, title } = {}) {
   };
 
   const renderEditor = async () => {
-    if (!editing) { editor.style.display = 'none'; editor.innerHTML = ''; return; }
+    if (!isEditMode()) { editor.style.display = 'none'; editor.innerHTML = ''; return; }
     editor.style.display = '';
     // Load pages list (cached first)
     let pages = getCachedPages();
@@ -148,8 +194,8 @@ export async function renderWidgetsArea(hostEl, { surfaceId, title } = {}) {
     // Build simple select to add a pageSnapshot
     const opts = pages.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)} (${escapeHtml(p.type)})</option>`).join('');
     editor.innerHTML = `
-      <div class="widgetAddRow" style="display:flex; gap:8px; align-items:center;">
-        <select class="widgetAddSelect" style="flex:1;">
+      <div class="widgetAddRow">
+        <select class="widgetAddSelect">
           <option value="">Select a page…</option>
           ${opts}
         </select>
@@ -189,13 +235,17 @@ export async function renderWidgetsArea(hostEl, { surfaceId, title } = {}) {
     await renderEditor();
   };
 
-  toggleBtn?.addEventListener('click', () => {
-    editing = !editing;
-    toggleBtn.textContent = editing ? 'Done' : 'Edit widgets';
-    renderAll();
-  });
-
   // Initial render
   renderAll();
+  // Observe edit mode changes (simple polling fallback to avoid wiring custom events)
+  let prevMode = isEditMode();
+  const i = setInterval(() => {
+    const cur = isEditMode();
+    if (cur !== prevMode) { prevMode = cur; renderAll(); }
+  }, 400);
+  // Best-effort cleanup if host is removed
+  const mo = new MutationObserver(() => {
+    if (!document.body.contains(hostEl)) { try { clearInterval(i); mo.disconnect(); } catch {} }
+  });
+  try { mo.observe(document.body, { childList: true, subtree: true }); } catch {}
 }
-
