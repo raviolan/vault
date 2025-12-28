@@ -330,6 +330,21 @@ input[type="radio"] {
     color: var(--text)
 }
 
+/* Precise override to guarantee top search readability */
+#searchBox {
+    color: var(--text, #e5e7eb) !important;
+    background: var(--panel, #151821) !important;
+    caret-color: var(--text, #e5e7eb);
+}
+#searchBox::placeholder {
+    color: var(--muted, #9aa3b2);
+    opacity: 1;
+}
+#searchBox:-webkit-autofill {
+    -webkit-text-fill-color: var(--text, #e5e7eb) !important;
+    transition: background-color 99999s ease-out 0s; /* prevent autofill bg flash */
+}
+
 /* Navigation & Trees */
 .tree ul {
     list-style: none;

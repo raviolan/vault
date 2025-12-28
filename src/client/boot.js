@@ -11,7 +11,6 @@ import { renderPage, renderPageBySlug } from './routes/pages.js';
 import { renderNotFound } from './routes/system.js';
 import { installSearchPreview } from './features/searchPreview.js';
 import { renderSearchResults } from './features/searchResults.js';
-import { installCommandPalette } from './features/commandPalette.js';
 import { bindModalBasics, openCreateModal, createPageFromModal } from './features/modals.js';
 import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav } from './features/nav.js';
@@ -36,7 +35,6 @@ export async function boot() {
   installWikiLinkHandler();
 
   installSearchPreview();
-  installCommandPalette();
   bindModalBasics('createPageModal');
   bindModalBasics('deletePageModal');
   bindModalBasics('wikilinkCreateModal');
