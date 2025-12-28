@@ -2621,3 +2621,10 @@ article.page.has-profile-media > h1#pageTitleView,
 article.page.has-profile-media > #pageTitleInput {
   margin-top: 54px;
 }
+
+/* Section landing: subtle saved highlight on row */
+.sectionRow.justSaved {
+  outline: 2px solid rgba(120, 120, 255, 0.35);
+  outline-offset: 2px;
+  transition: outline-color 250ms ease;
+}

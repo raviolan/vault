@@ -56,7 +56,7 @@ export async function render(outlet, { key }) {
           `<option value="" ${!valid ? 'selected' : ''}>Ungrouped</option>`,
           ...groups.map(g => `<option value="${String(g.id)}" ${valid && String(g.id)===String(currentGroupId)?'selected':''}>${escapeHtml(g.name)}</option>`),
         ].join('');
-        return `<li style="display:flex; align-items:center; gap:8px;">
+        return `<li class="sectionRow" data-pid="${escapeHtml(p.id)}" style="display:flex; align-items:center; gap:8px;">
           <a href="${href}" data-link style="flex:1 1 auto; min-width:0;">${escapeHtml(p.title)}</a>
           <select data-pid="${escapeHtml(p.id)}" title="Group">${opts}</select>
         </li>`;
@@ -204,7 +204,15 @@ export async function render(outlet, { key }) {
           badge.textContent = 'Saved';
         }
         await refreshNav();
-        await render(outlet, { key: sectionKey });
+        // Subtle feedback on the changed row (no full rerender)
+        try {
+          const row = outlet.querySelector(`[data-pid="${pid}"]`)?.closest?.('.sectionRow')
+            || outlet.querySelector(`[data-pid="${pid}"]`);
+          if (row) {
+            row.classList.add('justSaved');
+            setTimeout(() => row.classList.remove('justSaved'), 600);
+          }
+        } catch {}
       } catch (err) {
         console.error('Failed to set nav group', err);
         try { if (badge) badge.textContent = 'Failed'; } catch {}
