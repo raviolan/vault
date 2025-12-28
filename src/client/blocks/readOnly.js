@@ -36,11 +36,15 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       wrap.setAttribute('data-block-id', n.id);
       const header = document.createElement('div');
       header.className = 'section-header';
+      // Expose collapsed state for CSS styling
+      header.dataset.collapsed = props.collapsed ? '1' : '0';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'section-toggle';
       btn.setAttribute('aria-label', 'Toggle');
       btn.textContent = props.collapsed ? '▸' : '▾';
+      // Accessible state for chevron CSS
+      btn.setAttribute('aria-expanded', props.collapsed ? 'false' : 'true');
       header.appendChild(btn);
       const title = document.createElement('span');
       title.className = 'section-title-read';
@@ -63,6 +67,8 @@ export function renderBlocksReadOnly(rootEl, blocks) {
           await apiPatchBlock(n.id, { props: next });
           props.collapsed = !props.collapsed;
           btn.textContent = props.collapsed ? '▸' : '▾';
+          btn.setAttribute('aria-expanded', props.collapsed ? 'false' : 'true');
+          header.dataset.collapsed = props.collapsed ? '1' : '0';
           kidsWrap.style.display = props.collapsed ? 'none' : '';
         } catch (e) { console.error('toggle failed', e); }
       });

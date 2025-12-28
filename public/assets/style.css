@@ -2134,6 +2134,285 @@ main.main>section[id].collapsed .section-content {
 .section-block.section--lvl2 .section-header { margin-bottom: 4px; }
 .section-block.section--lvl3 .section-header { margin-bottom: 2px; }
 
+/* Sections: Option A (Notion-clean) spacing + visuals */
+/* A) Spacing between sections */
+.section-block.section--lvl1 { margin-top: 12px; }
+.section-block.section--lvl2 { margin-top: 10px; }
+.section-block.section--lvl3 { margin-top: 8px; }
+.section-block:first-child { margin-top: 0; }
+
+/* B) Header row styling (clean row, subtle hover) */
+.section-header{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-5);
+}
+.section-header:hover{
+    background: rgba(127,127,127,0.10);
+}
+@supports (background: color-mix(in srgb, black, white)){
+  .section-header:hover{
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+  }
+}
+
+/* C) Toggle button (remove circle, draw chevron via CSS) */
+.section-toggle{
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    /* hide ▾/▸ text while keeping it in DOM as fallback */
+    font-size: 0;
+    line-height: 0;
+    color: transparent;
+    position: relative;
+}
+.section-toggle::before{
+    content:"";
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg); /* expanded = down */
+}
+.section-toggle[aria-expanded="false"]::before{
+    transform: rotate(-45deg); /* collapsed = right */
+}
+.section-toggle:hover{
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* D) Title spacing + alignment */
+.section-title-read{
+    flex: 1;
+}
+.block-input.section-title{
+    flex: 1;
+    background: transparent;
+}
+
+/* E) Nested children guide line (hierarchy readability) */
+.section-children{
+    margin-left: 14px;
+    padding-left: 12px !important; /* override inline paddingLeft from readOnly.js */
+    border-left: 1px solid var(--border);
+}
+@supports (border-left-color: color-mix(in srgb, black, white)){
+  .section-children{
+    border-left-color: color-mix(in srgb, var(--border) 70%, transparent);
+  }
+}
+
+
+/* --- Section accordion: Option A (Notion-clean) + polish --- */
+
+/* Breathing room between section blocks */
+#pageBlocks .section-block{ margin-top: 12px; }
+#pageBlocks > .section-block:first-child{ margin-top: 0; }
+.section-children > .section-block{ margin-top: 10px; }
+
+/* Header row: clean row w/ subtle hover + no layout shifts */
+.section-header{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-5);
+  margin: 0;                 /* override old margin-bottom-only style */
+  border-bottom: 1px solid transparent; /* prevents jump on hover */
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+/* Slight lift on hover (tiny) */
+.section-header:hover{ transform: translateY(-0.5px); }
+
+/* Hover background (theme-safe) */
+.section-header:hover{
+  background: rgba(127,127,127,0.10);
+  border-bottom-color: var(--border);
+}
+@supports (background: color-mix(in srgb, black, white)){
+  .section-header:hover{
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent);
+  }
+}
+
+/* Expanded sections get a faint persistent tint */
+.section-header[data-collapsed="0"]{
+  background: rgba(127,127,127,0.08);
+}
+@supports (background: color-mix(in srgb, black, white)){
+  .section-header[data-collapsed="0"]{
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+
+/* Toggle: remove “button chrome”, draw a chevron, animate it */
+.section-toggle{
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor: pointer;
+  position: relative;
+
+  /* hide the ▾/▸ glyph visually (fallback remains in DOM) */
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
+}
+.section-toggle::before{
+  content:"";
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); /* expanded = down */
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+.section-toggle[aria-expanded="false"]::before{
+  transform: rotate(-45deg); /* collapsed = right */
+}
+.section-toggle:hover{
+  background: rgba(127,127,127,0.10);
+}
+.section-toggle:hover::before{
+  border-color: var(--text);
+}
+@supports (background: color-mix(in srgb, black, white)){
+  .section-toggle:hover{
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+  }
+}
+
+/* Drag handle for section reorder */
+.section-drag{
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  cursor: grab;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.section-header:hover .section-drag,
+.section-header:focus-within .section-drag{
+  opacity: 1;
+}
+.section-drag:hover{
+  background: rgba(127,127,127,0.10);
+  color: var(--text);
+}
+@supports (background: color-mix(in srgb, black, white)){
+  .section-drag:hover{
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+  }
+}
+.section-drag:active{ cursor: grabbing; }
+
+.section-block.is-dragging{
+  opacity: 0.6;
+}
+
+.drag-indicator{
+  height: 2px;
+  background: rgba(255,255,255,0.35);
+  border-radius: 999px;
+  margin: 4px 0;
+}
+@supports (background: color-mix(in srgb, black, white)){
+  .drag-indicator{
+    background: color-mix(in srgb, var(--text) 35%, transparent);
+  }
+}
+
+/* Titles align nicely */
+.section-title-read{ flex: 1; }
+.block-input.section-title{ flex: 1; background: transparent; }
+
+/* Focus ring (designed + accessible) */
+.section-toggle:focus-visible,
+.section-header:focus-within{
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(127,127,127,0.22);
+}
+@supports (box-shadow: 0 0 0 2px color-mix(in srgb, black, white)){
+  .section-toggle:focus-visible,
+  .section-header:focus-within{
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 15%, transparent);
+  }
+}
+
+/* Children: hierarchy guide line (override inline paddingLeft) */
+.section-children{
+  margin-left: 14px;
+  padding-left: 12px !important;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-left: 1px solid var(--border);
+}
+@supports (border-left-color: color-mix(in srgb, black, white)){
+  .section-children{
+    border-left-color: color-mix(in srgb, var(--border) 55%, transparent);
+  }
+}
+
+/* Edit-mode: Section header controls (move/delete/add) */
+.section-controls{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  margin-left: auto;
+}
+.section-controls button{
+  height: 22px;
+  min-width: 22px;
+  border-radius: 8px;
+  padding: 0 6px;
+}
+
+/* Hide move/delete unless hover/focus for cleanliness */
+.section-controls .section-move-up,
+.section-controls .section-move-down,
+.section-controls .section-delete-empty{
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.section-header:hover .section-controls .section-move-up,
+.section-header:hover .section-controls .section-move-down,
+.section-header:hover .section-controls .section-delete-empty,
+.section-header:focus-within .section-controls .section-move-up,
+.section-header:focus-within .section-controls .section-move-down,
+.section-header:focus-within .section-controls .section-delete-empty{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Delete button visible only when JS removes hidden attribute; keep base subtle */
+.section-controls .section-delete-empty{
+  opacity: 0;
+}
 
 /* Connections modal primitives consolidated in components.css */
 
