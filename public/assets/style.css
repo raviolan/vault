@@ -3094,8 +3094,10 @@ body[data-theme='light'] .page-header::after {
   overflow: hidden;
 }
 .headerMedia.headerMedia--tall { --headerMediaCoverH: 720px; }
+/* Avatar sizing: expose variable + clamp for responsiveness */
+.headerMedia { --avatar-size: 280px; --avatar-size-clamped: clamp(120px, var(--avatar-size), 320px); }
 .headerMedia .profile {
-  width: 140px; height: 140px;
+  width: var(--avatar-size-clamped); height: var(--avatar-size-clamped);
   border-radius: 999px;
   object-fit: cover;
   position: absolute;
@@ -3111,7 +3113,7 @@ body[data-theme='light'] .page-header::after {
 .headerMedia .profileWrap {
   position: absolute;
   left: 16px; bottom: -48px;
-  width: 140px; height: 140px;
+  width: var(--avatar-size-clamped); height: var(--avatar-size-clamped);
   border-radius: 999px;
   overflow: hidden;
   border: 4px solid var(--panel);
@@ -3128,7 +3130,8 @@ body[data-theme='light'] .page-header::after {
 /* Add spacing when profile overlaps */
 article.page.has-profile-media > h1#pageTitleView,
 article.page.has-profile-media > #pageTitleInput {
-  margin-top: 54px;
+  /* Base 54px for 140px avatar, plus half the delta beyond 140px */
+  margin-top: calc(54px + (var(--avatar-size-clamped) - 140px) / 2);
 }
 
 /* Section landing: subtle saved highlight on row */

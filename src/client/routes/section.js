@@ -126,8 +126,10 @@ export async function render(outlet, { key }) {
   `).join('') : `<li class="meta">No items yet.</li>`;
 
   const widgetsHostId = 'sectionWidgetsHost';
+  const introHostId = 'sectionIntroHost';
   outlet.innerHTML = `
     <div id="surfaceHeader"></div>
+    <section id="${introHostId}" class="card" style="display:none; margin: 10px 0 12px;"></section>
     ${organizer}
     <div id="${widgetsHostId}"></div>
     <section class="card">
@@ -275,6 +277,39 @@ export async function render(outlet, { key }) {
         }
       } catch {}
     };
+  } catch {}
+
+  // Intro content: fetch section virtual page and render view or editor
+  try {
+    const introHost = document.getElementById(introHostId);
+    const res = await fetch(`/api/pages/${encodeURIComponent(`section:${key}`)}`);
+    const page = await res.json();
+    const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+    const customizing = document?.body?.dataset?.mode === 'edit';
+    if (!customizing) {
+      if (!blocks.length) {
+        introHost.style.display = 'none';
+      } else {
+        introHost.style.display = '';
+        const body = document.createElement('div');
+        body.className = 'section-intro-view';
+        body.id = 'pageBlocks';
+        introHost.innerHTML = '';
+        introHost.appendChild(body);
+        const { renderBlocksReadOnly } = await import('../blocks/readOnly.js');
+        renderBlocksReadOnly(body, blocks);
+      }
+    } else {
+      introHost.style.display = '';
+      introHost.innerHTML = '';
+      const editorWrap = document.createElement('div');
+      const body = document.createElement('div');
+      body.id = 'pageBlocks';
+      editorWrap.appendChild(body);
+      introHost.appendChild(editorWrap);
+      const { renderBlocksEdit } = await import('../blocks/edit/render.js');
+      renderBlocksEdit(body, { id: `section:${key}`, title: page.title || '', type: 'section' }, blocks);
+    }
   } catch {}
 
   // Render organizer controls (events bound via delegation below)

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { sendJson, sendText, readBody, writeJsonAtomic } from '../lib/http.js';
 
-function defaultUserState() {
+export function defaultUserState() {
   return {
     leftPanelOpen: true,
     rightPanelOpen: true,
@@ -13,6 +13,7 @@ function defaultUserState() {
     todoItems: [],
     surfaceMediaV1: { surfaces: {} },
     surfaceStyleV1: { surfaces: {} },
+    sectionIntroV1: { sections: {} },
   };
 }
 

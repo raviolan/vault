@@ -75,6 +75,32 @@ export function routePages(req, res, ctx) {
   const pageIdMatch = pathname.match(/^\/api\/pages\/([^\/]+)$/);
   if (pageIdMatch) {
     const id = pageIdMatch[1];
+    // Virtual Section Intro pages: id = section:<key>
+    const secMatch = id.match(/^section:(.+)$/);
+    if (secMatch) {
+      const key = secMatch[1];
+      if (req.method === 'GET') {
+        return (async () => {
+          // Read from user state
+          const fs = await import('node:fs');
+          const path = await import('node:path');
+          const { defaultUserState } = await import('./userState.js');
+          const p = path.join(ctx.USER_DIR, 'state.json');
+          let state = defaultUserState();
+          try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+          const sec = state.sectionIntroV1?.sections?.[key] || {};
+          const blocks = Array.isArray(sec.blocks) ? sec.blocks : [];
+          const title = key.charAt(0).toUpperCase() + key.slice(1);
+          sendJson(res, 200, { id, title, type: 'section', blocks });
+          return true;
+        })();
+      }
+      if (req.method === 'PATCH') {
+        // No-op for now for virtual sections
+        sendJson(res, 200, { ok: true });
+        return true;
+      }
+    }
     if (req.method === 'GET') {
       const page = ctx.dbGetPageWithBlocks(ctx.db, id);
       if (!page) { notFound(res); return true; }

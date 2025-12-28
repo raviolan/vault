@@ -545,7 +545,7 @@ h4 {
     min-height: 64px;
 }
 
-.headerMedia.hasProfile .headerMediaFooter { padding-left: 170px; }
+.headerMedia.hasProfile .headerMediaFooter { padding-left: calc(var(--avatar-size-clamped, 140px) + 30px); }
 
 .headerMediaFooterLeft,
 .headerMediaFooterRight {
