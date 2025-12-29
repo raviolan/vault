@@ -14,6 +14,7 @@ function getPartyState() {
   return {
     open: !!block.open,
     pinnedPageIds: Array.isArray(block.pinnedPageIds) ? block.pinnedPageIds : [],
+    heightVh: Number.isFinite(block.heightVh) ? Number(block.heightVh) : 55,
   };
 }
 
@@ -158,6 +159,11 @@ function render() {
     `;
   mountRoot.innerHTML = '';
   mountRoot.appendChild(rootEl);
+  // Apply stored height on initial render
+  try {
+    const wrap = mountRoot.querySelector('#partyDrawer');
+    if (wrap) wrap.style.setProperty('--party-drawer-h', String(st.heightVh) + 'vh');
+  } catch {}
   
   const tabBtn = mountRoot.querySelector('#partyDrawerTabBtn');
   tabBtn?.addEventListener('click', () => togglePartyDrawer());
@@ -201,12 +207,14 @@ function render() {
   if (handle && wrap) {
     const startDrag = (clientY) => {
       const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+      let lastPct = null;
       const onMove = (y) => {
         const fromBottom = Math.max(0, vh - y);
         const min = Math.round(vh * 0.25);
         const max = Math.round(vh * 0.85);
         const clamped = Math.max(min, Math.min(max, fromBottom));
         const pct = (clamped / vh) * 100;
+        lastPct = pct;
         try { wrap.style.setProperty('--party-drawer-h', String(pct) + 'vh'); } catch {}
       };
       const onMouseMove = (ev) => { ev.preventDefault(); onMove(ev.clientY); };
@@ -216,6 +224,11 @@ function render() {
         window.removeEventListener('mouseup', stop);
         window.removeEventListener('touchmove', onTouchMove);
         window.removeEventListener('touchend', stop);
+        // Persist final height once per drag
+        if (lastPct != null) {
+          const h = Math.round(lastPct);
+          setPartyState({ heightVh: h });
+        }
       };
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', stop);

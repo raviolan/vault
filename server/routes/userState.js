@@ -20,6 +20,7 @@ export function defaultUserState() {
     partyDrawerV1: {
       open: false,
       pinnedPageIds: [],
+      heightVh: 55,
     },
   };
 }

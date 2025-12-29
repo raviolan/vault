@@ -137,7 +137,7 @@ export function routeBlocks(req, res, ctx) {
         sections[key] = { blocks };
         state.sectionIntroV1 = { sections };
         writeJsonAtomic(p, state);
-        sendJson(res, 200, { ok: true });
+        sendJson(res, 200, updated);
         return true;
       }
       // Try patch in virtual Section Intro store first
@@ -200,7 +200,7 @@ export function routeBlocks(req, res, ctx) {
           blocks[idx] = updated;
           state.dashboardV1 = { blocks };
           writeJsonAtomic(p, state);
-          sendJson(res, 200, { ok: true });
+          sendJson(res, 200, updated);
           return true;
         }
       }
@@ -230,7 +230,7 @@ export function routeBlocks(req, res, ctx) {
           blocks[idx] = updated;
           state.sessionV1 = { blocks };
           writeJsonAtomic(p, state);
-          sendJson(res, 200, { ok: true });
+          sendJson(res, 200, updated);
           return true;
         }
       }

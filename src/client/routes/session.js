@@ -5,17 +5,19 @@ import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js'
 import { loadState, getState, updateState, saveStateNow } from '../lib/state.js';
 import { fetchJson } from '../lib/http.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
-import { getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
+import { setPageActionsEnabled } from '../lib/ui.js';
+import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
 
 export function render(container, ctx = {}) {
   if (!container) return;
+  // Enable global Edit in top bar for Session
+  try { setPageActionsEnabled({ canEdit: true, canDelete: false }); } catch {}
   // Page-like layout mirroring Dashboard
   container.innerHTML = `
     <article class="page">
       <div id="surfaceHeader"></div>
       <div class="page-title-row" style="display:flex;align-items:center;gap:8px;margin:4px 0;">
         <h1 style="flex:1 1 auto;">Session</h1>
-        <button id="btnCustomize" type="button" class="chip">Customize</button>
       </div>
       <div id="sessionBlocks" class="page-body"></div>
       <div id="sessionWidgetsHost"></div>
@@ -24,14 +26,13 @@ export function render(container, ctx = {}) {
 
   const surfaceId = 'session';
   const pageId = 'session';
-  let customizing = false;
   let media = null;
   let page = null; // Virtual page data loaded from /api/pages/session
   const headerHost = container.querySelector('#surfaceHeader');
-  const btn = container.querySelector('#btnCustomize');
   const blocksRoot = container.querySelector('#sessionBlocks');
   const widgetsHost = container.querySelector('#sessionWidgetsHost');
   let headerCtl = null;
+  const btnEdit = document.getElementById('btnEditPage');
 
   async function ensurePageLoaded() {
     if (page) return page;
@@ -46,7 +47,7 @@ export function render(container, ctx = {}) {
 
   async function refresh() {
     await ensurePageLoaded();
-    try { setUiMode(customizing ? 'edit' : null); } catch {}
+    const editing = isEditingPage('session');
 
     // Header media state and rendering (same pattern as Dashboard)
     const state = getState();
@@ -56,7 +57,7 @@ export function render(container, ctx = {}) {
     const sizeMode = (styleCfg?.fit === true) ? 'contain' : 'cover';
     const heightPx = Number.isFinite(styleCfg?.heightPx) ? styleCfg.heightPx : null;
     renderHeaderMedia(headerHost, {
-      mode: customizing ? 'edit' : 'view',
+      mode: editing ? 'edit' : 'view',
       cover: media,
       profile: null,
       showProfile: false,
@@ -79,8 +80,8 @@ export function render(container, ctx = {}) {
       }
     });
 
-    // Header controls when customizing (fit toggle + height)
-    if (customizing) {
+    // Header controls only in edit (fit toggle + height)
+    if (editing) {
       if (!headerCtl) {
         headerCtl = document.createElement('div');
         headerCtl.id = 'sessionHeaderControls';
@@ -134,7 +135,7 @@ export function render(container, ctx = {}) {
 
     // Blocks area
     if (blocksRoot) {
-      if (customizing) {
+      if (editing) {
         try {
           const mod = await import('../blocks/edit/render.js');
           const { renderBlocksEdit } = mod;
@@ -149,17 +150,47 @@ export function render(container, ctx = {}) {
     }
   }
 
-  if (btn) btn.onclick = async () => {
-    const wasCustomizing = customizing;
-    customizing = !customizing;
-    btn.textContent = customizing ? 'Done' : 'Customize';
-    if (wasCustomizing && !customizing) {
-      try { await saveStateNow(); } catch {}
-    }
-    refresh();
-  };
+  // Bind global Edit button behavior
+  if (btnEdit) {
+    const setLabel = () => { btnEdit.textContent = isEditingPage('session') ? 'Done' : 'Edit'; };
+    setLabel();
+    btnEdit.onclick = async () => {
+      const now = !isEditingPage('session');
+      setEditModeForPage('session', now);
+      setLabel();
+      if (now) {
+        setUiMode('edit');
+        await refresh();
+      } else {
+        setUiMode(null);
+        try {
+          const { flushDebouncedPatches } = await import('../blocks/edit/state.js');
+          await flushDebouncedPatches();
+        } catch (e) { console.error('Failed to flush debounced patches', e); }
+        try {
+          const { refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
+          await refreshBlocksFromServer('session');
+        } catch (e) { console.error('Failed to refresh blocks from server', e); }
+        try { await saveStateNow(); } catch {}
+        await refresh();
+      }
+    };
+  }
 
   // Initial render + widgets
   void refresh();
   try { renderWidgetsArea(widgetsHost, { surfaceId, title: 'Widgets' }); } catch {}
+
+  // Cleanup on route change
+  return () => {
+    try {
+      if (btnEdit) btnEdit.onclick = null;
+    } catch {}
+    try {
+      if (isEditingPage('session')) {
+        setEditModeForPage('session', false);
+        setUiMode(null);
+      }
+    } catch {}
+  };
 }
