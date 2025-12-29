@@ -14,14 +14,38 @@ export function getWidgets(surfaceId) {
   return (w.surfaces && w.surfaces[surfaceId] && Array.isArray(w.surfaces[surfaceId].items)) ? w.surfaces[surfaceId].items : [];
 }
 
-export function setWidgets(surfaceId, nextItems) {
+// Per-surface layout: 'grid' (default) or 'carousel'
+export function getSurfaceLayout(surfaceId) {
+  const w = getWidgetsState();
+  const lay = w?.surfaces?.[surfaceId]?.layout;
+  return (lay === 'carousel' ? 'carousel' : 'grid');
+}
+
+export function setSurfaceLayout(surfaceId, layout) {
   const st = getState() || {};
   const cur = st.widgetsV1 || { surfaces: {} };
+  const prevSurf = (cur.surfaces || {})[surfaceId] || {};
   const next = {
     widgetsV1: {
       surfaces: {
         ...(cur.surfaces || {}),
-        [surfaceId]: { items: Array.isArray(nextItems) ? nextItems : [] },
+        [surfaceId]: { ...prevSurf, layout: (layout === 'carousel' ? 'carousel' : 'grid') },
+      }
+    }
+  };
+  updateState(next);
+  return getSurfaceLayout(surfaceId);
+}
+
+export function setWidgets(surfaceId, nextItems) {
+  const st = getState() || {};
+  const cur = st.widgetsV1 || { surfaces: {} };
+  const prevSurf = (cur.surfaces || {})[surfaceId] || {};
+  const next = {
+    widgetsV1: {
+      surfaces: {
+        ...(cur.surfaces || {}),
+        [surfaceId]: { ...prevSurf, items: Array.isArray(nextItems) ? nextItems : [] },
       }
     }
   };
@@ -71,8 +95,16 @@ export async function renderWidgetsArea(hostEl, { surfaceId } = {}) {
   // Editing is driven by global topbar Edit mode
   const isEditMode = () => (document?.body?.dataset?.mode === 'edit');
 
+  const applyLayoutClass = () => {
+    const layout = getSurfaceLayout(surfaceId);
+    // Keep base grid class for default grid styles; add specific layout modifier
+    grid.classList.toggle('widgetsLayout--carousel', layout === 'carousel');
+    grid.classList.toggle('widgetsLayout--grid', layout !== 'carousel');
+  };
+
   const renderView = (snapshotsMap) => {
     const curItems = getWidgets(surfaceId);
+    applyLayoutClass();
     grid.innerHTML = '';
     for (const w of curItems) {
       if (w.type === 'pageSnapshot') {
@@ -193,13 +225,20 @@ export async function renderWidgetsArea(hostEl, { surfaceId } = {}) {
     }
     // Build simple select to add a pageSnapshot
     const opts = pages.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)} (${escapeHtml(p.type)})</option>`).join('');
+    const currentLayout = getSurfaceLayout(surfaceId);
     editor.innerHTML = `
-      <div class="widgetAddRow">
-        <select class="widgetAddSelect">
-          <option value="">Select a page…</option>
-          ${opts}
-        </select>
-        <button type="button" class="widgetAddBtn">Add Page Card</button>
+      <div class="widgetsToolbar" style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+        <div class="widgetsLayoutToggle" role="group" aria-label="Widgets layout">
+          <button type="button" class="chip layoutChipGrid ${currentLayout !== 'carousel' ? 'is-active' : ''}" data-layout="grid">Grid</button>
+          <button type="button" class="chip layoutChipCarousel ${currentLayout === 'carousel' ? 'is-active' : ''}" data-layout="carousel">Carousel</button>
+        </div>
+        <div class="widgetAddRow" style="margin-top:0;">
+          <select class="widgetAddSelect">
+            <option value="">Select a page…</option>
+            ${opts}
+          </select>
+          <button type="button" class="widgetAddBtn">Add Page Card</button>
+        </div>
       </div>
     `;
     const btn = editor.querySelector('.widgetAddBtn');
@@ -210,6 +249,20 @@ export async function renderWidgetsArea(hostEl, { surfaceId } = {}) {
       const widget = { id: `w_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, type: 'pageSnapshot', pageId: pid };
       addWidget(surfaceId, widget);
       renderAll();
+    });
+
+    const layoutGroup = editor.querySelector('.widgetsLayoutToggle');
+    layoutGroup?.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      const lay = t.getAttribute('data-layout');
+      if (!lay) return;
+      setSurfaceLayout(surfaceId, lay);
+      // Update active chip state without full re-render
+      editor.querySelectorAll('.widgetsLayoutToggle .chip').forEach((el) => {
+        el.classList.toggle('is-active', el.getAttribute('data-layout') === getSurfaceLayout(surfaceId));
+      });
+      applyLayoutClass();
     });
   };
 

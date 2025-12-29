@@ -3166,6 +3166,44 @@ body[data-theme='light'] .page-header::after {
   gap: 10px;
   margin-top: 14px;
 }
+
+/* Widgets layout toggle active state */
+.chip.is-active {
+  outline: 2px solid var(--border);
+}
+
+/* Widgets layout modifiers */
+/* Default grid remains as-is; use this hook if needed */
+.widgetsLayout--grid {
+  /* Intentionally left minimal; base .widgetsGrid styles apply */
+}
+
+/* Carousel layout: horizontal scrolling row of cards */
+.widgetsLayout--carousel,
+.widgetsGrid.widgetsLayout--carousel {
+  display: flex; /* override grid */
+  gap: var(--space-3);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-2);
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Each card inside the carousel */
+.widgetsLayout--carousel > .widgetCard,
+.widgetsLayout--carousel > .widget {
+  flex: 0 0 280px;
+  scroll-snap-align: start;
+}
+
+/* Optional: hide scrollbar in carousel */
+.widgetsLayout--carousel::-webkit-scrollbar {
+  height: 0;
+}
+.widgetsLayout--carousel {
+  scrollbar-width: none;
+}
 .widgetAddRow select{
   flex: 1;
   min-width: 0;
