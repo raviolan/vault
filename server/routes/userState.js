@@ -14,6 +14,7 @@ export function defaultUserState() {
     surfaceMediaV1: { surfaces: {} },
     surfaceStyleV1: { surfaces: {} },
     sectionIntroV1: { sections: {} },
+    dashboardV1: { blocks: [] },
   };
 }
 

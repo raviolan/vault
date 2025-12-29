@@ -75,6 +75,27 @@ export function routePages(req, res, ctx) {
   const pageIdMatch = pathname.match(/^\/api\/pages\/([^\/]+)$/);
   if (pageIdMatch) {
     const id = pageIdMatch[1];
+    // Virtual Dashboard page: id = "dashboard"
+    if (id === 'dashboard') {
+      if (req.method === 'GET') {
+        return (async () => {
+          const fs = await import('node:fs');
+          const path = await import('node:path');
+          const { defaultUserState } = await import('./userState.js');
+          const p = path.join(ctx.USER_DIR, 'state.json');
+          let state = defaultUserState();
+          try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+          const blocks = Array.isArray(state.dashboardV1?.blocks) ? state.dashboardV1.blocks : [];
+          sendJson(res, 200, { id: 'dashboard', title: 'Dashboard', type: 'tool', blocks });
+          return true;
+        })();
+      }
+      if (req.method === 'PATCH') {
+        // No-op for virtual dashboard
+        sendJson(res, 200, { ok: true });
+        return true;
+      }
+    }
     // Virtual Section Intro pages: id = section:<key>
     const secMatch = id.match(/^section:(.+)$/);
     if (secMatch) {
