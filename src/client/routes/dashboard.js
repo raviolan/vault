@@ -1,12 +1,11 @@
 import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
-import { setUiMode } from '../lib/uiMode.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { loadState, getState, updateState, saveStateNow } from '../lib/state.js';
 import { fetchJson } from '../lib/http.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { setPageActionsEnabled } from '../lib/ui.js';
-import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
 
 export function render(container, ctx = {}) {
   if (!container) return;
@@ -33,8 +32,7 @@ export function render(container, ctx = {}) {
   const blocksRoot = container.querySelector('#dashBlocks');
   const widgetsHost = container.querySelector('#dashWidgetsHost');
   let headerCtl = null;
-  // Hook the global Edit button
-  const btnEdit = document.getElementById('btnEditPage');
+  let mo = null; // MutationObserver for global edit mode
 
   async function ensurePageLoaded() {
     if (page) return page;
@@ -49,9 +47,9 @@ export function render(container, ctx = {}) {
     return page;
   }
   async function refresh() {
-    // Load dashboard page and keep UI mode in sync with customizing
+    // Load dashboard page and derive mode from global top-bar
     await ensurePageLoaded();
-    const editing = isEditingPage('dashboard');
+    const editing = document.body?.dataset?.mode === 'edit';
 
     // Read current in-memory state to avoid races with debounced saves
     const state = getState();
@@ -84,7 +82,7 @@ export function render(container, ctx = {}) {
       }
     });
 
-    // Render header style controls when customizing
+    // Render header style controls only when globally editing
     if (editing) {
       if (!headerCtl) {
         headerCtl = document.createElement('div');
@@ -137,7 +135,7 @@ export function render(container, ctx = {}) {
       headerCtl = null;
     }
 
-    // Render blocks area: read-only in view mode, editor in customize mode
+    // Render blocks area: edit when global edit is on
     if (blocksRoot) {
       if (editing) {
         try {
@@ -153,48 +151,18 @@ export function render(container, ctx = {}) {
       }
     }
   }
-  // Bind global Edit button behavior
-  if (btnEdit) {
-    const setLabel = () => { btnEdit.textContent = isEditingPage('dashboard') ? 'Done' : 'Edit'; };
-    setLabel();
-    btnEdit.onclick = async () => {
-      const now = !isEditingPage('dashboard');
-      setEditModeForPage('dashboard', now);
-      setLabel();
-      if (now) {
-        setUiMode('edit');
-        await refresh();
-      } else {
-        setUiMode(null);
-        try {
-          const { flushDebouncedPatches } = await import('../blocks/edit/state.js');
-          await flushDebouncedPatches();
-        } catch (e) { console.error('Failed to flush debounced patches', e); }
-        try {
-          const { refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
-          const fresh = await refreshBlocksFromServer('dashboard');
-          if (fresh && (fresh.updatedAt || fresh.createdAt)) {
-            page.updatedAt = fresh.updatedAt || fresh.createdAt;
-          }
-        } catch (e) { console.error('Failed to refresh blocks from server', e); }
-        try { await saveStateNow(); } catch {}
-        await refresh();
-      }
-    };
-  }
+  // React to global top-bar Edit toggle (data-mode changes)
+  mo = new MutationObserver(() => {
+    // If container was removed, disconnect observer
+    if (!container.isConnected) { try { mo.disconnect(); } catch {} return; }
+    void refresh();
+  });
+  try { mo.observe(document.body, { attributes: true, attributeFilter: ['data-mode'] }); } catch {}
   void refresh();
   try { renderWidgetsArea(widgetsHost, { surfaceId, title: 'Widgets' }); } catch {}
 
   // Cleanup on route change
   return () => {
-    try {
-      if (btnEdit) btnEdit.onclick = null;
-    } catch {}
-    try {
-      if (isEditingPage('dashboard')) {
-        setEditModeForPage('dashboard', false);
-        setUiMode(null);
-      }
-    } catch {}
+    try { mo && mo.disconnect(); } catch {}
   };
 }

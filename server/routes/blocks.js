@@ -1,4 +1,4 @@
-import { sendJson, readBody, decodePathParam } from '../lib/http.js';
+import { sendJson, readBody, decodePathParam, writeJsonAtomic } from '../lib/http.js';
 import { badRequest, notFound } from '../lib/errors.js';
 
 export function routeBlocks(req, res, ctx) {
@@ -22,7 +22,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -48,7 +47,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -73,7 +71,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -117,7 +114,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -145,7 +141,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -179,7 +174,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -256,7 +250,6 @@ export function routeBlocks(req, res, ctx) {
           const fs = await import('node:fs');
           const path = await import('node:path');
           const { defaultUserState } = await import('./userState.js');
-          const { writeJsonAtomic } = await import('../lib/http.js');
           const p = path.join(ctx.USER_DIR, 'state.json');
           let state = defaultUserState();
           try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -277,7 +270,6 @@ export function routeBlocks(req, res, ctx) {
           const fs = await import('node:fs');
           const path = await import('node:path');
           const { defaultUserState } = await import('./userState.js');
-          const { writeJsonAtomic } = await import('../lib/http.js');
           const p = path.join(ctx.USER_DIR, 'state.json');
           let state = defaultUserState();
           try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -299,8 +291,7 @@ export function routeBlocks(req, res, ctx) {
           const fs = await import('node:fs');
           const path = await import('node:path');
           const { defaultUserState } = await import('./userState.js');
-          const { writeJsonAtomic } = await import('../lib/http.js');
-          const p = path.join(ctx.USER_DIR, 'state.json');
+            const p = path.join(ctx.USER_DIR, 'state.json');
           let state = defaultUserState();
           try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
           const blocks = Array.isArray(state.dashboardV1?.blocks) ? state.dashboardV1.blocks : [];
@@ -318,7 +309,6 @@ export function routeBlocks(req, res, ctx) {
           const fs = await import('node:fs');
           const path = await import('node:path');
           const { defaultUserState } = await import('./userState.js');
-          const { writeJsonAtomic } = await import('../lib/http.js');
           const p = path.join(ctx.USER_DIR, 'state.json');
           let state = defaultUserState();
           try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -355,7 +345,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -383,7 +372,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
@@ -407,7 +395,6 @@ export function routeBlocks(req, res, ctx) {
         const fs = await import('node:fs');
         const path = await import('node:path');
         const { defaultUserState } = await import('./userState.js');
-        const { writeJsonAtomic } = await import('../lib/http.js');
         const p = path.join(ctx.USER_DIR, 'state.json');
         let state = defaultUserState();
         try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}

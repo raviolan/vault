@@ -1,12 +1,11 @@
 import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
-import { setUiMode } from '../lib/uiMode.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { loadState, getState, updateState, saveStateNow } from '../lib/state.js';
 import { fetchJson } from '../lib/http.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { setPageActionsEnabled } from '../lib/ui.js';
-import { isEditingPage, setEditModeForPage, getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
 
 export function render(container, ctx = {}) {
   if (!container) return;
@@ -32,7 +31,7 @@ export function render(container, ctx = {}) {
   const blocksRoot = container.querySelector('#sessionBlocks');
   const widgetsHost = container.querySelector('#sessionWidgetsHost');
   let headerCtl = null;
-  const btnEdit = document.getElementById('btnEditPage');
+  let mo = null; // MutationObserver for global edit toggle
 
   async function ensurePageLoaded() {
     if (page) return page;
@@ -47,7 +46,7 @@ export function render(container, ctx = {}) {
 
   async function refresh() {
     await ensurePageLoaded();
-    const editing = isEditingPage('session');
+    const editing = document.body?.dataset?.mode === 'edit';
 
     // Header media state and rendering (same pattern as Dashboard)
     const state = getState();
@@ -149,48 +148,18 @@ export function render(container, ctx = {}) {
       }
     }
   }
-
-  // Bind global Edit button behavior
-  if (btnEdit) {
-    const setLabel = () => { btnEdit.textContent = isEditingPage('session') ? 'Done' : 'Edit'; };
-    setLabel();
-    btnEdit.onclick = async () => {
-      const now = !isEditingPage('session');
-      setEditModeForPage('session', now);
-      setLabel();
-      if (now) {
-        setUiMode('edit');
-        await refresh();
-      } else {
-        setUiMode(null);
-        try {
-          const { flushDebouncedPatches } = await import('../blocks/edit/state.js');
-          await flushDebouncedPatches();
-        } catch (e) { console.error('Failed to flush debounced patches', e); }
-        try {
-          const { refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
-          await refreshBlocksFromServer('session');
-        } catch (e) { console.error('Failed to refresh blocks from server', e); }
-        try { await saveStateNow(); } catch {}
-        await refresh();
-      }
-    };
-  }
-
+  // React to global Edit toggle via body[data-mode]
+  mo = new MutationObserver(() => {
+    if (!container.isConnected) { try { mo.disconnect(); } catch {} return; }
+    void refresh();
+  });
+  try { mo.observe(document.body, { attributes: true, attributeFilter: ['data-mode'] }); } catch {}
   // Initial render + widgets
   void refresh();
   try { renderWidgetsArea(widgetsHost, { surfaceId, title: 'Widgets' }); } catch {}
 
   // Cleanup on route change
   return () => {
-    try {
-      if (btnEdit) btnEdit.onclick = null;
-    } catch {}
-    try {
-      if (isEditingPage('session')) {
-        setEditModeForPage('session', false);
-        setUiMode(null);
-      }
-    } catch {}
+    try { mo && mo.disconnect(); } catch {}
   };
 }
