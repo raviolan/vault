@@ -227,6 +227,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
           <button type="button" id="tbAddH1" class="chip">+ H1</button>
           <button type="button" id="tbAddH2" class="chip">+ H2</button>
           <button type="button" id="tbAddH3" class="chip">+ H3</button>
+          <button type="button" id="tbAddBody" class="chip">+ Body</button>
         </div>`;
       host.insertBefore(tb, rootEl);
 
@@ -279,6 +280,71 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       };
       const triggerSave = (el) => { try { el?.dispatchEvent(new Event('input', { bubbles: true })); } catch {} };
 
+      // Insertion helper utilities (outline-aware)
+      function getById(all, id) { return all.find(x => String(x.id) === String(id)); }
+      function getProps(b) { return b?.props || parseMaybeJson(b?.propsJson) || {}; }
+      function getLevel(b) { const p = getProps(b); return Number(p.level || 0) || 0; }
+      function getParent(all, b) { if (!b?.parentId) return null; return getById(all, b.parentId); }
+      function getPathToRoot(all, cur) {
+        const path = [];
+        let n = cur;
+        while (n) { path.push(n); n = getParent(all, n); }
+        return path; // leaf-first
+      }
+      function firstInPathWithParent(path, parentId) {
+        for (const n of path) {
+          if ((n.parentId ?? null) === (parentId ?? null)) return n;
+        }
+        return null;
+      }
+      function computeHeadingInsert(all, cur, desiredLevel) {
+        if (!cur) {
+          const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
+          const last = roots[roots.length-1] || null;
+          return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
+        }
+        const path = getPathToRoot(all, cur);
+        const ancestors = path.filter(n => n.type === 'section');
+        let parentId = null;
+        if (desiredLevel === 1) {
+          parentId = null;
+        } else {
+          const want = desiredLevel - 1;
+          let parentSec = ancestors.find(s => getLevel(s) === want);
+          if (!parentSec) parentSec = ancestors.find(s => getLevel(s) > 0 && getLevel(s) < desiredLevel) || null;
+          parentId = parentSec ? parentSec.id : null;
+        }
+        const directChild = firstInPathWithParent(path, parentId);
+        const sortBase = directChild ? Number(directChild.sort||0) : (
+          (() => {
+            const sibs = all.filter(b => (b.parentId ?? null) === (parentId ?? null));
+            return sibs.length ? Math.max(...sibs.map(s => Number(s.sort||0))) : -1;
+          })()
+        );
+        return { parentId, sortBase };
+      }
+      function computeBodyInsert(all, cur) {
+        if (!cur) {
+          const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
+          const last = roots[roots.length-1] || null;
+          return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
+        }
+        // If cur is root-level, keep root-level and insert after it
+        if ((cur.parentId ?? null) === null) return { parentId: null, sortBase: Number(cur.sort||0) };
+        // If cur is a section, insert after this section at its parent level
+        if (cur.type === 'section') {
+          return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
+        }
+        // Otherwise, find the nearest ancestor section and insert after it
+        const path = getPathToRoot(all, cur);
+        const nearestSection = path.find(n => n.type === 'section');
+        if (nearestSection) {
+          return { parentId: nearestSection.parentId ?? null, sortBase: Number(nearestSection.sort || 0) };
+        }
+        // Fallback: insert after current block at its parent level
+        return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
+      }
+
       byId('tbBold')?.addEventListener('click', () => {
         const el = ensureRichActive(); if (!el) return;
         try { document.execCommand('bold'); } catch {}
@@ -317,24 +383,39 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         const id = activeBlockId;
         const all = getCurrentPageBlocks();
         const cur = id ? all.find(x => String(x.id) === String(id)) : null;
-        let parentId = null; let sort = -1;
-        if (cur) { parentId = cur.parentId ?? null; sort = Number(cur.sort || 0); }
-        else {
-          const roots = all.filter(x => (x.parentId || null) === null).sort((a,b) => a.sort - b.sort);
-          const last = roots[roots.length - 1] || null;
-          parentId = null; sort = last ? Number(last.sort || 0) : -1;
-        }
+        const { parentId, sortBase } = computeHeadingInsert(all, cur, level);
         try {
           const { apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
-          const created = await apiCreateBlock(page.id, { type: 'section', parentId, sort: sort + 1, props: { collapsed: false, level }, content: { title: '' } });
+          const created = await apiCreateBlock(page.id, { type: 'section', parentId, sort: Number(sortBase || 0) + 1, props: { collapsed: false, level }, content: { title: '' } });
           await refreshBlocksFromServer(page.id);
-          const container = document.getElementById('pageBlocks');
+          const container = document.getElementById('pageBlocks') || rootEl;
           stableRender(container, page, getCurrentPageBlocks(), created.id);
         } catch (err) { console.error('toolbar create section failed', err); }
+      }
+
+      async function createBodyAfterActive() {
+        const id = activeBlockId;
+        const all = getCurrentPageBlocks();
+        const cur = id ? all.find(x => String(x.id) === String(id)) : null;
+        const { parentId, sortBase } = computeBodyInsert(all, cur);
+        try {
+          const { apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
+          const created = await apiCreateBlock(page.id, {
+            type: 'paragraph',
+            parentId,
+            sort: Number(sortBase || 0) + 1,
+            props: {},
+            content: { text: '' }
+          });
+          await refreshBlocksFromServer(page.id);
+          const container = document.getElementById('pageBlocks') || rootEl;
+          stableRender(container, page, getCurrentPageBlocks(), created.id);
+        } catch (err) { console.error('toolbar create body failed', err); }
       }
       byId('tbAddH1')?.addEventListener('click', () => void createSectionAfterActive(1));
       byId('tbAddH2')?.addEventListener('click', () => void createSectionAfterActive(2));
       byId('tbAddH3')?.addEventListener('click', () => void createSectionAfterActive(3));
+      byId('tbAddBody')?.addEventListener('click', () => void createBodyAfterActive());
     }
   } catch {}
 
