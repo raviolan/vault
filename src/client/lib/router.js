@@ -24,6 +24,8 @@ export async function renderRoute() {
       currentCleanup = null;
       const out = await r.handler({ path, params: m.groups || {}, match: m });
       if (typeof out === 'function') currentCleanup = out;
+      // Notify listeners that the route has changed
+      try { window.dispatchEvent(new CustomEvent('app:route', { detail: { path } })); } catch {}
       return;
     }
   }
@@ -33,6 +35,8 @@ export async function renderRoute() {
     currentCleanup = null;
     const out = await fallbackHandler();
     if (typeof out === 'function') currentCleanup = out;
+    // Notify listeners that the route has changed
+    try { window.dispatchEvent(new CustomEvent('app:route', { detail: { path } })); } catch {}
     return;
   }
 }

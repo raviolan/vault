@@ -13,7 +13,7 @@ import { installSearchPreview } from './features/searchPreview.js';
 import { renderSearchResults } from './features/searchResults.js';
 import { bindModalBasics, openCreateModal, createPageFromModal } from './features/modals.js';
 import { bindRightPanel } from './features/rightPanel.js';
-import { refreshNav } from './features/nav.js';
+import { refreshNav, installNavActiveSync } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
@@ -34,6 +34,8 @@ export async function boot() {
   installLinkInterceptor();
   setFallback(() => renderNotFound());
   installWikiLinkHandler();
+  // Keep the left nav in sync with current route
+  try { installNavActiveSync(); } catch {}
 
   installSearchPreview();
   bindModalBasics('createPageModal');

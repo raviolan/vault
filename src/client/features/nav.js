@@ -228,6 +228,8 @@ export async function refreshNav() {
   try { renderToolsSection(); } catch {}
   // Append user sections (from user state)
   try { renderUserSections(pages); } catch {}
+  // After rendering, sync active state indicator
+  try { updateActiveNavIndicator(); } catch {}
 }
 
 export function renderToolsSection() {
@@ -417,3 +419,42 @@ export function renderUserSections(pages) {
 }
 
 // (Nav delete control removed; deletion handled on section landing page.)
+
+// Highlight current page in the left nav
+export function updateActiveNavIndicator(pathname) {
+  try {
+    const path = typeof pathname === 'string' ? pathname : (window?.location?.pathname || '/');
+    const nav = document.querySelector('aside.left nav.nav');
+    if (!nav) return;
+    const norm = (s) => {
+      if (!s) return '/';
+      const x = String(s);
+      return x.replace(/\/+$/, '') || '/';
+    };
+    const cur = norm(path);
+    const links = Array.from(nav.querySelectorAll('a.nav-item[href]'));
+    for (const a of links) {
+      a.classList.remove('active');
+      a.removeAttribute('aria-current');
+    }
+    const match = links.find(a => norm(a.getAttribute('href')) === cur);
+    if (match) {
+      match.classList.add('active');
+      match.setAttribute('aria-current', 'page');
+      // Ensure containing <details> are open so the mark is visible
+      let d = match.closest('details');
+      while (d) { try { d.open = true; } catch {} d = d.parentElement?.closest?.('details'); }
+    }
+  } catch {}
+}
+
+export function installNavActiveSync() {
+  try {
+    // On initial load
+    updateActiveNavIndicator();
+    // On app route changes
+    window.addEventListener('app:route', (e) => {
+      try { updateActiveNavIndicator(e?.detail?.path); } catch {}
+    });
+  } catch {}
+}

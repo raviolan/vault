@@ -154,14 +154,28 @@
 
 .nav-item.active {
     background: color-mix(in srgb, var(--accent) 18%, var(--surface-2, var(--surface)) 82%);
-    color: var(--accent);
+    color: var(--text);
     border-color: color-mix(in srgb, var(--accent) 40%, var(--border) 60%);
     font-weight: 600;
     box-shadow: 0 2px 8px 0 color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-.nav-item.active .nav-icon {
-    opacity: 1
+.nav-item.active .nav-icon { opacity: 1 }
+
+/* Per-section colored highlight for active item (default RGB mapping) */
+.left details[data-section] a.nav-item.active {
+    background: rgba(var(--section-rgb, 148, 163, 184), 0.16);
+    border-color: rgba(var(--section-rgb, 148, 163, 184), 0.45);
+    color: var(--text);
+    box-shadow: 0 2px 8px 0 rgba(var(--section-rgb, 148, 163, 184), 0.18);
+}
+
+/* Per-section colored highlight when a custom --section-accent is applied */
+.left details.nav-details[style*='--section-accent'] a.nav-item.active {
+    background: color-mix(in srgb, var(--section-accent) 18%, var(--surface-2, var(--surface)) 82%);
+    border-color: color-mix(in srgb, var(--section-accent) 40%, var(--border) 60%);
+    color: var(--text);
+    box-shadow: 0 2px 8px 0 color-mix(in srgb, var(--section-accent) 14%, transparent);
 }
 
 
