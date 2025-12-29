@@ -63,6 +63,31 @@ export function routeBlocks(req, res, ctx) {
         sendJson(res, 201, block);
         return true;
       }
+      // Virtual Session page blocks
+      if (String(pageId) === 'session') {
+        const bodyRaw = await readBody(req);
+        let body = {};
+        try { body = JSON.parse(bodyRaw || '{}'); } catch {}
+        const { type, parentId = null, sort = 0, props = {}, content = {} } = body;
+        if (!type) { badRequest(res, 'type required'); return true; }
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const { defaultUserState } = await import('./userState.js');
+        const { writeJsonAtomic } = await import('../lib/http.js');
+        const p = path.join(ctx.USER_DIR, 'state.json');
+        let state = defaultUserState();
+        try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+        const sess = (state.sessionV1 && typeof state.sessionV1 === 'object') ? state.sessionV1 : (state.sessionV1 = { blocks: [] });
+        const blocks = Array.isArray(sess.blocks) ? sess.blocks : (sess.blocks = []);
+        const id = `ssblk_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+        const nextSort = Number(sort) || (blocks.length ? (Math.max(...blocks.filter(b => (b.parentId || null) === (parentId || null)).map(b => Number(b.sort) || 0)) + 1) : 0);
+        const block = { id, pageId, parentId: parentId ?? null, sort: nextSort, type: String(type), propsJson: JSON.stringify(props||{}), contentJson: JSON.stringify(content||{}), createdAt: Date.now(), updatedAt: Date.now() };
+        blocks.push(block);
+        state.sessionV1 = { blocks };
+        writeJsonAtomic(p, state);
+        sendJson(res, 201, block);
+        return true;
+      }
       const bodyRaw = await readBody(req);
       let body = {};
       try { body = JSON.parse(bodyRaw || '{}'); } catch {}
@@ -179,6 +204,36 @@ export function routeBlocks(req, res, ctx) {
           return true;
         }
       }
+      // Try patch in virtual Session store
+      {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const { defaultUserState } = await import('./userState.js');
+        const { writeJsonAtomic } = await import('../lib/http.js');
+        const p = path.join(ctx.USER_DIR, 'state.json');
+        let state = defaultUserState();
+        try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+        const blocks = Array.isArray(state.sessionV1?.blocks) ? state.sessionV1.blocks : [];
+        const idx = blocks.findIndex(b => String(b.id) === String(blockIdStr));
+        if (idx >= 0) {
+          const bodyRaw = await readBody(req);
+          let patch = {};
+          try { patch = JSON.parse(bodyRaw || '{}'); } catch {}
+          const cur = blocks[idx];
+          const updated = { ...cur };
+          if (patch.type) updated.type = String(patch.type);
+          if (patch.parentId !== undefined) updated.parentId = patch.parentId ?? null;
+          if (patch.sort !== undefined) updated.sort = Number(patch.sort) || 0;
+          if (patch.props !== undefined) updated.propsJson = JSON.stringify({ ...(JSON.parse(cur.propsJson||'{}')), ...(patch.props || {}) });
+          if (patch.content !== undefined) updated.contentJson = JSON.stringify({ ...(JSON.parse(cur.contentJson||'{}')), ...(patch.content || {}) });
+          updated.updatedAt = Date.now();
+          blocks[idx] = updated;
+          state.sessionV1 = { blocks };
+          writeJsonAtomic(p, state);
+          sendJson(res, 200, { ok: true });
+          return true;
+        }
+      }
       const bodyRaw = await readBody(req);
       let patch = {};
       try { patch = JSON.parse(bodyRaw || '{}'); } catch {}
@@ -258,6 +313,25 @@ export function routeBlocks(req, res, ctx) {
             return true;
           }
         }
+        // Try delete in session store by matching id
+        {
+          const fs = await import('node:fs');
+          const path = await import('node:path');
+          const { defaultUserState } = await import('./userState.js');
+          const { writeJsonAtomic } = await import('../lib/http.js');
+          const p = path.join(ctx.USER_DIR, 'state.json');
+          let state = defaultUserState();
+          try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+          const blocks = Array.isArray(state.sessionV1?.blocks) ? state.sessionV1.blocks : [];
+          const idx = blocks.findIndex(b => String(b.id) === String(blockIdStr));
+          if (idx >= 0) {
+            blocks.splice(idx, 1);
+            state.sessionV1 = { blocks };
+            writeJsonAtomic(p, state);
+            sendJson(res, 200, { ok: true });
+            return true;
+          }
+        }
         const ok = await Promise.resolve(ctx.dbDeleteBlock(ctx.db, blockIdStr));
         if (!ok) { notFound(res); return true; }
         sendJson(res, 200, { ok: true });
@@ -324,6 +398,30 @@ export function routeBlocks(req, res, ctx) {
           b.updatedAt = Date.now();
         }
         state.dashboardV1 = { blocks: Array.from(byId.values()) };
+        writeJsonAtomic(p, state);
+        sendJson(res, 200, { ok: true });
+        return true;
+      }
+      // Reorder for session virtual page
+      if (String(pageId) === 'session') {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const { defaultUserState } = await import('./userState.js');
+        const { writeJsonAtomic } = await import('../lib/http.js');
+        const p = path.join(ctx.USER_DIR, 'state.json');
+        let state = defaultUserState();
+        try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+        const sess = (state.sessionV1 && typeof state.sessionV1 === 'object') ? state.sessionV1 : { blocks: [] };
+        const blocks = Array.isArray(sess.blocks) ? sess.blocks : [];
+        const byId = new Map(blocks.map(b => [String(b.id), b]));
+        for (const mv of moves) {
+          const b = byId.get(String(mv.id));
+          if (!b) continue;
+          b.parentId = mv.parentId ?? null;
+          b.sort = Number(mv.sort) || 0;
+          b.updatedAt = Date.now();
+        }
+        state.sessionV1 = { blocks: Array.from(byId.values()) };
         writeJsonAtomic(p, state);
         sendJson(res, 200, { ok: true });
         return true;

@@ -96,6 +96,27 @@ export function routePages(req, res, ctx) {
         return true;
       }
     }
+    // Virtual Session page: id = "session"
+    if (id === 'session') {
+      if (req.method === 'GET') {
+        return (async () => {
+          const fs = await import('node:fs');
+          const path = await import('node:path');
+          const { defaultUserState } = await import('./userState.js');
+          const p = path.join(ctx.USER_DIR, 'state.json');
+          let state = defaultUserState();
+          try { state = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+          const blocks = Array.isArray(state.sessionV1?.blocks) ? state.sessionV1.blocks : [];
+          sendJson(res, 200, { id: 'session', title: 'Session', type: 'tool', blocks });
+          return true;
+        })();
+      }
+      if (req.method === 'PATCH') {
+        // No-op for virtual session
+        sendJson(res, 200, { ok: true });
+        return true;
+      }
+    }
     // Virtual Section Intro pages: id = section:<key>
     const secMatch = id.match(/^section:(.+)$/);
     if (secMatch) {
