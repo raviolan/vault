@@ -2,6 +2,7 @@ import { $, $$, escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
 import { refreshNav } from './nav.js';
 import { navigate } from '../lib/router.js';
+import { canonicalPageHref } from '../lib/pageUrl.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
 import { ensureSection } from '../lib/sections.js';
 
@@ -99,7 +100,7 @@ export async function createPageFromModal() {
   });
   closeModal('createPageModal');
   await refreshNav();
-  navigate(`/page/${encodeURIComponent(page.id)}`);
+  navigate(canonicalPageHref(page));
 }
 
 export async function openDeleteModal(page) {

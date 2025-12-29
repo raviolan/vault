@@ -16,6 +16,7 @@ import { getNavGroupsForSection, setGroupForPage, addGroup } from '../features/n
 import { flushDebouncedPatches } from '../blocks/edit/state.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
 import { addPageToSection, removePageFromSection, normalizeSections } from '../lib/sections.js';
+import { canonicalPageHref } from '../lib/pageUrl.js';
 
 function getFolderTitleForPage(pageId) {
   const st = getState();
@@ -54,6 +55,16 @@ function setPageBreadcrumb(page) {
 export async function renderPage({ match }) {
   const id = match[1];
   const page = await fetchJson(`/api/pages/${encodeURIComponent(id)}`);
+
+  // Expose current page id for global Edit toggle even on slug routes
+  try { document.body.dataset.activePageId = String(page.id); } catch {}
+
+  // If this page has a slug, immediately replace URL and render the slug route
+  if (page && page.slug) {
+    try { history.replaceState({}, '', canonicalPageHref(page)); } catch {}
+    // Delegate rendering to slug-based renderer and short-circuit this handler
+    return await renderPageBySlug({ match: [null, page.slug] });
+  }
 
   setPageBreadcrumb(page);
   setPageActionsEnabled({ canEdit: true, canDelete: true });
@@ -474,6 +485,7 @@ export async function renderPage({ match }) {
   return () => {
     try { setUiMode(null); } catch {}
     try { unmountSaveIndicator(); } catch {}
+    try { delete document.body.dataset.activePageId; } catch {}
     // Cleanup autosize resize handler if present
     try {
       if (outlet.__editResizeHandler) {
@@ -487,6 +499,9 @@ export async function renderPage({ match }) {
 export async function renderPageBySlug({ match }) {
   const slug = match[1];
   const page = await fetchJson(`/api/pages/slug/${encodeURIComponent(slug)}`);
+
+  // Expose current page id for global Edit toggle
+  try { document.body.dataset.activePageId = String(page.id); } catch {}
 
   setPageBreadcrumb(page);
   setPageActionsEnabled({ canEdit: true, canDelete: true });
@@ -884,6 +899,7 @@ export async function renderPageBySlug({ match }) {
   return () => {
     try { setUiMode(null); } catch {}
     try { unmountSaveIndicator(); } catch {}
+    try { delete document.body.dataset.activePageId; } catch {}
     try {
       if (outlet.__editResizeHandler) {
         window.removeEventListener('resize', outlet.__editResizeHandler);

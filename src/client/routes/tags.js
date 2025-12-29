@@ -52,7 +52,10 @@ export async function render(container, ctx = {}) {
       tagPages.innerHTML = `
         <h3 class="meta">Pages tagged “${tagName}”</h3>
         <ul>
-          ${out.map(p => `<li><a href="/page/${encodeURIComponent(p.id)}" data-link>${p.title}</a></li>`).join('')}
+          ${out.map(p => {
+            const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+            return `<li><a href="${href}" data-link>${p.title}</a></li>`;
+          }).join('')}
         </ul>
       `;
       // enable SPA nav inside this list

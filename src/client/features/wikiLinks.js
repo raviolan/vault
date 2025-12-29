@@ -1,5 +1,6 @@
 import { navigate } from '../lib/router.js';
 import { fetchJson } from '../lib/http.js';
+import { canonicalHrefForPageId, canonicalPageHref } from '../lib/pageUrl.js';
 import { parseMaybeJson } from '../blocks/tree.js';
 import { apiPatchBlock } from '../blocks/api.js';
 import { getCurrentPageBlocks, updateCurrentBlocks } from '../lib/pageStore.js';
@@ -68,6 +69,17 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
       a.setAttribute('data-wiki', 'id');
       a.setAttribute('data-page-id', id);
       a.textContent = label || id;
+      // Canonicalize navigation to slug on click
+      a.addEventListener('click', async (ev) => {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch {}
+        try {
+          window.__pageMetaCache = window.__pageMetaCache || new Map();
+          const href = await canonicalHrefForPageId(id, fetchJson, window.__pageMetaCache);
+          navigate(href);
+        } catch {
+          navigate(a.getAttribute('href'));
+        }
+      });
       frag.appendChild(a);
     } else {
       const title = (legacyTitle || '').trim();
@@ -318,7 +330,7 @@ async function createPageForWikilink({ title, blockId, token, type }) {
       if (modal) await applyBulkIfRequested({ label: title, targetPageId: id, modal });
     } catch {}
     await refreshNav();
-    navigate(`/page/${encodeURIComponent(id)}`);
+    navigate(canonicalPageHref(page));
   } catch (e) {
     console.error('Failed to create page for wikilink', e);
     alert('Failed to create page: ' + (e?.message || e));

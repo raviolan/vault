@@ -1,6 +1,7 @@
 import { fetchJson } from '../../lib/http.js';
 import { navigate } from '../../lib/router.js';
 import { getState, updateState } from '../../lib/state.js';
+import { canonicalHrefForPageId } from '../../lib/pageUrl.js';
 import { listSections, ensureSection, addPageToSection } from '../../lib/sections.js';
 import { refreshNav } from '../../features/nav.js';
 
@@ -96,7 +97,12 @@ export async function saveToVault(gen) {
   // Refresh nav so the page appears under the selected section
   try { await refreshNav(); } catch {}
 
-  navigate(`/page/${encodeURIComponent(pageId)}`);
+  try {
+    const href = await canonicalHrefForPageId(pageId, fetchJson);
+    navigate(href);
+  } catch {
+    navigate(`/page/${encodeURIComponent(pageId)}`);
+  }
 }
 
 function fmt(n) { return (n >= 0 ? '+' : '') + String(n); }

@@ -118,6 +118,12 @@ export async function boot() {
     if (!pathname) return null;
     const m = pathname.match(/^\/page\/([^\/]+)$/);
     if (m) return decodeURIComponent(m[1]);
+    const ms = pathname.match(/^\/p\/([^\/]+)$/);
+    if (ms) {
+      // Slug route: prefer the page id exposed by the active page renderer
+      const pid = document?.body?.dataset?.activePageId;
+      if (pid) return pid;
+    }
     if (pathname === '/' || pathname === '') return 'dashboard';
     if (pathname === '/session' || pathname === '/session/') return 'session';
     return null;

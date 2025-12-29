@@ -115,6 +115,26 @@ const server = http.createServer(async (req, res) => {
     const handled = await routeRequest(req, res, ctx);
     if (handled) return;
 
+    // Server-side redirect: /page/:id -> /p/:slug when available
+    if (req.method === 'GET') {
+      const m = pathname.match(/^\/page\/([^\/]+)$/);
+      if (m) {
+        const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return String(v || ''); } };
+        const id = safeDecode(m[1]);
+        try {
+          const row = db.prepare("SELECT slug FROM pages WHERE id = ? AND slug IS NOT NULL AND slug != ''").get(id);
+          const slug = row?.slug;
+          if (slug) {
+            res.statusCode = 302;
+            res.setHeader('Location', `/p/${encodeURIComponent(slug)}`);
+            res.end('Found');
+            return;
+          }
+        } catch {}
+        // Fall through to SPA if no slug found
+      }
+    }
+
     // Static and SPA fallback if not handled by routes
     const served = serveStaticOrSpa(req, res, ctx);
     if (served) return;
