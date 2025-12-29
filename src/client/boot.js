@@ -2,6 +2,8 @@ import { $, $$ } from './lib/dom.js';
 import { loadState, getState, updateState } from './lib/state.js';
 import { route, installLinkInterceptor, renderRoute, setFallback, navigate } from './lib/router.js';
 import { setBreadcrumb, setPageActionsEnabled } from './lib/ui.js';
+import { setUiMode } from './lib/uiMode.js';
+import { isEditingPage, setEditModeForPage } from './lib/pageStore.js';
 import * as Dashboard from './routes/dashboard.js';
 import * as Tags from './routes/tags.js';
 import * as Session from './routes/session.js';
@@ -109,6 +111,42 @@ export async function boot() {
 
   $('#btnCreatePage')?.addEventListener('click', openCreateModal);
   $('#createPageModal .modal-confirm')?.addEventListener('click', () => void createPageFromModal());
+
+  // Global Edit button handler: map path -> pageId and toggle edit
+  const btnEditGlobal = document.getElementById('btnEditPage');
+  function activePageIdFromPath(pathname) {
+    if (!pathname) return null;
+    const m = pathname.match(/^\/page\/([^\/]+)$/);
+    if (m) return decodeURIComponent(m[1]);
+    if (pathname === '/' || pathname === '') return 'dashboard';
+    if (pathname === '/session' || pathname === '/session/') return 'session';
+    return null;
+  }
+  function syncEditBtnLabel() {
+    if (!btnEditGlobal) return;
+    const pid = activePageIdFromPath(window.location.pathname);
+    const label = pid ? (isEditingPage(pid) ? 'Done' : 'Edit') : ((document?.body?.dataset?.mode === 'edit') ? 'Done' : 'Edit');
+    btnEditGlobal.textContent = label;
+  }
+  if (btnEditGlobal) {
+    btnEditGlobal.addEventListener('click', () => {
+      const pid = activePageIdFromPath(window.location.pathname);
+      if (pid) {
+        const now = !isEditingPage(pid);
+        setEditModeForPage(pid, now);
+        try { setUiMode(now ? 'edit' : null); } catch {}
+      } else {
+        const currentlyEdit = document?.body?.dataset?.mode === 'edit';
+        try { setUiMode(currentlyEdit ? null : 'edit'); } catch {}
+      }
+      syncEditBtnLabel();
+    });
+    // Keep label in sync on route changes and mode changes
+    window.addEventListener('app:route', syncEditBtnLabel);
+    const mo = new MutationObserver(syncEditBtnLabel);
+    try { mo.observe(document.body, { attributes: true, attributeFilter: ['data-mode'] }); } catch {}
+    syncEditBtnLabel();
+  }
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
