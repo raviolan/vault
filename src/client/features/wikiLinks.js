@@ -7,6 +7,7 @@ import { getCurrentPageBlocks, updateCurrentBlocks } from '../lib/pageStore.js';
 import { refreshNav } from './nav.js';
 import { openModal, closeModal } from './modals.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
+import { stableRender, refreshBlocksFromServer } from '../blocks/edit/index.js';
 
 // Reset shared wikilink modal to default state each time it opens
 function resetWikilinkModal(modal) {
@@ -248,8 +249,8 @@ async function linkWikilinkToExisting({ title, blockId, token, page }) {
       await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
       updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
     }
-    // Re-render to reflect link resolution; don't navigate automatically
-    rerenderReadOnly();
+    // Re-render to reflect link resolution live
+    await rerenderBlocksNow(blockId || null);
   } catch (e) {
     console.error('Failed to link wikilink to existing page', e);
     alert('Failed to link: ' + (e?.message || e));
@@ -272,6 +273,22 @@ export function installWikiLinkHandler() {
       openWikilinkModal({ title, blockId, token, mode: 'wikilink' });
     }
   });
+  // Delegated handling for id-based page links so newly inserted links work
+  document.addEventListener('click', async (e) => {
+    const a = e.target?.closest?.('a[data-page-id], a.wikilink.idlink');
+    if (!a) return;
+    const id = a.getAttribute('data-page-id');
+    if (!id) return;
+    try { e.preventDefault(); e.stopPropagation(); } catch {}
+    try {
+      window.__pageMetaCache = window.__pageMetaCache || new Map();
+      const href = await canonicalHrefForPageId(id, fetchJson, window.__pageMetaCache);
+      navigate(href);
+    } catch {
+      const href = a.getAttribute('href') || `/page/${encodeURIComponent(id)}`;
+      navigate(href);
+    }
+  }, true);
 }
 
 function findBlocksRoot() {
@@ -287,6 +304,23 @@ function rerenderReadOnly() {
   } catch {}
 }
 
+async function rerenderBlocksNow(preferFocusId = null) {
+  try {
+    const root = findBlocksRoot();
+    if (!root) return;
+    const pageId = document?.body?.dataset?.activePageId;
+    const editing = document?.body?.dataset?.mode === 'edit';
+    if (!pageId) { rerenderReadOnly(); return; }
+    await refreshBlocksFromServer(pageId);
+    if (editing) {
+      const page = { id: pageId };
+      stableRender(root, page, getCurrentPageBlocks(), preferFocusId || null);
+    } else {
+      renderBlocksReadOnly(root, getCurrentPageBlocks());
+    }
+  } catch {}
+}
+
 async function revertWikilinkToPlain({ blockId, token, title }) {
   try {
     const blk = getCurrentPageBlocks().find(b => b.id === blockId);
@@ -299,7 +333,7 @@ async function revertWikilinkToPlain({ blockId, token, title }) {
     }
     await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
     updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
-    rerenderReadOnly();
+    await rerenderBlocksNow(blockId || null);
   } catch (e) {
     console.error('Failed to revert wikilink', e);
     alert('Failed to revert wikilink: ' + (e?.message || e));
@@ -705,11 +739,7 @@ async function applyBulkIfRequested({ label, targetPageId, modal, scope }) {
       alert(`Updated ${summary.updatedPages} page${summary.updatedPages === 1 ? '' : 's'}`);
     }
 
-    if (pageId) {
-      const { refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
-      await refreshBlocksFromServer(pageId);
-      rerenderReadOnly();
-    }
+    if (pageId) await rerenderBlocksNow();
   } catch (e) {
     console.error('Bulk resolve failed', e);
     alert('Bulk resolve failed: ' + (e?.message || e));

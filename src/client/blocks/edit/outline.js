@@ -1,5 +1,5 @@
-import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
-import { apiReorder, refreshBlocksFromServer, apiPatchBlock } from './apiBridge.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
+import { apiReorder, apiPatchBlock } from './apiBridge.js';
 import { parseMaybeJson } from '../tree.js';
 
 function clampLevel(n) { n = Number(n||0); if (n < 1 || n > 3) return 0; return n; }
@@ -25,12 +25,13 @@ export async function normalizeOutlineFromLevels(page, { scopeParentId = null } 
     if (b.type === 'heading') {
       const lvl = clampLevel(b.props?.level);
       try {
-        await apiPatchBlock(b.id, { type: 'section', props: { ...(b.props||{}), collapsed: false, level: lvl || 1 }, content: { title: String(b.content?.text || '') } });
+        // Optimistically update local store and fire patch
+        updateCurrentBlocks(x => x.id === b.id ? { ...x, type: 'section', propsJson: JSON.stringify({ ...(b.props||{}), collapsed: false, level: lvl || 1 }), contentJson: JSON.stringify({ title: String(b.content?.text || '') }) } : x);
+        void apiPatchBlock(b.id, { type: 'section', props: { ...(b.props||{}), collapsed: false, level: lvl || 1 }, content: { title: String(b.content?.text || '') } }).catch(() => {});
       } catch {}
     }
   }
-  // Refresh local snapshot after possible conversions
-  await refreshBlocksFromServer(page.id);
+  // Work off current (optimistically updated) snapshot
   const scope = getParsedBlocks().filter(b => parentKey(b.parentId) === parentKey(scopeParentId)).slice().sort((a,b) => (a.sort||0) - (b.sort||0));
 
   // Walk and compute desired parentId for each node
@@ -88,8 +89,19 @@ export async function normalizeOutlineFromLevels(page, { scopeParentId = null } 
   }
 
   if (moves.length) {
-    await apiReorder(page.id, moves);
-    await refreshBlocksFromServer(page.id);
+    // Apply moves locally for immediate responsiveness
+    try {
+      const byId = new Map(getCurrentPageBlocks().map(x => [x.id, { ...x }]));
+      for (const m of moves) {
+        const n = byId.get(m.id);
+        if (!n) continue;
+        n.parentId = m.parentId ?? null;
+        n.sort = m.sort;
+      }
+      const next = Array.from(byId.values()).slice().sort((a,b) => ((a.parentId||'') === (b.parentId||'')) ? (a.sort - b.sort) : (String(a.parentId||'').localeCompare(String(b.parentId||'')) || (a.sort - b.sort)));
+      setCurrentPageBlocks(next);
+    } catch {}
+    // Kick off server reorder without blocking
+    void apiReorder(page.id, moves).catch(() => {});
   }
 }
-

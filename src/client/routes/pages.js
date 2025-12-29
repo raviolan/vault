@@ -17,6 +17,7 @@ import { flushDebouncedPatches } from '../blocks/edit/state.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
 import { addPageToSection, removePageFromSection, normalizeSections } from '../lib/sections.js';
 import { canonicalPageHref } from '../lib/pageUrl.js';
+import { setActivePage } from '../lib/activePage.js';
 
 function getFolderTitleForPage(pageId) {
   const st = getState();
@@ -56,8 +57,8 @@ export async function renderPage({ match }) {
   const id = match[1];
   const page = await fetchJson(`/api/pages/${encodeURIComponent(id)}`);
 
-  // Expose current page id for global Edit toggle even on slug routes
-  try { document.body.dataset.activePageId = String(page.id); } catch {}
+  // Register active page context for centralized edit handling
+  try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: page.type !== 'tool', kind: 'page' }); } catch {}
 
   // If this page has a slug, immediately replace URL and render the slug route
   if (page && page.slug) {
@@ -435,57 +436,39 @@ export async function renderPage({ match }) {
   if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
   if (btnDeleteLocal) { btnDeleteLocal.onclick = () => openDeleteModal(page); }
 
-  const btnEdit = document.getElementById('btnEditPage');
-  const btnEditLocal = document.getElementById('btnEditPageLocal');
-  if (btnEdit || btnEditLocal) {
-    const setLabels = () => {
-      const label = isEditingPage(page.id) ? 'Done' : 'Edit';
-      if (btnEdit) btnEdit.textContent = label;
-      if (btnEditLocal) btnEditLocal.textContent = label;
-    };
-    setLabels();
-    const onClick = async () => {
-      const now = !isEditingPage(page.id);
-      setEditModeForPage(page.id, now);
-      setLabels();
-      if (now) {
-        setUiMode('edit');
-        enablePageTitleEdit(page);
-        renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-        try { mountSaveIndicator(); } catch {}
-        // Keep header media callbacks by reusing stable re-render
-        try { rerenderHeaderMedia?.(); } catch {}
-        // If on Sheet tab, re-render sheet for edit mode
-        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-      } else {
-        setUiMode(null);
-        disablePageTitleEdit(page);
-        try {
-          await flushDebouncedPatches();
-        } catch (e) { console.error('Failed to flush debounced patches', e); }
-        try {
-          const fresh = await refreshBlocksFromServer(page.id);
-          if (fresh && (fresh.updatedAt || fresh.createdAt)) {
-            page.updatedAt = fresh.updatedAt || fresh.createdAt;
-          }
-        } catch (e) { console.error('Failed to refresh blocks from server', e); }
-        renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
-        try { unmountSaveIndicator(); } catch {}
-        // Keep header media callbacks by reusing stable re-render
-        try { rerenderHeaderMedia?.(); } catch {}
-        // If on Sheet tab, re-render sheet for view mode
-        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-      }
-    };
-    if (btnEdit) btnEdit.onclick = onClick;
-    if (btnEditLocal) btnEditLocal.onclick = onClick;
-  }
+  // React to centralized edit toggles
+  const applyEditState = async () => {
+    const now = isEditingPage(page.id);
+    if (now) {
+      try { setUiMode('edit'); } catch {}
+      enablePageTitleEdit(page);
+      renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+      try { mountSaveIndicator(); } catch {}
+      try { rerenderHeaderMedia?.(); } catch {}
+      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+    } else {
+      try { setUiMode(null); } catch {}
+      disablePageTitleEdit(page);
+      try { await flushDebouncedPatches(); } catch (e) { console.error('Failed to flush debounced patches', e); }
+      try {
+        const fresh = await refreshBlocksFromServer(page.id);
+        if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
+      } catch (e) { console.error('Failed to refresh blocks from server', e); }
+      renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+      try { unmountSaveIndicator(); } catch {}
+      try { rerenderHeaderMedia?.(); } catch {}
+      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+    }
+  };
+  try { window.addEventListener('vault:modechange', applyEditState); } catch {}
+  // Ensure correct initial state (e.g., when navigating back)
+  void applyEditState();
 
   // Cleanup on route change: ensure we exit edit mode styles/indicator
   return () => {
     try { setUiMode(null); } catch {}
     try { unmountSaveIndicator(); } catch {}
-    try { delete document.body.dataset.activePageId; } catch {}
+    try { window.removeEventListener('vault:modechange', applyEditState); } catch {}
     // Cleanup autosize resize handler if present
     try {
       if (outlet.__editResizeHandler) {
@@ -501,7 +484,7 @@ export async function renderPageBySlug({ match }) {
   const page = await fetchJson(`/api/pages/slug/${encodeURIComponent(slug)}`);
 
   // Expose current page id for global Edit toggle
-  try { document.body.dataset.activePageId = String(page.id); } catch {}
+  try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: page.type !== 'tool', kind: 'page' }); } catch {}
 
   setPageBreadcrumb(page);
   setPageActionsEnabled({ canEdit: true, canDelete: true });
@@ -846,51 +829,32 @@ export async function renderPageBySlug({ match }) {
   if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
   if (btnDeleteLocal) { btnDeleteLocal.onclick = () => openDeleteModal(page); }
 
-  const btnEdit = document.getElementById('btnEditPage');
-  const btnEditLocal = document.getElementById('btnEditPageLocal');
-  if (btnEdit || btnEditLocal) {
-    const setLabels = () => {
-      const label = isEditingPage(page.id) ? 'Done' : 'Edit';
-      if (btnEdit) btnEdit.textContent = label;
-      if (btnEditLocal) btnEditLocal.textContent = label;
-    };
-    setLabels();
-    const onClick = async () => {
-      const now = !isEditingPage(page.id);
-      setEditModeForPage(page.id, now);
-      setLabels();
-      if (now) {
-        setUiMode('edit');
-        enablePageTitleEdit(page);
-        renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-        try { mountSaveIndicator(); } catch {}
-        // Keep header media callbacks by reusing stable re-render
-        try { rerenderHeaderMedia?.(); } catch {}
-        // If on Sheet tab, re-render sheet for edit mode
-        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-      } else {
-        setUiMode(null);
-        disablePageTitleEdit(page);
-        try {
-          await flushDebouncedPatches();
-        } catch (e) { console.error('Failed to flush debounced patches', e); }
-        try {
-          const fresh = await refreshBlocksFromServer(page.id);
-          if (fresh && (fresh.updatedAt || fresh.createdAt)) {
-            page.updatedAt = fresh.updatedAt || fresh.createdAt;
-          }
-        } catch (e) { console.error('Failed to refresh blocks from server', e); }
-        renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
-        try { unmountSaveIndicator(); } catch {}
-        // Keep header media callbacks by reusing stable re-render
-        try { rerenderHeaderMedia?.(); } catch {}
-        // If on Sheet tab, re-render sheet for view mode
-        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-      }
-    };
-    if (btnEdit) btnEdit.onclick = onClick;
-    if (btnEditLocal) btnEditLocal.onclick = onClick;
-  }
+  // React to centralized edit toggles
+  const applyEditStateSlug = async () => {
+    const now = isEditingPage(page.id);
+    if (now) {
+      try { setUiMode('edit'); } catch {}
+      enablePageTitleEdit(page);
+      renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+      try { mountSaveIndicator(); } catch {}
+      try { rerenderHeaderMedia?.(); } catch {}
+      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+    } else {
+      try { setUiMode(null); } catch {}
+      disablePageTitleEdit(page);
+      try { await flushDebouncedPatches(); } catch (e) { console.error('Failed to flush debounced patches', e); }
+      try {
+        const fresh = await refreshBlocksFromServer(page.id);
+        if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
+      } catch (e) { console.error('Failed to refresh blocks from server', e); }
+      renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+      try { unmountSaveIndicator(); } catch {}
+      try { rerenderHeaderMedia?.(); } catch {}
+      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+    }
+  };
+  try { window.addEventListener('vault:modechange', applyEditStateSlug); } catch {}
+  void applyEditStateSlug();
 
   // Backlinks
   void renderBacklinksPanel(page.id);
@@ -899,7 +863,7 @@ export async function renderPageBySlug({ match }) {
   return () => {
     try { setUiMode(null); } catch {}
     try { unmountSaveIndicator(); } catch {}
-    try { delete document.body.dataset.activePageId; } catch {}
+    try { window.removeEventListener('vault:modechange', applyEditStateSlug); } catch {}
     try {
       if (outlet.__editResizeHandler) {
         window.removeEventListener('resize', outlet.__editResizeHandler);

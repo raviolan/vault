@@ -10,6 +10,8 @@ const DEFAULT_STATE = {
   todoItems: [],
   surfaceMediaV1: { surfaces: {} },
   surfaceStyleV1: { surfaces: {} },
+  // UI prefs v1: add section header highlight toggle (default on)
+  uiPrefsV1: { sectionHeaderHighlight: true },
 };
 
 let state = { ...DEFAULT_STATE };

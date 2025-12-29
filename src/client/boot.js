@@ -1,9 +1,11 @@
 import { $, $$ } from './lib/dom.js';
 import { loadState, getState, updateState } from './lib/state.js';
+import { applyUiPrefsToBody } from './lib/uiPrefs.js';
 import { route, installLinkInterceptor, renderRoute, setFallback, navigate } from './lib/router.js';
 import { setBreadcrumb, setPageActionsEnabled } from './lib/ui.js';
 import { setUiMode } from './lib/uiMode.js';
 import { isEditingPage, setEditModeForPage } from './lib/pageStore.js';
+import { getActivePage, setActivePage } from './lib/activePage.js';
 import * as Dashboard from './routes/dashboard.js';
 import * as Tags from './routes/tags.js';
 import * as Session from './routes/session.js';
@@ -45,6 +47,8 @@ export async function boot() {
   bindModalBasics('deletePageModal');
   bindModalBasics('wikilinkCreateModal');
   await loadState();
+  // Apply UI preferences on boot
+  try { applyUiPrefsToBody(getState()); } catch {}
   // Apply saved theme and labels on boot, with backwards-compatible migration to themeMode/defaults
   try {
     const st = getState();
@@ -112,47 +116,53 @@ export async function boot() {
   $('#btnCreatePage')?.addEventListener('click', openCreateModal);
   $('#createPageModal .modal-confirm')?.addEventListener('click', () => void createPageFromModal());
 
-  // Global Edit button handler: map path -> pageId and toggle edit
-  const btnEditGlobal = document.getElementById('btnEditPage');
-  function activePageIdFromPath(pathname) {
-    if (!pathname) return null;
-    const m = pathname.match(/^\/page\/([^\/]+)$/);
-    if (m) return decodeURIComponent(m[1]);
-    const ms = pathname.match(/^\/p\/([^\/]+)$/);
-    if (ms) {
-      // Slug route: prefer the page id exposed by the active page renderer
-      const pid = document?.body?.dataset?.activePageId;
-      if (pid) return pid;
+  // Centralized Edit button wiring (global + local) using active page
+  // Use delegated click so dynamically-rendered local buttons work across routes
+
+  async function onToggleEdit() {
+    const ap = getActivePage();
+    if (!ap?.id || !ap?.canEdit) return;
+
+    const now = !isEditingPage(ap.id);
+    setEditModeForPage(ap.id, now);
+    try { setUiMode(now ? 'edit' : null); } catch {}
+
+    if (!now) {
+      try {
+        const { flushDebouncedPatches } = await import('./blocks/edit/state.js');
+        await flushDebouncedPatches();
+      } catch {}
+      try {
+        const { refreshBlocksFromServer } = await import('./blocks/edit/apiBridge.js');
+        await refreshBlocksFromServer(ap.id);
+      } catch {}
     }
-    if (pathname === '/' || pathname === '') return 'dashboard';
-    if (pathname === '/session' || pathname === '/session/') return 'session';
-    return null;
+    try { window.dispatchEvent(new Event('vault:modechange')); } catch {}
+    updateEditButtonState();
   }
-  function syncEditBtnLabel() {
-    if (!btnEditGlobal) return;
-    const pid = activePageIdFromPath(window.location.pathname);
+
+  function updateEditButtonState() {
+    const ap = getActivePage();
+    const can = !!ap?.canEdit;
+    const pid = ap?.id || null;
     const label = pid ? (isEditingPage(pid) ? 'Done' : 'Edit') : ((document?.body?.dataset?.mode === 'edit') ? 'Done' : 'Edit');
-    btnEditGlobal.textContent = label;
+    const g = document.getElementById('btnEditPage');
+    const l = document.getElementById('btnEditPageLocal');
+    if (g) { g.disabled = !can; g.textContent = label; }
+    if (l) { l.disabled = !can; l.textContent = label; }
   }
-  if (btnEditGlobal) {
-    btnEditGlobal.addEventListener('click', () => {
-      const pid = activePageIdFromPath(window.location.pathname);
-      if (pid) {
-        const now = !isEditingPage(pid);
-        setEditModeForPage(pid, now);
-        try { setUiMode(now ? 'edit' : null); } catch {}
-      } else {
-        const currentlyEdit = document?.body?.dataset?.mode === 'edit';
-        try { setUiMode(currentlyEdit ? null : 'edit'); } catch {}
-      }
-      syncEditBtnLabel();
-    });
-    // Keep label in sync on route changes and mode changes
-    window.addEventListener('app:route', syncEditBtnLabel);
-    const mo = new MutationObserver(syncEditBtnLabel);
-    try { mo.observe(document.body, { attributes: true, attributeFilter: ['data-mode'] }); } catch {}
-    syncEditBtnLabel();
-  }
+  // Expose to activePage.js so setActivePage can request a UI refresh
+  try { window.__updateEditButtonState = updateEditButtonState; } catch {}
+
+  document.addEventListener('click', (e) => {
+    const t = e.target?.closest?.('#btnEditPage, #btnEditPageLocal');
+    if (!t) return;
+    e.preventDefault();
+    void onToggleEdit();
+  });
+  window.addEventListener('vault:modechange', updateEditButtonState);
+  window.addEventListener('app:route', updateEditButtonState);
+  updateEditButtonState();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -196,10 +206,11 @@ export async function boot() {
   });
   route(/^\/page\/([^\/]+)$/, (ctx) => renderPage(ctx));
   route(/^\/p\/([^\/]+)$/, (ctx) => renderPageBySlug(ctx));
-  route(/^\/search\/?$/, () => renderSearchResults());
+  route(/^\/search\/?$/, () => { try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {} return renderSearchResults(); });
   route(/^\/tags\/?$/, () => {
     setBreadcrumb('Tags');
     setPageActionsEnabled({ canEdit: false, canDelete: false });
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     const outlet = document.getElementById('outlet');
     Tags.render(outlet, {});
   });
@@ -207,6 +218,7 @@ export async function boot() {
   route(/^\/tools\/enemy-generator\/?$/, () => {
     setBreadcrumb('Enemy Generator');
     setPageActionsEnabled({ canEdit: false, canDelete: false });
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     const outlet = document.getElementById('outlet');
     EnemyGenerator.render(outlet);
   });
@@ -218,6 +230,7 @@ export async function boot() {
   });
   route(/^\/settings\/?$/, () => {
     const outlet = document.getElementById('outlet');
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     return SettingsRoute.render(outlet, {});
   });
   route(/^\/section\/([^\/]+)\/?$/, (ctx) => {

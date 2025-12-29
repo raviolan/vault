@@ -1,8 +1,6 @@
 import { debouncePatch } from './state.js';
 import { apiCreateBlock, apiDeleteBlock } from './apiBridge.js';
-import { apiPatchBlock } from './apiBridge.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
-import { refreshBlocksFromServer } from './apiBridge.js';
 import { hideSlashMenuPublic, maybeHandleSlashMenu, isSlashMenuFor } from './slashMenu.js';
 import { indentBlock, outdentBlock, moveBlockWithinSiblings } from './reorder.js';
 import { markDirty } from './state.js';
@@ -68,7 +66,7 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
 
     // Insert blocks starting at the current one. Replace current with first chunk.
     // After insert, focus lands in the last inserted block.
-    const { apiCreateBlock, apiPatchBlock } = await import('./apiBridge.js');
+    const { apiCreateBlock } = await import('./apiBridge.js');
     const { getCurrentPageBlocks, setCurrentPageBlocks } = await import('../../lib/pageStore.js');
 
     // Helper to compute sort position relative to current block among siblings
@@ -79,18 +77,10 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
     // Apply first chunk to current block
     const first = chunks[0];
     if (first.type === 'section') {
-      // Convert block to section with appropriate level
-      try {
-        await apiPatchBlock(block.id, { type: 'section', props: { ...(block.props||{}), collapsed: false, level: first.level }, content: { title: first.title || '' } });
-      } catch (err) {
-        console.error('Failed to convert block to section on paste', err);
-      }
+      // Convert block to section with appropriate level (non-blocking)
+      debouncePatch(block.id, { type: 'section', props: { ...(block.props||{}), collapsed: false, level: first.level }, content: { title: first.title || '' } });
     } else {
-      try {
-        await apiPatchBlock(block.id, { type: 'paragraph', props: { ...(block.props||{}) }, content: { text: first.text } });
-      } catch (err) {
-        console.error('Failed to patch paragraph on paste', err);
-      }
+      debouncePatch(block.id, { type: 'paragraph', props: { ...(block.props||{}) }, content: { text: first.text } });
     }
 
     // Create remaining chunks as new blocks after current, preserving order
@@ -118,11 +108,10 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
       await normalizeOutlineFromLevels(page);
     } catch (err) { console.error('normalizeOutlineFromLevels failed', err); }
 
-    // Re-render and refresh data; focus last inserted block (or current if single chunk)
+    // Re-render; focus last inserted block (or current if single chunk)
     render();
     const focusId = createdIds.length ? createdIds[createdIds.length - 1] : block.id;
     focus(focusId);
-    await refreshBlocksFromServer(page.id);
   });
 
   inputEl.addEventListener('keydown', async (e) => {
@@ -161,16 +150,8 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
 
         if (level >= 1 && level <= 3) {
           e.preventDefault();
-          try {
-            // Convert current block to section with title
-            await apiPatchBlock(block.id, { type: 'section', props: { ...(block.props||{}), collapsed: false, level }, content: { title } });
-          } catch (err) {
-            console.error('Quick heading conversion failed (apiPatchBlock)', err);
-            return; // do not continue if conversion failed
-          }
-
-          // Refresh to ensure section exists in store
-          await refreshBlocksFromServer(page.id);
+          // Convert current block to section with title (debounced, non-blocking)
+          debouncePatch(block.id, { type: 'section', props: { ...(block.props||{}), collapsed: false, level }, content: { title } });
 
           // If remainder exists, create a child paragraph as first child of the new section
           let createdChildId = null;
@@ -179,10 +160,10 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
             try {
               const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: block.id, sort: 0, props: {}, content: { text: remainderTrimmed } });
               createdChildId = created?.id || null;
+              setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
             } catch (err) {
               console.error('Quick heading: failed creating child paragraph from remainder', err);
             }
-            await refreshBlocksFromServer(page.id);
           }
 
           // Normalize outline levels and refresh
@@ -192,7 +173,6 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
           } catch (err) {
             console.error('normalize after quick heading failed', err);
           }
-          await refreshBlocksFromServer(page.id);
 
           // Re-render using provided render() callback
           render();
@@ -233,7 +213,6 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
         setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
         render();
         focus(created.id); // For section, focuses the title input
-        await refreshBlocksFromServer(page.id);
       } catch (err) {
         console.error('Failed to create block via Option+Enter', err);
       }
@@ -256,7 +235,7 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
         setCurrentPageBlocks(getCurrentPageBlocks().filter(x => x.id !== block.id));
         render();
         if (prev) focus(prev.id);
-        await refreshBlocksFromServer(page.id);
+        // No live refresh while editing
       }
     } else if (e.key === 'Tab' && !(e.ctrlKey || e.metaKey || e.altKey)) {
       e.preventDefault();

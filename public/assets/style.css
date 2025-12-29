@@ -2494,12 +2494,23 @@ main.main>section[id].collapsed .section-content {
 }
 
 /* Expanded sections get a faint persistent tint */
+/* Respect UI pref: section highlight toggle via body[data-section-hl] */
 .section-header[data-collapsed="0"]{
   background: rgba(127,127,127,0.08);
 }
 @supports (background: color-mix(in srgb, black, white)){
   .section-header[data-collapsed="0"]{
     background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+
+/* Disable persistent tint when highlight pref off */
+body[data-section-hl="0"] .section-header[data-collapsed="0"]{
+  background: transparent !important;
+}
+@supports (background: color-mix(in srgb, black, white)){
+  body[data-section-hl="0"] .section-header[data-collapsed="0"]{
+    background: transparent !important;
   }
 }
 

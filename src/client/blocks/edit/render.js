@@ -1,11 +1,13 @@
 import { parseMaybeJson, blocksToTree } from '../tree.js';
-import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
 import { bindTextInputHandlers, bindRichTextHandlers } from './handlersText.js';
 import { bindSectionTitleHandlers, bindSectionHeaderControls } from './handlersSection.js';
 import { focusBlockInput } from './focus.js';
 import { bindAutosizeTextarea } from '../../lib/autosizeTextarea.js';
 import { insertMarkdownLink } from '../../lib/formatShortcuts.js';
 import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../../lib/sanitize.js';
+import { getState, updateState, saveStateNow } from '../../lib/state.js';
+import { applyUiPrefsToBody } from '../../lib/uiPrefs.js';
 
 // Track active block across the editor for toolbar actions
 let activeBlockId = null;
@@ -228,6 +230,8 @@ export function renderBlocksEdit(rootEl, page, blocks) {
           <button type="button" id="tbAddH2" class="chip">+ H2</button>
           <button type="button" id="tbAddH3" class="chip">+ H3</button>
           <button type="button" id="tbAddBody" class="chip">+ Body</button>
+          <span class="sep"></span>
+          <button type="button" id="tbSectionHL" class="chip" title="Toggle section highlight">Section HL</button>
         </div>`;
       host.insertBefore(tb, rootEl);
 
@@ -245,10 +249,39 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         const cur = all.find(x => String(x.id) === String(id));
         if (!cur) return;
         try {
-          const { apiPatchBlock, apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
+          const { apiPatchBlock, apiCreateBlock } = await import('./apiBridge.js');
           if (cur.type === 'section') {
             await apiPatchBlock(cur.id, { props: { ...(cur.props || {}), level } });
-            await refreshBlocksFromServer(page.id);
+            // Update local props
+            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify({ ...(cur.props || {}), level }) } : b);
+            // Normalize outline parent for new level
+            try {
+              const want = Math.min(3, Math.max(1, Number(level)));
+              const getById = (arr, bid) => arr.find(x => String(x.id) === String(bid));
+              const getParent = (arr, b) => (b?.parentId ? getById(arr, b.parentId) : null);
+              const ancestors = [];
+              let n = cur;
+              while (n) { ancestors.push(n); n = getParent(all, n); }
+              let nextParentId = null;
+              if (want > 1) {
+                const wantParentLevel = want - 1;
+                const found = ancestors.find(a => a.type === 'section' && Number((a.props && a.props.level) || 0) === wantParentLevel);
+                nextParentId = found ? found.id : null;
+              } else {
+                nextParentId = null;
+              }
+              if ((cur.parentId ?? null) !== (nextParentId ?? null)) {
+                await apiPatchBlock(cur.id, { parentId: nextParentId });
+                updateCurrentBlocks(b => b.id === cur.id ? { ...b, parentId: nextParentId ?? null } : b);
+              }
+            } catch (e) { console.warn('normalize section parent failed', e); }
+            const container = document.getElementById('pageBlocks');
+            stableRender(container, page, getCurrentPageBlocks(), cur.id);
+            return;
+          }
+          if (cur.type === 'heading') {
+            await apiPatchBlock(cur.id, { props: { ...(cur.props || {}), level } });
+            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify({ ...(cur.props || {}), level }) } : b);
             const container = document.getElementById('pageBlocks');
             stableRender(container, page, getCurrentPageBlocks(), cur.id);
             return;
@@ -260,11 +293,10 @@ export function renderBlocksEdit(rootEl, page, blocks) {
             const title = (lines[0] || '').trim() || 'Untitled';
             const remainder = lines.slice(1).join('\n').replace(/\s+$/,'');
             await apiPatchBlock(cur.id, { type: 'section', props: { ...(cur.props || {}), collapsed: false, level }, content: { title } });
-            await refreshBlocksFromServer(page.id);
+            updateCurrentBlocks(b => b.id === cur.id ? { ...b, type: 'section', propsJson: JSON.stringify({ ...(cur.props || {}), collapsed: false, level }), contentJson: JSON.stringify({ title }) } : b);
             if (remainder && remainder.trim().length) {
               const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: cur.id, sort: 0, props: {}, content: { text: remainder } });
-              void created; // no-op; server refresh ensures consistency
-              await refreshBlocksFromServer(page.id);
+              setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
             }
             const container = document.getElementById('pageBlocks');
             stableRender(container, page, getCurrentPageBlocks(), cur.id);
@@ -279,6 +311,21 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         return isRich ? ae : null;
       };
       const triggerSave = (el) => { try { el?.dispatchEvent(new Event('input', { bubbles: true })); } catch {} };
+
+      // Section highlight toggle control (persisted)
+      const btnHL = byId('tbSectionHL');
+      if (btnHL) {
+        btnHL.addEventListener('click', () => {
+          try {
+            const st = getState() || {};
+            const on = st?.uiPrefsV1?.sectionHeaderHighlight !== false;
+            const next = { ...(st.uiPrefsV1 || {}), sectionHeaderHighlight: !on };
+            updateState({ uiPrefsV1: next });
+            try { saveStateNow(); } catch {}
+            applyUiPrefsToBody({ ...(st || {}), uiPrefsV1: next });
+          } catch {}
+        });
+      }
 
       // Insertion helper utilities (outline-aware)
       function getById(all, id) { return all.find(x => String(x.id) === String(id)); }
@@ -385,9 +432,9 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         const cur = id ? all.find(x => String(x.id) === String(id)) : null;
         const { parentId, sortBase } = computeHeadingInsert(all, cur, level);
         try {
-          const { apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
+          const { apiCreateBlock } = await import('./apiBridge.js');
           const created = await apiCreateBlock(page.id, { type: 'section', parentId, sort: Number(sortBase || 0) + 1, props: { collapsed: false, level }, content: { title: '' } });
-          await refreshBlocksFromServer(page.id);
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
           const container = document.getElementById('pageBlocks') || rootEl;
           stableRender(container, page, getCurrentPageBlocks(), created.id);
         } catch (err) { console.error('toolbar create section failed', err); }
@@ -399,7 +446,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         const cur = id ? all.find(x => String(x.id) === String(id)) : null;
         const { parentId, sortBase } = computeBodyInsert(all, cur);
         try {
-          const { apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
+          const { apiCreateBlock } = await import('./apiBridge.js');
           const created = await apiCreateBlock(page.id, {
             type: 'paragraph',
             parentId,
@@ -407,7 +454,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
             props: {},
             content: { text: '' }
           });
-          await refreshBlocksFromServer(page.id);
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
           const container = document.getElementById('pageBlocks') || rootEl;
           stableRender(container, page, getCurrentPageBlocks(), created.id);
         } catch (err) { console.error('toolbar create body failed', err); }
@@ -437,6 +484,9 @@ export function renderBlocksEdit(rootEl, page, blocks) {
               if (cur?.type === 'section') {
                 const lvl = Math.min(3, Math.max(1, Number(cur.props?.level || 1)));
                 selType.value = `h${lvl}`;
+              } else if (cur?.type === 'heading') {
+                const lvl = Math.min(3, Math.max(1, Number(cur.props?.level || 1)));
+                selType.value = `h${lvl}`;
               } else {
                 selType.value = 'p';
               }
@@ -453,10 +503,10 @@ export function renderBlocksEdit(rootEl, page, blocks) {
     ta.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const { apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
+        const { apiCreateBlock } = await import('./apiBridge.js');
         const { getCurrentPageBlocks } = await import('../../lib/pageStore.js');
         const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: null, sort: 0, props: {}, content: { text: '' } });
-        await refreshBlocksFromServer(page.id);
+        setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
         stableRender(rootEl, page, getCurrentPageBlocks(), created.id);
       }
     });

@@ -6,11 +6,13 @@ import { fetchJson } from '../lib/http.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { setPageActionsEnabled } from '../lib/ui.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
+import { setActivePage } from '../lib/activePage.js';
 
 export function render(container, ctx = {}) {
   if (!container) return;
   // Enable global Edit in top bar for Session
   try { setPageActionsEnabled({ canEdit: true, canDelete: false }); } catch {}
+  try { setActivePage({ id: 'session', slug: null, canEdit: true, kind: 'page' }); } catch {}
   // Page-like layout mirroring Dashboard
   container.innerHTML = `
     <article class="page">

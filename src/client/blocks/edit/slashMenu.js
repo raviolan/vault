@@ -1,4 +1,5 @@
-import { apiCreateBlock, apiPatchBlock, refreshBlocksFromServer } from './apiBridge.js';
+import { apiCreateBlock, apiPatchBlock } from './apiBridge.js';
+import { getCurrentPageBlocks, updateCurrentBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
 
 let slashMenuEl = null;
 let slashMenuForBlockId = null;
@@ -95,12 +96,12 @@ export function maybeHandleSlashMenu({ page, block, inputEl, orderedBlocksFlat, 
     else if (newType === 'divider') newContent = {};
     try {
       await apiPatchBlock(block.id, { type: newType, props: newProps, content: newContent });
-      await refreshBlocksFromServer(page.id);
+      // Update local snapshot for immediate feedback
+      updateCurrentBlocks(b => b.id === block.id ? { ...b, type: newType, propsJson: JSON.stringify(newProps || {}), contentJson: JSON.stringify(newContent || {}) } : b);
       // If this is a leveled section, normalize outline nesting
       if (newType === 'section' && (newProps?.level === 1 || newProps?.level === 2 || newProps?.level === 3)) {
         const { normalizeOutlineFromLevels } = await import('./outline.js');
         await normalizeOutlineFromLevels(page);
-        await refreshBlocksFromServer(page.id);
       }
       await onAfterChange();
       if (newType === 'divider') {
@@ -109,7 +110,7 @@ export function maybeHandleSlashMenu({ page, block, inputEl, orderedBlocksFlat, 
         let next = flat[idx + 1];
         if (!next) {
           const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: block.parentId ?? null, sort: (block.sort ?? 0) + 1, props: {}, content: { text: '' } });
-          await refreshBlocksFromServer(page.id);
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
           await onAfterChange();
           return { focusId: created.id };
         }

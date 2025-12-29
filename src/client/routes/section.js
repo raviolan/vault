@@ -1,6 +1,7 @@
 import { $, escapeHtml } from '../lib/dom.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { setUiMode } from '../lib/uiMode.js';
+import { setActivePage } from '../lib/activePage.js';
 import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
 import { normalizeSections, removeSection } from '../lib/sections.js';
@@ -26,6 +27,7 @@ export async function render(outlet, { key }) {
   if (!outlet) return;
   // Store section key on the outlet for delegated handlers
   outlet.dataset.sectionKey = String(key || '');
+  try { setActivePage({ id: `section:${String(key||'')}`, slug: null, canEdit: true, kind: 'page' }); } catch {}
   // Local cleanup for header media click binding
   let cleanupHeaderMedia = null;
   const pages = await loadPages();

@@ -1,7 +1,6 @@
 import { debouncePatch } from './state.js';
 import { apiCreateBlock, apiPatchBlock, apiDeleteBlock, apiReorder } from './apiBridge.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
-import { refreshBlocksFromServer } from './apiBridge.js';
 
 export function bindSectionTitleHandlers({ page, block, inputEl, rootEl, renderStable, focus }) {
   inputEl.addEventListener('input', () => {
@@ -16,7 +15,7 @@ export function bindSectionTitleHandlers({ page, block, inputEl, rootEl, renderS
   });
 
   inputEl.addEventListener('keydown', async (e) => {
-    const { apiCreateBlock, refreshBlocksFromServer } = await import('./apiBridge.js');
+    const { apiCreateBlock } = await import('./apiBridge.js');
     const { getCurrentPageBlocks, setCurrentPageBlocks } = await import('../../lib/pageStore.js');
     const { indentBlock, outdentBlock, moveBlockWithinSiblings } = await import('./reorder.js');
 
@@ -30,7 +29,6 @@ export function bindSectionTitleHandlers({ page, block, inputEl, rootEl, renderS
       try {
         const created = await apiCreateBlock(page.id, payload);
         setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-        await refreshBlocksFromServer(page.id);
         const container = document.getElementById('pageBlocks');
         renderStable?.(created.id) || (container && (await import('./render.js')).stableRender(container, page, getCurrentPageBlocks(), created.id));
       } catch (err) { console.error('Failed to add sibling from section title', err); }
@@ -43,7 +41,6 @@ export function bindSectionTitleHandlers({ page, block, inputEl, rootEl, renderS
       const nextSort = kids.length ? (kids[kids.length - 1].sort + 1) : 0;
       const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: block.id, sort: nextSort, props: {}, content: { text: '' } });
       setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-      await refreshBlocksFromServer(page.id);
       const container = document.getElementById('pageBlocks');
       renderStable?.(created.id) || (container && (await import('./render.js')).stableRender(container, page, getCurrentPageBlocks(), created.id));
       return;
@@ -71,7 +68,6 @@ export function bindSectionTitleHandlers({ page, block, inputEl, rootEl, renderS
             await apiDeleteBlock(pid);
           }
           await apiDeleteBlock(block.id);
-          await refreshBlocksFromServer(page.id);
           const container = document.getElementById('pageBlocks');
           if (renderStable) renderStable(focusTargetId || null);
           else if (container) (await import('./render.js')).stableRender(container, page, getCurrentPageBlocks(), focusTargetId || null);
@@ -102,7 +98,10 @@ export function bindSectionHeaderControls({ page, block, rootEl, titleInput, onA
     try {
       const next = { ...(block.props || {}), collapsed: !block.props?.collapsed };
       await apiPatchBlock(block.id, { props: next });
-      await refreshBlocksFromServer(page.id);
+      // Optimistically update local store
+      try {
+        setCurrentPageBlocks(getCurrentPageBlocks().map(b => b.id === block.id ? { ...b, propsJson: JSON.stringify(next) } : b));
+      } catch {}
       await onAfterChange();
       if (wasActive) focus(block.id);
     } catch (e) { console.error('toggle failed', e); }
@@ -114,7 +113,6 @@ export function bindSectionHeaderControls({ page, block, rootEl, titleInput, onA
       const nextSort = kids.length ? (kids[kids.length - 1].sort + 1) : 0;
       const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: block.id, sort: nextSort, props: {}, content: { text: '' } });
       setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-      await refreshBlocksFromServer(page.id);
       await onAfterChange();
       focus(created.id);
     } catch (e) { console.error('add child failed', e); }
@@ -134,7 +132,6 @@ export function bindSectionHeaderControls({ page, block, rootEl, titleInput, onA
         const targetIndex = idx + delta;
         if (idx < 0 || targetIndex < 0 || targetIndex >= sibs.length) return;
         await moveBlockWithinSiblings(page, block, delta);
-        await refreshBlocksFromServer(page.id);
         await onAfterChange();
         focus(block.id);
       } catch (err) { console.error('move section failed', err); }
@@ -160,7 +157,6 @@ export function bindSectionHeaderControls({ page, block, rootEl, titleInput, onA
           await apiDeleteBlock(pid);
         }
         await apiDeleteBlock(block.id);
-        await refreshBlocksFromServer(page.id);
         const container = document.getElementById('pageBlocks');
         if (container) {
           try {
@@ -315,8 +311,19 @@ export function bindSectionDrag({ page, block, wrapEl, headerEl, handleEl, onAft
       }
       newAll.splice(insertPosAll, 0, moved);
       const moves = newAll.map((node, i) => ({ id: node.id, parentId: block.parentId ?? null, sort: i }));
-      await apiReorder(page.id, moves);
-      await refreshBlocksFromServer(page.id);
+      // Optimistically update local order
+      try {
+        const byId = new Map(getCurrentPageBlocks().map(x => [x.id, { ...x }]));
+        for (const m of moves) {
+          const n = byId.get(m.id);
+          if (!n) continue;
+          n.parentId = m.parentId ?? null;
+          n.sort = m.sort;
+        }
+        const next = Array.from(byId.values()).slice().sort((a,b) => ((a.parentId||'') === (b.parentId||'')) ? (a.sort - b.sort) : (String(a.parentId||'').localeCompare(String(b.parentId||'')) || (a.sort - b.sort)));
+        setCurrentPageBlocks(next);
+      } catch {}
+      void apiReorder(page.id, moves).catch(() => {});
       await onAfterChange();
       focus(block.id);
     } catch (err) {

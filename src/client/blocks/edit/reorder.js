@@ -1,6 +1,5 @@
-import { getCurrentPageBlocks } from '../../lib/pageStore.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
 import { apiReorder } from './apiBridge.js';
-import { refreshBlocksFromServer } from './apiBridge.js';
 
 function orderedBlocksFlat() {
   const arr = getCurrentPageBlocks().slice();
@@ -25,8 +24,20 @@ export async function indentBlock(page, b) {
   newChildren.forEach((child, i) => moves.push({ id: child.id, parentId: newParentId, sort: i }));
   const oldSibs = siblingsOf(oldParentId).filter(x => x.id !== b.id);
   oldSibs.forEach((sib, i) => moves.push({ id: sib.id, parentId: oldParentId, sort: i }));
-  await apiReorder(page.id, moves);
-  await refreshBlocksFromServer(page.id);
+  // Optimistically update local store for immediate feedback
+  try {
+    const byId = new Map(getCurrentPageBlocks().map(x => [x.id, { ...x }]));
+    for (const m of moves) {
+      const n = byId.get(m.id);
+      if (!n) continue;
+      n.parentId = m.parentId ?? null;
+      n.sort = m.sort;
+    }
+    const next = Array.from(byId.values()).slice().sort((a,b) => ((a.parentId||'') === (b.parentId||'')) ? (a.sort - b.sort) : (String(a.parentId||'').localeCompare(String(b.parentId||'')) || (a.sort - b.sort)));
+    setCurrentPageBlocks(next);
+  } catch {}
+  // Fire-and-forget server reorder; do not block UI
+  void apiReorder(page.id, moves).catch(() => {});
   return { focusId: b.id };
 }
 
@@ -46,8 +57,19 @@ export async function outdentBlock(page, b) {
   const oldChildren = siblingsOf(parent.id).filter(x => x.id !== b.id);
   oldChildren.forEach((node, i) => moves.push({ id: node.id, parentId: parent.id, sort: i }));
 
-  await apiReorder(page.id, moves);
-  await refreshBlocksFromServer(page.id);
+  // Optimistically update local order
+  try {
+    const byId = new Map(getCurrentPageBlocks().map(x => [x.id, { ...x }]));
+    for (const m of moves) {
+      const n = byId.get(m.id);
+      if (!n) continue;
+      n.parentId = m.parentId ?? null;
+      n.sort = m.sort;
+    }
+    const next = Array.from(byId.values()).slice().sort((a,b) => ((a.parentId||'') === (b.parentId||'')) ? (a.sort - b.sort) : (String(a.parentId||'').localeCompare(String(b.parentId||'')) || (a.sort - b.sort)));
+    setCurrentPageBlocks(next);
+  } catch {}
+  void apiReorder(page.id, moves).catch(() => {});
   return { focusId: b.id };
 }
 
@@ -62,8 +84,18 @@ export async function moveBlockWithinSiblings(page, b, delta) {
   swapped[i] = swapped[j];
   swapped[j] = tmp;
   const moves = swapped.map((node, idx) => ({ id: node.id, parentId: b.parentId ?? null, sort: idx }));
-  await apiReorder(page.id, moves);
-  await refreshBlocksFromServer(page.id);
+  // Optimistically update local order
+  try {
+    const byId = new Map(getCurrentPageBlocks().map(x => [x.id, { ...x }]));
+    for (const m of moves) {
+      const n = byId.get(m.id);
+      if (!n) continue;
+      n.parentId = m.parentId ?? null;
+      n.sort = m.sort;
+    }
+    const next = Array.from(byId.values()).slice().sort((a,b) => ((a.parentId||'') === (b.parentId||'')) ? (a.sort - b.sort) : (String(a.parentId||'').localeCompare(String(b.parentId||'')) || (a.sort - b.sort)));
+    setCurrentPageBlocks(next);
+  } catch {}
+  void apiReorder(page.id, moves).catch(() => {});
   return { focusId: b.id };
 }
-
