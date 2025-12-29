@@ -7,6 +7,30 @@ import { refreshNav } from './nav.js';
 import { openModal, closeModal } from './modals.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 
+// Reset shared wikilink modal to default state each time it opens
+function resetWikilinkModal(modal) {
+  if (!modal) return;
+  // Reset mode and transient data
+  modal.dataset.mode = 'wikilink';
+  delete modal.dataset.linkifyTerm;
+  delete modal.dataset.linkifyPages;
+
+  // Unhide sections possibly hidden by linkify mode
+  try { modal.querySelector('.wiki-apply')?.style.setProperty('display', ''); } catch {}
+  try { modal.querySelector('.wiki-create')?.style.setProperty('display', ''); } catch {}
+
+  // Re-enable confirm buttons
+  const btn = modal.querySelector('[data-action="link"]')
+    || modal.querySelector('#wikilinkLinkBtn')
+    || modal.querySelector('#wikiConfirm')
+    || modal.querySelector('.wikiResolveConfirm');
+  if (btn) btn.disabled = false;
+
+  // Restore default header if changed
+  const h2 = modal.querySelector('h2');
+  if (h2 && h2.textContent === 'Linkify Term') h2.textContent = 'Resolve Wikilink';
+}
+
 // Inline rendering helpers: escape via text nodes; then add wiki links, hashtags, bold/italic.
 // Avoid formatting inside inline code spans delimited by backticks.
 export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
@@ -231,7 +255,9 @@ export function installWikiLinkHandler() {
       const title = a.getAttribute('data-wiki-title') || '';
       const blockId = a.getAttribute('data-src-block') || '';
       const token = a.getAttribute('data-token') || `[[${title}]]`;
-      openWikilinkModal({ title, blockId, token });
+      const modal = document.getElementById('wikilinkCreateModal');
+      resetWikilinkModal(modal);
+      openWikilinkModal({ title, blockId, token, mode: 'wikilink' });
     }
   });
 }
@@ -309,6 +335,8 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
     void resolveLegacyAndUpgrade(title, blockId, token);
     return;
   }
+  // Ensure modal starts from a clean state
+  resetWikilinkModal(modal);
   modal.setAttribute('data-wikilink-title', title);
   modal.setAttribute('data-wikilink-block', blockId || '');
   modal.setAttribute('data-wikilink-token', token || `[[${title}]]`);
@@ -323,14 +351,23 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
   if (btnCreate) {
     btnCreate.onclick = async () => {
       const type = sel?.value || 'note';
-      closeModal('wikilinkCreateModal');
+      try {
+        closeModal('wikilinkCreateModal');
+      } finally {
+        resetWikilinkModal(modal);
+      }
       await createPageForWikilink({ title, blockId, token, type });
     };
   }
   if (btnCancel) {
     btnCancel.onclick = async () => {
-      closeModal('wikilinkCreateModal');
-      if (mode !== 'linkify') {
+      try {
+        closeModal('wikilinkCreateModal');
+      } finally {
+        resetWikilinkModal(modal);
+      }
+      const effectiveMode = mode || modal.dataset.mode || 'wikilink';
+      if (effectiveMode !== 'linkify') {
         await revertWikilinkToPlain({ title, blockId, token });
       }
     };
@@ -340,10 +377,15 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
   const input = modal.querySelector('input[name="wikiResolveQuery"]');
   const resultsEl = modal.querySelector('.wikiResolveResults');
   const autoEl = modal.querySelector('.wikiResolveAuto');
-  const linkBtn = modal.querySelector('.wikiResolveConfirm');
-  // Apply controls
-  if (mode !== 'linkify') {
-    setupApplyControls({ modal, label: title });
+  const selectedSummary = modal.querySelector('.wikiSelectedSummary');
+  const confirmBtn = modal.querySelector('#wikiConfirm');
+  const cancelBtn = modal.querySelector('#wikiCancel');
+  // State vars must be declared before any helper uses them
+  let selected = null; // selected target page from results
+  let scope = 'single'; // 'single' | 'page' | 'vault'
+  // Scope controls
+  if ((mode || modal.dataset.mode || 'wikilink') !== 'linkify') {
+    setupScopeControls({ modal, label: title, onScopeChange: (s) => { scope = s; updateConfirmLabel(); } });
   } else {
     // In linkify mode hide apply and create sections, retitle modal
     const h2 = modal.querySelector('h2');
@@ -351,17 +393,46 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
     try { modal.querySelector('.wiki-apply')?.style.setProperty('display','none'); } catch {}
     try { modal.querySelector('.wiki-create')?.style.setProperty('display','none'); } catch {}
   }
-  let selected = null; // { id, title, slug, type }
+  let currentResults = [];
   const setSelected = (item) => {
     selected = item;
     // update selection UI
-    resultsEl?.querySelectorAll('.result').forEach(n => n.classList.remove('is-selected'));
+    resultsEl?.querySelectorAll('.wikiPickRow').forEach(n => n.classList.remove('is-selected'));
     if (item && resultsEl) {
-      const node = resultsEl.querySelector(`.result[data-id="${CSS.escape(item.id)}"]`);
+      const node = resultsEl.querySelector(`.wikiPickRow[data-id="${CSS.escape(item.id)}"]`);
       if (node) node.classList.add('is-selected');
     }
-    if (linkBtn) linkBtn.disabled = !selected;
+    // update checkmarks and ARIA
+    if (resultsEl) {
+      resultsEl.querySelectorAll('.wikiPickRow').forEach(n => {
+        const mark = n.querySelector('.wikiPickMark');
+        if (!mark) return;
+        if (selected && n.getAttribute('data-id') === String(selected.id)) {
+          mark.textContent = '✓';
+          n.setAttribute('aria-selected', 'true');
+        } else {
+          mark.textContent = '';
+          n.setAttribute('aria-selected', 'false');
+        }
+      });
+    }
+    if (confirmBtn) confirmBtn.disabled = !selected;
+    if (selectedSummary) selectedSummary.textContent = selected ? `Selected: ${selected.title}` : 'No page selected';
+    updateConfirmLabel();
   };
+
+  function updateConfirmLabel() {
+    if (!confirmBtn) return;
+    const t = selected?.title || '';
+    confirmBtn.disabled = !selected;
+    confirmBtn.textContent = !selected
+      ? 'Link'
+      : (scope === 'vault'
+          ? `Link across vault → ${t}`
+          : scope === 'page'
+            ? `Link in this page → ${t}`
+            : `Link → ${t}`);
+  }
 
   const renderResults = (arr, qNorm) => {
     if (!resultsEl) return;
@@ -370,16 +441,27 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
     for (const r of arr) {
       const div = document.createElement('div');
       div.className = 'result';
+      div.classList.add('wikiPickRow');
       div.setAttribute('data-id', r.id);
+      div.setAttribute('role', 'option');
+      div.setAttribute('aria-selected', 'false');
       div.style.padding = '6px 8px';
       div.style.borderRadius = '6px';
       div.style.cursor = 'pointer';
       div.innerHTML = `<div style="font-weight:700;">${r.title}</div>
         <div style="font-size:12px; color: var(--muted);">${r.type || 'page'}${r.slug ? ` • ${r.slug}` : ''}</div>`;
+      // append checkmark holder
+      try {
+        const mark = document.createElement('div');
+        mark.className = 'wikiPickMark';
+        mark.textContent = '';
+        div.appendChild(mark);
+      } catch {}
       div.addEventListener('click', () => setSelected(r));
       div.addEventListener('dblclick', async () => {
-        if (mode === 'linkify') {
-          try {
+        const effectiveMode = mode || modal.dataset.mode || 'wikilink';
+        try {
+          if (effectiveMode === 'linkify') {
             const summary = await fetchJson('/api/wikilinks/linkify', {
               method: 'POST',
               body: JSON.stringify({ term: title, targetPageId: r.id, scope: 'pages', pageIds: linkifyPageIds || [], caseSensitive: false })
@@ -387,59 +469,27 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
             const linked = Number(summary?.linkedOccurrences || 0);
             const upPages = Number(summary?.updatedPages || 0);
             alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
-          } catch (e) {
-            console.error('Linkify failed', e);
-            alert('Linkify failed: ' + (e?.message || e));
-          } finally {
-            closeModal('wikilinkCreateModal');
+          } else {
+            await linkWikilinkToExisting({ title, blockId, token, page: r });
+            await applyBulkIfRequested({ label: title, targetPageId: r.id, modal, scope });
+            alert('Linked ✓');
           }
-        } else {
-          await linkWikilinkToExisting({ title, blockId, token, page: r });
-          await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
+        } catch (e) {
+          console.error('wikilink commit failed', e);
+          alert('Link failed. Check console/network for details.');
+        } finally {
           closeModal('wikilinkCreateModal');
+          resetWikilinkModal(modal);
         }
       });
-      div.addEventListener('mouseenter', () => { resultsEl.querySelectorAll('.result').forEach(n => n.classList.remove('hover')); div.classList.add('hover'); });
+      div.addEventListener('mouseenter', () => { resultsEl.querySelectorAll('.wikiPickRow').forEach(n => n.classList.remove('hover')); div.classList.add('hover'); });
       div.addEventListener('mouseleave', () => div.classList.remove('hover'));
       frag.appendChild(div);
     }
     resultsEl.appendChild(frag);
-    // Auto-suggest exact match
-    if (autoEl) {
-      const exact = arr.filter(r => normalizeLabel(r.title) === qNorm);
-      if (exact.length === 1) {
-        const r = exact[0];
-        autoEl.style.display = '';
-        autoEl.innerHTML = `<button type="button" class="chip" data-id="${r.id}">Link to \u201C${r.title}\u201D</button>`;
-        autoEl.querySelector('button')?.addEventListener('click', async () => {
-          if (mode === 'linkify') {
-            try {
-              const summary = await fetchJson('/api/wikilinks/linkify', {
-                method: 'POST',
-                body: JSON.stringify({ term: title, targetPageId: r.id, scope: 'pages', pageIds: linkifyPageIds || [], caseSensitive: false })
-              });
-              const linked = Number(summary?.linkedOccurrences || 0);
-              const upPages = Number(summary?.updatedPages || 0);
-              alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
-            } catch (e) {
-              console.error('Linkify failed', e);
-              alert('Linkify failed: ' + (e?.message || e));
-            } finally {
-              closeModal('wikilinkCreateModal');
-            }
-          } else {
-            await linkWikilinkToExisting({ title, blockId, token, page: r });
-            await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
-            closeModal('wikilinkCreateModal');
-          }
-        });
-        // Prefer existing when exact match found
-        setSelected(r);
-      } else {
-        autoEl.style.display = 'none';
-        autoEl.innerHTML = '';
-      }
-    }
+    // Hide auto-suggest action; default selection to first item
+    if (autoEl) { autoEl.style.display = 'none'; autoEl.innerHTML = ''; }
+    if (!selected && arr.length > 0) setSelected(arr[0]);
   };
 
   let lastQ = '';
@@ -475,11 +525,12 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
       tmr = setTimeout(() => doSearch(v), 160);
     };
   }
-  if (linkBtn) {
-    linkBtn.onclick = async () => {
-      if (!selected) return;
-      if (mode === 'linkify') {
-        try {
+  if (confirmBtn) {
+    confirmBtn.onclick = async () => {
+      try {
+        if (!selected) return;
+        const effectiveMode = mode || modal.dataset.mode || 'wikilink';
+        if (effectiveMode === 'linkify') {
           const summary = await fetchJson('/api/wikilinks/linkify', {
             method: 'POST',
             body: JSON.stringify({ term: title, targetPageId: selected.id, scope: 'pages', pageIds: linkifyPageIds || [], caseSensitive: false })
@@ -487,19 +538,53 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
           const linked = Number(summary?.linkedOccurrences || 0);
           const upPages = Number(summary?.updatedPages || 0);
           alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
-        } catch (e) {
-          console.error('Linkify failed', e);
-          alert('Linkify failed: ' + (e?.message || e));
-        } finally {
-          closeModal('wikilinkCreateModal');
+        } else {
+          await linkWikilinkToExisting({ title, blockId, token, page: selected });
+          await applyBulkIfRequested({ label: title, targetPageId: selected.id, modal, scope });
+          alert('Linked ✓');
         }
-      } else {
-        await linkWikilinkToExisting({ title, blockId, token, page: selected });
-        await applyBulkIfRequested({ label: title, targetPageId: selected.id, modal });
+      } catch (e) {
+        console.error('wikilink commit failed', e);
+        alert('Link failed. Check console/network for details.');
+      } finally {
         closeModal('wikilinkCreateModal');
+        resetWikilinkModal(modal);
       }
     };
   }
+
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      closeModal('wikilinkCreateModal');
+      resetWikilinkModal(modal);
+    };
+  }
+
+  // Keyboard navigation: up/down to move selection; Enter to confirm
+  modal.addEventListener('keydown', (ev) => {
+    if (!currentResults.length) return;
+    if (ev.key === 'ArrowDown' || ev.key === 'Down') {
+      ev.preventDefault();
+      if (!selected) { setSelected(currentResults[0]); return; }
+      const idx = currentResults.findIndex(r => r.id === selected.id);
+      const next = currentResults[Math.min(idx + 1, currentResults.length - 1)] || selected;
+      setSelected(next);
+    } else if (ev.key === 'ArrowUp' || ev.key === 'Up') {
+      ev.preventDefault();
+      if (!selected) { setSelected(currentResults[0]); return; }
+      const idx = currentResults.findIndex(r => r.id === selected.id);
+      const prev = currentResults[Math.max(idx - 1, 0)] || selected;
+      setSelected(prev);
+    } else if (ev.key === 'Enter') {
+      if (confirmBtn && !confirmBtn.disabled) {
+        ev.preventDefault();
+        confirmBtn.click();
+      }
+    }
+  });
+
+  // Initial label state
+  updateConfirmLabel();
 
   openModal('wikilinkCreateModal');
   // Kick off initial search
@@ -509,6 +594,7 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
 export function openLinkifyTermModal({ term, pageIds }) {
   const modal = document.getElementById('wikilinkCreateModal');
   if (!modal) return;
+  resetWikilinkModal(modal);
   modal.dataset.mode = 'linkify';
   modal.dataset.linkifyTerm = term || '';
   modal.dataset.linkifyPages = JSON.stringify(pageIds || []);
@@ -519,71 +605,73 @@ function currentPageIdFromBlocks() {
   try { return getCurrentPageBlocks()[0]?.pageId || null; } catch { return null; }
 }
 
-function setupApplyControls({ modal, label }) {
-  const applyPageCb = modal.querySelector('input[name="wikiApplyPage"]');
-  const applyGlobalCb = modal.querySelector('input[name="wikiApplyGlobal"]');
-  const applyStatus = modal.querySelector('.wikiApplyGlobalStatus');
-  const applyReview = modal.querySelector('.wikiApplyReview');
-  const applyToggle = modal.querySelector('.wikiApplyToggle');
+function setupScopeControls({ modal, label, onScopeChange }) {
+  const radios = Array.from(modal.querySelectorAll('input[name="wikiScope"]'));
+  const reviewRow = modal.querySelector('.wikiScopeReview');
+  const statusEl = modal.querySelector('.wikiScopeStatus');
+  const reviewBtn = modal.querySelector('.wikiScopeReviewBtn');
   const applyList = modal.querySelector('.wikiApplyList');
-  if (applyStatus) { applyStatus.textContent = 'checking…'; }
 
   const updateReviewVisibility = () => {
-    if (!applyReview) return;
-    applyReview.style.display = applyGlobalCb?.checked ? '' : 'none';
-    if (!applyGlobalCb?.checked && applyList) applyList.style.display = 'none';
+    const val = (radios.find(r => r.checked)?.value) || 'single';
+    if (onScopeChange) onScopeChange(val);
+    if (!reviewRow) return;
+    reviewRow.style.display = val === 'vault' ? '' : 'none';
+    if (val !== 'vault' && applyList) applyList.style.display = 'none';
   };
-  applyGlobalCb?.addEventListener('change', updateReviewVisibility);
+  radios.forEach(r => r.addEventListener('change', updateReviewVisibility));
   updateReviewVisibility();
 
-  applyToggle?.addEventListener('click', () => {
-    if (!applyList) return;
-    applyList.style.display = (applyList.style.display === 'none' || !applyList.style.display) ? '' : 'none';
-  });
-
-  // Fetch occurrences to populate counts and review list
-  fetchJson(`/api/wikilinks/occurrences?label=${encodeURIComponent(label)}&limit=100`).then((arr) => {
-    const results = Array.isArray(arr) ? arr : [];
-    const n = results.length;
-    if (applyStatus) applyStatus.textContent = `Found in ${n} page${n === 1 ? '' : 's'}`;
-    if (applyList) {
-      applyList.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      for (const r of results) {
-        const row = document.createElement('label');
-        row.style.display = 'block';
-        row.style.padding = '4px 2px';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = true;
-        cb.setAttribute('data-page-id', r.pageId);
-        const text = document.createElement('span');
-        text.textContent = ` ${r.title}`;
-        const meta = document.createElement('span');
-        meta.style.color = 'var(--muted)';
-        meta.style.fontSize = '12px';
-        meta.textContent = r.slug ? ` • ${r.slug}` : '';
-        row.appendChild(cb);
-        row.appendChild(text);
-        if (r.slug) row.appendChild(meta);
-        frag.appendChild(row);
+  reviewBtn?.addEventListener('click', async () => {
+    try {
+      statusEl.textContent = 'Counting…';
+      const arr = await fetchJson(`/api/wikilinks/occurrences?label=${encodeURIComponent(label)}&limit=100`);
+      const results = Array.isArray(arr) ? arr : [];
+      const n = results.length;
+      statusEl.textContent = `Found in ${n} page${n === 1 ? '' : 's'}`;
+      if (applyList) {
+        applyList.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        for (const r of results) {
+          const row = document.createElement('label');
+          row.style.display = 'block';
+          row.style.padding = '4px 2px';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = true;
+          cb.setAttribute('data-page-id', r.pageId);
+          const text = document.createElement('span');
+          text.textContent = ` ${r.title}`;
+          const meta = document.createElement('span');
+          meta.style.color = 'var(--muted)';
+          meta.style.fontSize = '12px';
+          meta.textContent = r.slug ? ` • ${r.slug}` : '';
+          row.appendChild(cb);
+          row.appendChild(text);
+          if (r.slug) row.appendChild(meta);
+          frag.appendChild(row);
+        }
+        applyList.appendChild(frag);
+        applyList.style.display = '';
       }
-      applyList.appendChild(frag);
+    } catch (e) {
+      console.error('scope count failed', e);
+      statusEl.textContent = 'Not counted yet';
+      alert('Count unavailable.');
     }
-  }).catch(() => { if (applyStatus) applyStatus.textContent = 'unavailable'; });
+  });
 }
 
-async function applyBulkIfRequested({ label, targetPageId, modal }) {
+async function applyBulkIfRequested({ label, targetPageId, modal, scope }) {
   try {
-    const applyPageCb = modal.querySelector('input[name="wikiApplyPage"]');
-    const applyGlobalCb = modal.querySelector('input[name="wikiApplyGlobal"]');
+    const scopeVal = scope || (modal.querySelector('input[name="wikiScope"]:checked')?.value) || 'single';
     const applyList = modal.querySelector('.wikiApplyList');
-    if (!(applyPageCb?.checked || applyGlobalCb?.checked)) return;
+    if (scopeVal === 'single') return;
 
     const pageId = currentPageIdFromBlocks();
     let summary = null;
 
-    if (applyGlobalCb?.checked) {
+    if (scopeVal === 'vault') {
       const ids = Array.from(applyList?.querySelectorAll('input[type="checkbox"][data-page-id]') || [])
         .filter(el => el.checked)
         .map(el => el.getAttribute('data-page-id'))
@@ -594,7 +682,7 @@ async function applyBulkIfRequested({ label, targetPageId, modal }) {
           body: JSON.stringify({ label, targetPageId, scope: 'global', pageIds: ids, replaceMode: 'unresolvedOnly' })
         });
       }
-    } else if (applyPageCb?.checked && pageId) {
+    } else if (scopeVal === 'page' && pageId) {
       summary = await fetchJson('/api/wikilinks/resolve', {
         method: 'POST',
         body: JSON.stringify({ label, targetPageId, scope: 'page', pageId, replaceMode: 'unresolvedOnly' })

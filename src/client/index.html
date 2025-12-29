@@ -289,22 +289,25 @@
         <input name="wikiResolveQuery" type="text" placeholder="Search pages…" autocomplete="off" />
         <div class="wikiResolveAuto" style="margin: 6px 0; display:none;"></div>
         <div class="wikiResolveResults" style="max-height: 240px; overflow:auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px;"></div>
-        <div class="modal-actions" style="margin-top: 8px;">
-          <button type="button" class="wikiResolveConfirm" disabled>Link to selected page</button>
-        </div>
+        <div class="wikiSelectedSummary" aria-live="polite">No page selected</div>
       </div>
 
       <div class="wiki-apply" style="margin-top: 12px;">
-        <h3 style="margin: 10px 0 4px;">Apply…</h3>
-        <label style="display:block; margin: 6px 0;">
-          <input type="checkbox" name="wikiApplyPage" /> Apply to all occurrences in this page
-        </label>
-        <label style="display:block; margin: 6px 0;">
-          <input type="checkbox" name="wikiApplyGlobal" /> Apply across the vault
-          <span class="wikiApplyGlobalStatus" style="margin-left:6px; color: var(--muted);">checking…</span>
-        </label>
-        <div class="wikiApplyReview" style="display:none; margin-top: 6px;">
-          <button type="button" class="wikiApplyToggle" style="font-size: 12px; color: var(--muted);">Review pages…</button>
+        <h3 style="margin: 10px 0 4px;">Scope</h3>
+        <div class="wiki-scope-group" role="radiogroup" aria-label="Scope">
+          <label style="display:block; margin: 6px 0;">
+            <input type="radio" name="wikiScope" value="single" checked /> Only this link (recommended)
+          </label>
+          <label style="display:block; margin: 6px 0;">
+            <input type="radio" name="wikiScope" value="page" /> All occurrences in this page
+          </label>
+          <label style="display:block; margin: 6px 0;">
+            <input type="radio" name="wikiScope" value="vault" /> Across the vault…
+          </label>
+        </div>
+        <div class="wikiScopeReview" style="display:none; margin-top: 6px;">
+          <span class="wikiScopeStatus" style="margin-right:6px; color: var(--muted);">Click Review pages… to calculate scope</span>
+          <button type="button" class="wikiScopeReviewBtn" style="font-size: 12px;">Review pages…</button>
           <div class="wikiApplyList" style="display:none; max-height: 180px; overflow:auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px; margin-top: 6px;"></div>
         </div>
       </div>
@@ -325,6 +328,11 @@
           <button type="button" class="modal-cancel">Cancel</button>
           <button type="button" class="modal-confirm">Create</button>
         </div>
+      </div>
+
+      <div class="wikiFooter">
+        <button type="button" id="wikiCancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="wikiConfirm" class="btn-primary" disabled>Link</button>
       </div>
     </div>
   </div>
