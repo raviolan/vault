@@ -299,7 +299,10 @@ async function createPageForWikilink({ title, blockId, token, type }) {
   }
 }
 
-function openWikilinkModal({ title, blockId, token }) {
+// Open the wikilink modal in two modes:
+// - mode 'wikilink' (default): resolving a [[Title]] token
+// - mode 'linkify': bulk linkify plain term across pages
+function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPageIds = [] }) {
   const modal = document.getElementById('wikilinkCreateModal');
   if (!modal) {
     // Fallback: keep existing behavior if modal not present
@@ -309,6 +312,7 @@ function openWikilinkModal({ title, blockId, token }) {
   modal.setAttribute('data-wikilink-title', title);
   modal.setAttribute('data-wikilink-block', blockId || '');
   modal.setAttribute('data-wikilink-token', token || `[[${title}]]`);
+  modal.setAttribute('data-mode', mode);
   const label = modal.querySelector('.wikilink-title-label');
   if (label) label.textContent = title;
   // set default type to note
@@ -326,7 +330,9 @@ function openWikilinkModal({ title, blockId, token }) {
   if (btnCancel) {
     btnCancel.onclick = async () => {
       closeModal('wikilinkCreateModal');
-      await revertWikilinkToPlain({ title, blockId, token });
+      if (mode !== 'linkify') {
+        await revertWikilinkToPlain({ title, blockId, token });
+      }
     };
   }
 
@@ -336,7 +342,15 @@ function openWikilinkModal({ title, blockId, token }) {
   const autoEl = modal.querySelector('.wikiResolveAuto');
   const linkBtn = modal.querySelector('.wikiResolveConfirm');
   // Apply controls
-  setupApplyControls({ modal, label: title });
+  if (mode !== 'linkify') {
+    setupApplyControls({ modal, label: title });
+  } else {
+    // In linkify mode hide apply and create sections, retitle modal
+    const h2 = modal.querySelector('h2');
+    if (h2) h2.textContent = 'Linkify Term';
+    try { modal.querySelector('.wiki-apply')?.style.setProperty('display','none'); } catch {}
+    try { modal.querySelector('.wiki-create')?.style.setProperty('display','none'); } catch {}
+  }
   let selected = null; // { id, title, slug, type }
   const setSelected = (item) => {
     selected = item;
@@ -364,9 +378,26 @@ function openWikilinkModal({ title, blockId, token }) {
         <div style="font-size:12px; color: var(--muted);">${r.type || 'page'}${r.slug ? ` • ${r.slug}` : ''}</div>`;
       div.addEventListener('click', () => setSelected(r));
       div.addEventListener('dblclick', async () => {
-        await linkWikilinkToExisting({ title, blockId, token, page: r });
-        await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
-        closeModal('wikilinkCreateModal');
+        if (mode === 'linkify') {
+          try {
+            const summary = await fetchJson('/api/wikilinks/linkify', {
+              method: 'POST',
+              body: JSON.stringify({ term: title, targetPageId: r.id, scope: 'pages', pageIds: linkifyPageIds || [], caseSensitive: false })
+            });
+            const linked = Number(summary?.linkedOccurrences || 0);
+            const upPages = Number(summary?.updatedPages || 0);
+            alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
+          } catch (e) {
+            console.error('Linkify failed', e);
+            alert('Linkify failed: ' + (e?.message || e));
+          } finally {
+            closeModal('wikilinkCreateModal');
+          }
+        } else {
+          await linkWikilinkToExisting({ title, blockId, token, page: r });
+          await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
+          closeModal('wikilinkCreateModal');
+        }
       });
       div.addEventListener('mouseenter', () => { resultsEl.querySelectorAll('.result').forEach(n => n.classList.remove('hover')); div.classList.add('hover'); });
       div.addEventListener('mouseleave', () => div.classList.remove('hover'));
@@ -381,9 +412,26 @@ function openWikilinkModal({ title, blockId, token }) {
         autoEl.style.display = '';
         autoEl.innerHTML = `<button type="button" class="chip" data-id="${r.id}">Link to \u201C${r.title}\u201D</button>`;
         autoEl.querySelector('button')?.addEventListener('click', async () => {
-          await linkWikilinkToExisting({ title, blockId, token, page: r });
-          await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
-          closeModal('wikilinkCreateModal');
+          if (mode === 'linkify') {
+            try {
+              const summary = await fetchJson('/api/wikilinks/linkify', {
+                method: 'POST',
+                body: JSON.stringify({ term: title, targetPageId: r.id, scope: 'pages', pageIds: linkifyPageIds || [], caseSensitive: false })
+              });
+              const linked = Number(summary?.linkedOccurrences || 0);
+              const upPages = Number(summary?.updatedPages || 0);
+              alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
+            } catch (e) {
+              console.error('Linkify failed', e);
+              alert('Linkify failed: ' + (e?.message || e));
+            } finally {
+              closeModal('wikilinkCreateModal');
+            }
+          } else {
+            await linkWikilinkToExisting({ title, blockId, token, page: r });
+            await applyBulkIfRequested({ label: title, targetPageId: r.id, modal });
+            closeModal('wikilinkCreateModal');
+          }
         });
         // Prefer existing when exact match found
         setSelected(r);
@@ -430,15 +478,41 @@ function openWikilinkModal({ title, blockId, token }) {
   if (linkBtn) {
     linkBtn.onclick = async () => {
       if (!selected) return;
-      await linkWikilinkToExisting({ title, blockId, token, page: selected });
-      await applyBulkIfRequested({ label: title, targetPageId: selected.id, modal });
-      closeModal('wikilinkCreateModal');
+      if (mode === 'linkify') {
+        try {
+          const summary = await fetchJson('/api/wikilinks/linkify', {
+            method: 'POST',
+            body: JSON.stringify({ term: title, targetPageId: selected.id, scope: 'pages', pageIds: linkifyPageIds || [], caseSensitive: false })
+          });
+          const linked = Number(summary?.linkedOccurrences || 0);
+          const upPages = Number(summary?.updatedPages || 0);
+          alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
+        } catch (e) {
+          console.error('Linkify failed', e);
+          alert('Linkify failed: ' + (e?.message || e));
+        } finally {
+          closeModal('wikilinkCreateModal');
+        }
+      } else {
+        await linkWikilinkToExisting({ title, blockId, token, page: selected });
+        await applyBulkIfRequested({ label: title, targetPageId: selected.id, modal });
+        closeModal('wikilinkCreateModal');
+      }
     };
   }
 
   openModal('wikilinkCreateModal');
   // Kick off initial search
   setTimeout(() => doSearch(title || ''), 0);
+}
+
+export function openLinkifyTermModal({ term, pageIds }) {
+  const modal = document.getElementById('wikilinkCreateModal');
+  if (!modal) return;
+  modal.dataset.mode = 'linkify';
+  modal.dataset.linkifyTerm = term || '';
+  modal.dataset.linkifyPages = JSON.stringify(pageIds || []);
+  openWikilinkModal({ title: term, blockId: '', token: '', mode: 'linkify', linkifyPageIds: pageIds || [] });
 }
 
 function currentPageIdFromBlocks() {

@@ -1,5 +1,6 @@
 import { escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
+import { openLinkifyTermModal } from './wikiLinks.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 
 export async function renderSearchResults() {
@@ -12,6 +13,9 @@ export async function renderSearchResults() {
     <section>
       <h1>Search</h1>
       <p class="meta">Showing results for “${escapeHtml(q)}”</p>
+      <div class="row" style="margin: 10px 0;">
+        <button type="button" class="chip" id="searchLinkifyBtn">Linkify “${escapeHtml(q)}”...</button>
+      </div>
       <div id="searchResultsPage"></div>
     </section>
   `;
@@ -19,6 +23,15 @@ export async function renderSearchResults() {
   if (!q.trim()) { root.innerHTML = '<p class="meta">Type in the search box above.</p>'; return; }
   const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}`);
   const results = res?.results || [];
+  const btn = document.getElementById('searchLinkifyBtn');
+  const pageIds = Array.isArray(results) ? results.map(r => r.id).filter(Boolean) : [];
+  if (btn) {
+    if (!q.trim() || !pageIds.length) btn.disabled = true;
+    btn.addEventListener('click', () => {
+      if (!q.trim() || !pageIds.length) return;
+      openLinkifyTermModal({ term: q, pageIds });
+    });
+  }
   if (!results.length) { root.innerHTML = '<p class="meta">No matches.</p>'; return; }
   root.innerHTML = '<ul class="search-list"></ul>';
   const ul = root.querySelector('ul');
@@ -33,4 +46,3 @@ export async function renderSearchResults() {
     ul.appendChild(li);
   }
 }
-

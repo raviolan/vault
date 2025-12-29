@@ -52,8 +52,10 @@ export function bindRightPanel() {
   const tabs = $$('.right-panel-tabs [data-tab]');
   const panels = $$('[data-panel]');
   const closeBtn = document.getElementById('rightDrawerClose');
-  const toggleTopBtn = document.getElementById('rightToggleTopApp');
-  const toggleHpBtn = document.getElementById('rightToggleHpApp');
+  // New explicit top-app buttons
+  const btnNotes = document.getElementById('rightTopAppNotes');
+  const btnCond  = document.getElementById('rightTopAppConditions');
+  const btnHp    = document.getElementById('rightTopAppHp');
   const splitToggle = document.getElementById('rightSplitToggle');
   const splitPicker = document.getElementById('rightSplitPicker');
   const splitTopSelect = document.getElementById('rightSplitTopSelect');
@@ -158,68 +160,42 @@ export function bindRightPanel() {
 
   const drawerContent = drawer; // use attribute on this element to signal split mode
 
-  function updateToggleTopButtonLabel() {
-    if (!toggleTopBtn) return;
-    try {
-      const st = getState() || {};
-      const split = !!st.rightPanelSplitActive;
-      const cur = split ? (st.rightSplitTopApp || 'notepad') : (st.rightPanelTab || 'notepad');
-      const isCond = cur === 'conditions';
-      toggleTopBtn.textContent = isCond ? '⇄ Notes' : '⇄ Cond';
-      toggleTopBtn.setAttribute('title', 'Toggle top app (Conditions)');
-    } catch {}
-  }
-
-  function toggleTopApp() {
+  // New unified setter for top app choice
+  function setTopAppChoice(choice) {
+    // choice: 'notepad' | 'conditions' | 'hp'
     const st = getState() || {};
-    const split = !!st.rightPanelSplitActive;
-    if (split) {
-      const cur = st.rightSplitTopApp || 'notepad';
-      if (cur !== 'conditions') {
-        updateState({ rightPrevTopApp: cur, rightSplitTopApp: 'conditions' });
-      } else {
-        const back = st.rightPrevTopApp || 'notepad';
-        updateState({ rightSplitTopApp: back });
-      }
+    if (st.rightPanelSplitActive) {
+      updateState({ rightSplitTopApp: choice });
       showSplit();
     } else {
-      const cur = st.rightPanelTab || 'notepad';
-      if (cur !== 'conditions') {
-        updateState({ rightPrevSingleApp: cur, rightPanelTab: 'conditions', rightPanelLastSingleTab: 'conditions' });
-        show('conditions');
-      } else {
-        const back = st.rightPrevSingleApp || 'notepad';
-        updateState({ rightPanelTab: back, rightPanelLastSingleTab: back });
-        show(back);
-      }
-    }
-    updateToggleTopButtonLabel();
-  }
-
-  toggleTopBtn?.addEventListener('click', toggleTopApp);
-
-  function toggleHpApp() {
-    const st = getState() || {};
-    const split = !!st.rightPanelSplitActive;
-    if (split) {
-      const cur = st.rightSplitTopApp || 'notepad';
-      if (cur !== 'hp') {
-        updateState({ rightPrevTopAppHp: cur, rightSplitTopApp: 'hp' });
-      } else {
-        const back = st.rightPrevTopAppHp || 'notepad';
-        updateState({ rightSplitTopApp: back });
-      }
-      showSplit();
-    } else {
-      const curOverlay = st.rightNotepadOverlayApp || null;
-      const next = curOverlay === 'hp' ? null : 'hp';
-      updateState({ rightPanelTab: 'notepad', rightPanelLastSingleTab: 'notepad', rightNotepadOverlayApp: next });
+      const overlay = (choice === 'notepad') ? null : choice;
+      updateState({
+        rightPanelTab: 'notepad',
+        rightPanelLastSingleTab: 'notepad',
+        rightNotepadOverlayApp: overlay,
+      });
       show('notepad');
     }
-    updateToggleHpButtonLabel();
   }
 
-  toggleHpBtn?.addEventListener('click', toggleHpApp);
+  // Wire new explicit buttons
+  btnNotes && (btnNotes.onclick = () => setTopAppChoice('notepad'));
+  btnCond && (btnCond.onclick  = () => setTopAppChoice('conditions'));
+  btnHp && (btnHp.onclick    = () => setTopAppChoice('hp'));
+
+  // Active state styling for buttons
+  function updateTopAppButtonsActive() {
+    const st = getState() || {};
+    let active = 'notepad';
+    if (st.rightPanelSplitActive) {
+      active = st.rightSplitTopApp || 'notepad';
+    } else {
+      active = st.rightNotepadOverlayApp || 'notepad';
+    }
+    btnNotes?.classList.toggle('is-active', active === 'notepad');
+    btnCond?.classList.toggle('is-active', active === 'conditions');
+    btnHp?.classList.toggle('is-active', active === 'hp');
+  }
 
   function setPanelHeadersDefault() {
     const np = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
@@ -329,14 +305,15 @@ export function bindRightPanel() {
 
     // Ensure split behavior is initialized once
     try { initRightPanelSplit({ getUserState, patchUserState }); } catch {}
+    // Update button actives after mounts
+    updateTopAppButtonsActive();
   }
 
   function showSplit() {
     const cfg = readSplitConfig();
     applySplitUI(cfg);
     mountSplitApps(cfg);
-    updateToggleTopButtonLabel();
-    updateToggleHpButtonLabel();
+    updateTopAppButtonsActive();
   }
 
   const showNotesSplit = ({ focus } = {}) => {
@@ -378,32 +355,23 @@ export function bindRightPanel() {
     const textarea = drawer.querySelector('#notepad');
     const topMount = drawer.querySelector('#rightNotepadMount');
     if (!textarea || !topMount) return;
+    // Reset both overlay hosts first
+    hpTopHost.show(null);
+    conditionsTopHost.show(null);
     if (overlay === 'hp') {
       textarea.hidden = true;
       topMount.hidden = false;
       hpTopHost.show('hp');
+    } else if (overlay === 'conditions') {
+      textarea.hidden = true;
+      topMount.hidden = false;
+      conditionsTopHost.show('conditions');
     } else {
       textarea.hidden = false;
       topMount.hidden = true;
-      hpTopHost.show(null);
     }
   }
 
-  function updateToggleHpButtonLabel() {
-    if (!toggleHpBtn) return;
-    try {
-      const st = getState() || {};
-      const split = !!st.rightPanelSplitActive;
-      if (split) {
-        const cur = st.rightSplitTopApp || 'notepad';
-        toggleHpBtn.textContent = cur === 'hp' ? '⇄ Notes' : '⇄ HP';
-      } else {
-        const overlay = st.rightNotepadOverlayApp || null;
-        toggleHpBtn.textContent = overlay === 'hp' ? '⇄ Notes' : '⇄ HP';
-      }
-      toggleHpBtn.setAttribute('title', 'Toggle top app (HP Tracker)');
-    } catch {}
-  }
 
   const show = (name) => {
     // Notes tabs map to split view when split toggle is active
@@ -421,8 +389,7 @@ export function bindRightPanel() {
       } else {
         try { hpTopHost.show(null); const topMount = drawer.querySelector('#rightNotepadMount'); if (topMount) topMount.hidden = true; } catch {}
       }
-      updateToggleTopButtonLabel();
-      updateToggleHpButtonLabel();
+      updateTopAppButtonsActive();
       return;
     }
     // Non-note tabs: hide both note panels, unmount hosts, show selected panel
@@ -438,8 +405,7 @@ export function bindRightPanel() {
     hpBottomHost.show(null);
     if (name === 'conditions') conditionsHost.show('conditions');
     if (name === 'settings') renderSettingsPanel();
-    updateToggleTopButtonLabel();
-    updateToggleHpButtonLabel();
+    updateTopAppButtonsActive();
   };
   // initialize active tab
   let initial = s.rightPanelTab || 'notepad';
@@ -461,7 +427,7 @@ export function bindRightPanel() {
     splitToggle && splitToggle.setAttribute('aria-pressed', 'false');
     show(initial);
   }
-  updateToggleTopButtonLabel();
+  updateTopAppButtonsActive();
   tabs.forEach(btn => btn.addEventListener('click', () => {
     const t = btn.getAttribute('data-tab');
     if ((getState() || {}).rightPanelSplitActive) {

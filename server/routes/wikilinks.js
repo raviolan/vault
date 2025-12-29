@@ -1,4 +1,4 @@
-import { sendJson } from '../lib/http.js';
+import { sendJson, readBody, parseJsonSafe } from '../lib/http.js';
 import { badRequest } from '../lib/errors.js';
 import { escapeLike } from '../db/index.js';
 
@@ -6,6 +6,53 @@ import { escapeLike } from '../db/index.js';
 export function routeWikiLinks(req, res, ctx) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname, searchParams } = url;
+
+  // Helper utils for linkify endpoint
+  const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const shouldUseWordBoundaries = (term) => /^[\p{L}\p{N}_-]+$/u.test(String(term || ''));
+  const linkifyText = (text, term, targetPageId, caseSensitive) => {
+    const src = String(text || '');
+    if (!src || !term) return { outText: src, replacements: 0 };
+
+    // Split by inline code spans and preserve them
+    const parts = src.split(/(`[^`]*`)/g);
+    let total = 0;
+    const out = [];
+
+    // Prepare regex for non-code segments
+    const termEsc = escapeRegExp(term);
+    const wordish = shouldUseWordBoundaries(term);
+    const body = wordish
+      ? `(?<![\\p{L}\\p{N}_])(${termEsc})(?![\\p{L}\\p{N}_])`
+      : `(${termEsc})`;
+    const flags = `gu${caseSensitive ? '' : 'i'}`;
+    const re = new RegExp(body, flags);
+
+    for (const part of parts) {
+      if (!part) { out.push(part); continue; }
+      if (part.startsWith('`') && part.endsWith('`')) { out.push(part); continue; }
+
+      // Protect existing wikilinks
+      const placeholders = [];
+      const protectedStr = part.replace(/\[\[[^\]]+\]\]/g, (m) => {
+        const key = `§§WIKI_${placeholders.length}§§`;
+        placeholders.push({ key, token: m });
+        return key;
+      });
+
+      let replaced = protectedStr.replace(re, (_m, cap) => {
+        total += 1;
+        return `[[page:${targetPageId}|${cap}]]`;
+      });
+
+      // Restore placeholders
+      for (const ph of placeholders) {
+        replaced = replaced.split(ph.key).join(ph.token);
+      }
+      out.push(replaced);
+    }
+    return { outText: out.join(''), replacements: total };
+  };
 
   if (pathname === '/api/wikilinks/occurrences' && req.method === 'GET') {
     const rawLabel = String(searchParams.get('label') || '').trim();
@@ -51,6 +98,90 @@ export function routeWikiLinks(req, res, ctx) {
 
     sendJson(res, 200, results);
     return true;
+  }
+
+  // POST /api/wikilinks/linkify
+  if (pathname === '/api/wikilinks/linkify' && req.method === 'POST') {
+    return (async () => {
+      // Parse JSON body
+      const bodyRaw = await readBody(req);
+      const payload = parseJsonSafe(bodyRaw, {});
+
+      const term = String(payload.term || '').trim();
+      const targetPageId = String(payload.targetPageId || '').trim();
+      const scope = String(payload.scope || 'pages');
+      const pageIdsReq = Array.isArray(payload.pageIds) ? payload.pageIds.map(String) : [];
+      const pageId = payload.pageId ? String(payload.pageId) : null;
+      const caseSensitive = Boolean(payload.caseSensitive);
+
+      if (!term) { badRequest(res, 'term required'); return true; }
+      if (!targetPageId) { badRequest(res, 'targetPageId required'); return true; }
+
+      // Determine LIKE prefilter
+      const like = `%${escapeLike(term)}%`;
+
+      // Determine pages to process
+      let pagesToProcess = [];
+      if (scope === 'pages') {
+        if (!pageIdsReq || pageIdsReq.length === 0) { badRequest(res, 'pageIds required for scope=pages'); return true; }
+        pagesToProcess = Array.from(new Set(pageIdsReq.filter(Boolean)));
+      } else if (scope === 'page') {
+        if (!pageId) { badRequest(res, 'pageId required for scope=page'); return true; }
+        pagesToProcess = [pageId];
+      } else if (scope === 'global') {
+        const rows = ctx.db.prepare(`
+          SELECT DISTINCT b.page_id AS page_id
+            FROM blocks b
+           WHERE (b.content_json LIKE ? ESCAPE '\\' OR b.props_json LIKE ? ESCAPE '\\')
+        `).all(like, like);
+        pagesToProcess = rows.map(r => r.page_id);
+      } else {
+        badRequest(res, 'invalid scope');
+        return true;
+      }
+
+      let updatedBlocks = 0;
+      let updatedPages = 0;
+      let linkedOccurrences = 0;
+      const ts = Math.floor(Date.now() / 1000);
+
+      const updBlock = ctx.db.prepare('UPDATE blocks SET content_json = ?, updated_at = ? WHERE id = ?');
+      const touchPage = ctx.db.prepare('UPDATE pages SET updated_at = ? WHERE id = ?');
+
+      for (const pid of pagesToProcess) {
+        const blocks = ctx.db.prepare(`
+          SELECT id, type, content_json, props_json
+            FROM blocks
+           WHERE page_id = ?
+             AND (content_json LIKE ? ESCAPE '\\' OR props_json LIKE ? ESCAPE '\\')
+        `).all(pid, like, like);
+
+        let pageChanged = false;
+        for (const b of blocks) {
+          let contentObj = null;
+          try { contentObj = JSON.parse(String(b.content_json || '{}') || '{}'); } catch { contentObj = null; }
+          // Paragraphs and headings store inline text under content.text
+          const hasText = contentObj && typeof contentObj.text === 'string';
+          if (!hasText) continue;
+          const origText = String(contentObj.text || '');
+          const { outText, replacements } = linkifyText(origText, term, targetPageId, caseSensitive);
+          if (replacements > 0 && outText !== origText) {
+            const next = { ...contentObj, text: outText };
+            updBlock.run(JSON.stringify(next), ts, b.id);
+            linkedOccurrences += replacements;
+            updatedBlocks += 1;
+            pageChanged = true;
+          }
+        }
+        if (pageChanged) {
+          touchPage.run(ts, pid);
+          updatedPages += 1;
+        }
+      }
+
+      sendJson(res, 200, { updatedPages, updatedBlocks, linkedOccurrences });
+      return true;
+    })();
   }
 
   // POST /api/wikilinks/resolve
@@ -146,4 +277,3 @@ export function routeWikiLinks(req, res, ctx) {
 
   return false;
 }
-

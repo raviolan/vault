@@ -368,6 +368,12 @@ body[data-mode='edit'] .editor-add-controls .chip {
 /* Compact spacing for the top-app toggle next to Tools */
 .right .right-drawer-handle .panelToggleCond { margin-left: 6px; }
 
+/* Subtle active state for panel toggle chips */
+.panelToggle.is-active {
+    outline: 2px solid var(--border);
+    filter: brightness(1.03);
+}
+
 .drawer-content {
     overflow-x: hidden;
     flex: 1;
