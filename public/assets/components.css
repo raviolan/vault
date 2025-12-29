@@ -571,6 +571,39 @@ h4 {
     backdrop-filter: blur(8px);
 }
 
+/* Edit-mode dock row above the header image */
+.headerMediaDock {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 10px;
+    /* keep accessible while scrolling through a tall header */
+    position: sticky;
+    top: 10px;
+    z-index: 6;
+}
+
+.headerMediaDockRight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Override old absolute positioning when docked */
+.headerMediaDock .headerMediaControls {
+    position: static !important;
+    top: auto;
+    right: auto;
+}
+
+/* Save/Cancel bar should also be docked (not absolute) */
+.headerMediaDock .headerMediaRepositionBar {
+    position: static !important;
+    top: auto;
+    right: auto;
+}
+
 /* Profile controls remain in the footer (left) */
 .headerMedia .headerMediaProfileControls {
     display: flex;

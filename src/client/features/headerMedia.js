@@ -29,6 +29,7 @@ export function renderHeaderMedia(hostEl, opts) {
   // Build structure
   const wrap = document.createElement('div');
   wrap.className = 'headerMedia';
+  if (mode === 'edit') wrap.classList.add('headerMedia--edit');
   if (variant === 'tall') wrap.classList.add('headerMedia--tall');
   // Ensure positioning anchor for absolute children
   wrap.style.position = 'relative';
@@ -47,6 +48,18 @@ export function renderHeaderMedia(hostEl, opts) {
   coverDiv.style.backgroundSize = 'cover';
   coverDiv.style.backgroundRepeat = 'no-repeat';
   wrap.appendChild(coverDiv);
+
+  // Add a dock row above the cover in edit mode
+  let dockRight = null;
+  if (mode === 'edit') {
+    const dock = document.createElement('div');
+    dock.className = 'headerMediaDock';
+    dockRight = document.createElement('div');
+    dockRight.className = 'headerMediaDockRight';
+    dock.appendChild(dockRight);
+    // Insert the dock before the cover element
+    wrap.insertBefore(dock, coverDiv);
+  }
 
   // Footer row for controls (below cover)
   // Kept for profile tools and spacing; cover tools now overlay inside the cover
@@ -110,14 +123,14 @@ export function renderHeaderMedia(hostEl, opts) {
         overlay.style.background = 'rgba(0,0,0,0.08)';
         // Hide normal cover controls while repositioning
         ctl.style.display = 'none';
-        // Add reposition bar as an overlay inside the cover (top-right)
+        // Add reposition bar into the dock (edit) or fallback to inside cover
         const bar = document.createElement('div');
         bar.className = 'headerMediaRepositionBar';
         const saveBtn = document.createElement('button'); saveBtn.className = 'chip'; saveBtn.textContent = 'Save';
         const cancelBtn = document.createElement('button'); cancelBtn.className = 'chip'; cancelBtn.textContent = 'Cancel';
         bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
         coverDiv.appendChild(overlay);
-        coverDiv.appendChild(bar);
+        (dockRight ?? coverDiv).appendChild(bar);
 
         const onPointerDown = (e) => {
           overlay.setPointerCapture(e.pointerId);
@@ -170,8 +183,8 @@ export function renderHeaderMedia(hostEl, opts) {
         };
       };
     }
-    // Place cover controls inside the cover so they don't compete with page tools
-    coverDiv.appendChild(ctl);
+    // Mount cover controls into the dock (edit) or fallback to inside cover
+    (dockRight ?? coverDiv).appendChild(ctl);
   }
 
   // Profile image (view if present; edit supports add/change/remove and reposition/zoom)
