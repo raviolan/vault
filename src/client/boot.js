@@ -27,6 +27,7 @@ import { initPanels } from './features/panelControls.js';
 import { initGlobalShortcuts } from './features/shortcuts.js';
 import { installGlobalLightbox } from './features/lightbox.js';
 import { getUserState, patchUserState } from './miniapps/state.js';
+import { PartyDrawerApp } from './miniapps/partyDrawer/app.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
@@ -187,4 +188,10 @@ export async function boot() {
   });
 
   await renderRoute();
+
+  // Mount global Party Drawer miniapp after initial render
+  try {
+    const root = document.getElementById('partyDrawerRoot');
+    if (root) PartyDrawerApp.mount(root, { loadState, getState, updateState, navigate });
+  } catch {}
 }

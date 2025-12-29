@@ -10,6 +10,7 @@ import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { loadState } from '../lib/state.js';
+import { setPartyPinned } from '../miniapps/partyDrawer/app.js';
 
 const KEY_TO_LABEL = new Map([
   ['characters', 'Characters'],
@@ -102,6 +103,10 @@ export async function render(outlet, { key }) {
   const hasStored = Object.keys(acc).length > 0;
   const defaultOpenId = groupList.find(g => g.pages.length)?.id || (groupList[0]?.id || '');
   const isOpen = (gid) => hasStored ? (acc[gid] !== false) : (gid === defaultOpenId);
+  // For Characters and NPCs, show a Pin/Pinned chip for Party Drawer
+  const partyState = (getState()?.partyDrawerV1 || {});
+  const pinnedSet = new Set((Array.isArray(partyState.pinnedPageIds) ? partyState.pinnedPageIds : []).map(String));
+
   const rowsFor = (p) => {
     const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
     const currentGroupId = pageToGroup[p.id] != null ? String(pageToGroup[p.id]) : '';
@@ -110,8 +115,14 @@ export async function render(outlet, { key }) {
       `<option value="" ${!valid ? 'selected' : ''}>Ungrouped</option>`,
       ...groups.map(g => `<option value="${String(g.id)}" ${valid && String(g.id)===String(currentGroupId)?'selected':''}>${escapeHtml(g.name)}</option>`),
     ].join('');
+    const isCharLike = (p.type === 'npc' || p.type === 'character' || p.type === 'pc');
+    const inCharacters = (key === 'characters' || key === 'npcs');
+    const canPinHere = isCharLike && inCharacters;
+    const pinned = pinnedSet.has(String(p.id));
+    const pinBtn = canPinHere ? `<button class="chip pinPartyBtn" data-pid="${escapeHtml(p.id)}">${pinned ? 'Pinned' : 'Pin'}</button>` : '';
     return `<li class="sectionRow" data-pid="${escapeHtml(p.id)}" style="display:flex; align-items:center; gap:8px;">
       <a href="${href}" data-link style="flex:1 1 auto; min-width:0;">${escapeHtml(p.title)}</a>
+      ${pinBtn}
       ${isEditMode() ? `<select data-pid="${escapeHtml(p.id)}" title="Group">${opts}</select>` : ''}
     </li>`;
   };
@@ -451,6 +462,22 @@ export async function render(outlet, { key }) {
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
       const sectionKey = outlet.dataset.sectionKey || '';
+
+      // Pin/Pinned chip for Party Drawer
+      if (el.closest('.pinPartyBtn')) {
+        e.preventDefault();
+        const btn = el.closest('.pinPartyBtn');
+        const pid = btn?.getAttribute('data-pid');
+        if (pid) {
+          const st = getState();
+          const cur = st?.partyDrawerV1?.pinnedPageIds || [];
+          const pinned = new Set(cur.map(String)).has(String(pid));
+          setPartyPinned(pid, !pinned);
+          // Update label immediately
+          try { btn.textContent = pinned ? 'Pin' : 'Pinned'; } catch {}
+        }
+        return;
+      }
 
       if (el.id === 'btnDeleteCustomSection') {
         e.preventDefault();

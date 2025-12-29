@@ -16,6 +16,11 @@ export function defaultUserState() {
     sectionIntroV1: { sections: {} },
     dashboardV1: { blocks: [] },
     sessionV1: { blocks: [] },
+    // Party Drawer global miniapp (v1)
+    partyDrawerV1: {
+      open: false,
+      pinnedPageIds: [],
+    },
   };
 }
 
