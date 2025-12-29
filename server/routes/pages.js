@@ -1,4 +1,4 @@
-import { sendJson, readBody } from '../lib/http.js';
+import { sendJson, readBody, decodePathParam } from '../lib/http.js';
 import { badRequest, notFound } from '../lib/errors.js';
 
 // Centralized allowlist for page types
@@ -64,7 +64,7 @@ export function routePages(req, res, ctx) {
   // GET /api/pages/slug/:slug
   const slugMatch = pathname.match(/^\/api\/pages\/slug\/([^\/]+)$/);
   if (slugMatch && req.method === 'GET') {
-    const slug = slugMatch[1];
+    const slug = decodePathParam(slugMatch[1]);
     const page = ctx.dbGetPageWithBlocksBySlug(ctx.db, slug);
     if (!page) { notFound(res); return true; }
     sendJson(res, 200, page);
@@ -74,7 +74,7 @@ export function routePages(req, res, ctx) {
   // /api/pages/:id
   const pageIdMatch = pathname.match(/^\/api\/pages\/([^\/]+)$/);
   if (pageIdMatch) {
-    const id = pageIdMatch[1];
+    const id = decodePathParam(pageIdMatch[1]);
     // Virtual Dashboard page: id = "dashboard"
     if (id === 'dashboard') {
       if (req.method === 'GET') {

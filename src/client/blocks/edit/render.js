@@ -4,6 +4,7 @@ import { bindTextInputHandlers, bindRichTextHandlers } from './handlersText.js';
 import { bindSectionTitleHandlers, bindSectionHeaderControls } from './handlersSection.js';
 import { focusBlockInput } from './focus.js';
 import { bindAutosizeTextarea } from '../../lib/autosizeTextarea.js';
+import { insertMarkdownLink } from '../../lib/formatShortcuts.js';
 import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../../lib/sanitize.js';
 
 // Track active block across the editor for toolbar actions
@@ -221,7 +222,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
           <span class="sep"></span>
           <button type="button" id="tbBold" title="Bold (Ctrl+B)"><b>B</b></button>
           <button type="button" id="tbItalic" title="Italic (Ctrl+I)"><i>I</i></button>
-          <button type="button" id="tbLink" title="Link">Link</button>
+          <button type="button" id="tbLink" title="Link (Cmd+Opt+K)">Link</button>
           <span class="sep"></span>
           <button type="button" id="tbAddH1" class="chip">+ H1</button>
           <button type="button" id="tbAddH2" class="chip">+ H2</button>
@@ -289,13 +290,27 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         triggerSave(el);
       });
       byId('tbLink')?.addEventListener('click', () => {
-        const el = ensureRichActive(); if (!el) return;
-        const sel = window.getSelection();
-        if (!sel || sel.isCollapsed) return;
-        const url = window.prompt('Link URL:');
-        if (!url) return;
-        try { document.execCommand('createLink', false, url); } catch {}
-        triggerSave(el);
+        const ae = document.activeElement;
+        const richEl = ensureRichActive();
+        if (richEl) {
+          const sel = window.getSelection();
+          const url = window.prompt('Link URL:');
+          if (!url) return;
+          try {
+            if (sel && !sel.isCollapsed) {
+              document.execCommand('createLink', false, url);
+            } else {
+              // No selection in rich text: insert the URL as plain text
+              document.execCommand('insertText', false, url);
+            }
+          } catch {}
+          triggerSave(richEl);
+          return;
+        }
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
+          insertMarkdownLink(ae);
+          return;
+        }
       });
 
       async function createSectionAfterActive(level) {

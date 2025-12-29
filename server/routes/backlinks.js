@@ -1,4 +1,4 @@
-import { sendJson } from '../lib/http.js';
+import { sendJson, decodePathParam } from '../lib/http.js';
 import { notFound } from '../lib/errors.js';
 
 export function routeBacklinks(req, res, ctx) {
@@ -7,7 +7,7 @@ export function routeBacklinks(req, res, ctx) {
 
   const backlinksMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/backlinks$/);
   if (backlinksMatch && req.method === 'GET') {
-    const id = backlinksMatch[1];
+    const id = decodePathParam(backlinksMatch[1]);
     const page = ctx.dbGetPageWithBlocks(ctx.db, id);
     if (!page) { notFound(res); return true; }
     const backlinks = ctx.dbGetBacklinks(ctx.db, id);

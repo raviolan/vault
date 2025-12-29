@@ -57,7 +57,8 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       title.className = 'section-title-read';
       const lvl = Math.min(3, Math.max(0, Number(props.level || 0)));
       if (lvl) title.classList.add(`h${lvl}`);
-      title.textContent = content.title || '';
+      const ttxt = String(content.title || '');
+      try { title.appendChild(buildWikiTextNodes(ttxt, n.id)); } catch { title.textContent = ttxt; }
       header.appendChild(title);
       wrap.appendChild(header);
       const kidsWrap = document.createElement('div');

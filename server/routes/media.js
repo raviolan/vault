@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { sendJson, sendText, readBuffer, writeJsonAtomic } from '../lib/http.js';
+import { sendJson, sendText, readBuffer, writeJsonAtomic, decodePathParam } from '../lib/http.js';
 
 const FILE_RE = /^[a-z0-9-]+\.(png|jpg|jpeg|webp|gif|avif)$/i;
 const ALLOWED_MIME = new Set([
@@ -48,7 +48,7 @@ export function routeMedia(req, res, ctx) {
   // Serve files: GET /media/<filename>
   const m = pathname.match(/^\/media\/([^\/]+)$/);
   if (m && req.method === 'GET') {
-    const fname = m[1];
+    const fname = decodePathParam(m[1]);
     if (!FILE_RE.test(fname)) { sendText(res, 400, 'bad filename'); return true; }
     const dir = ensureMediaDir(ctx.DATA_DIR);
     const full = path.join(dir, fname);

@@ -66,7 +66,7 @@ export async function renderPage({ match }) {
   const folderTitle = getFolderTitleForPage(page.id);
   const sectionLabel = folderTitle || sectionForType(page.type);
   outlet.innerHTML = `
-    <article class="page">
+    <article class="page page--${escapeHtml(page.type || 'page')}">
       <div id=\"pageHeaderMedia\"></div>
       <div class=\"page-identity\" id=\"pageIdentity\">
         <div class=\"avatar-col\"></div>
@@ -335,9 +335,9 @@ export async function renderPageBySlug({ match }) {
   const folderTitle2 = getFolderTitleForPage(page.id);
   const sectionLabel2 = folderTitle2 || sectionForType(page.type);
   outlet.innerHTML = `
-    <article class=\"page\"> 
+    <article class=\"page page--${escapeHtml(page.type || 'page')}\"> 
       <div id=\"pageHeaderMedia\"></div>
-      <div class=\"page-identity\" id=\"pageIdentity\">
+      <div class=\"page-identity\" id=\"pageIdentity\"> 
         <div class=\"avatar-col\"></div>
         <div class=\"name-col\">
           <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>

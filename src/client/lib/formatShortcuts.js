@@ -30,19 +30,58 @@ export function toggleWrapSelection(inputEl, marker) {
 }
 
 export function handleFormatShortcutKeydown(e, inputEl) {
-  const isCmd = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
-  if (!isCmd) return false;
   const k = (e.key || '').toLowerCase();
-  if (k === 'b') {
+  // Bold/Italic: Ctrl/Cmd + key (no Alt/Shift)
+  const biCmd = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
+  if (biCmd && k === 'b') {
     e.preventDefault();
     toggleWrapSelection(inputEl, '**');
     return true;
   }
-  if (k === 'i') {
+  if (biCmd && k === 'i') {
     e.preventDefault();
     toggleWrapSelection(inputEl, '*');
+    return true;
+  }
+  // Link: Cmd + Option + K (no Ctrl/Shift)
+  const linkCmd = !!e.metaKey && !!e.altKey && !e.ctrlKey && !e.shiftKey;
+  if (linkCmd && k === 'k') {
+    e.preventDefault();
+    insertMarkdownLink(inputEl);
     return true;
   }
   return false;
 }
 
+export function insertMarkdownLink(inputEl) {
+  if (!inputEl) return;
+  const tag = (inputEl.tagName || '').toUpperCase();
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+  const url = window.prompt('Link URL:');
+  if (!url) return;
+  const start = inputEl.selectionStart ?? 0;
+  const end = inputEl.selectionEnd ?? start;
+  const val = String(inputEl.value || '');
+  const before = val.slice(0, start);
+  const sel = val.slice(start, end);
+  const after = val.slice(end);
+  let newVal, newStart, newEnd;
+  if (sel && sel.length) {
+    const label = sel;
+    const md = `[${label}](${url})`;
+    newVal = before + md + after;
+    // Keep selection on label portion inside the brackets
+    newStart = before.length + 1; // after '['
+    newEnd = newStart + label.length;
+  } else {
+    const md = `[](${url})`;
+    newVal = before + md + after;
+    // Place caret inside the brackets to type label
+    newStart = before.length + 1; // inside []
+    newEnd = newStart;
+  }
+  inputEl.value = newVal;
+  try { inputEl.setSelectionRange(newStart, newEnd); } catch {}
+  // Trigger input event so autosave/patching runs
+  try { inputEl.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
+}

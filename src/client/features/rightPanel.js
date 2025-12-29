@@ -6,6 +6,7 @@ import { registerMany } from '../miniapps/registry.js';
 import { NotepadApp } from '../miniapps/notepad/app.js';
 import { TodoApp } from '../miniapps/todo/app.js';
 import { ConditionsApp } from '../miniapps/conditions/app.js';
+import { HpTrackerApp } from '../miniapps/hp/app.js';
 import { getAppState, setAppState, getUserState, patchUserState } from '../miniapps/state.js';
 import { initRightPanelSplit } from './rightPanelSplit.js';
 
@@ -16,7 +17,7 @@ export function bindRightPanel() {
   if (!toggle || !drawer) return;
 
   // Register built-in mini apps once, keeping order stable
-  registerMany([NotepadApp, TodoApp, ConditionsApp]);
+  registerMany([NotepadApp, TodoApp, ConditionsApp, HpTrackerApp]);
 
   // init from state
   const s = getState();
@@ -52,6 +53,7 @@ export function bindRightPanel() {
   const panels = $$('[data-panel]');
   const closeBtn = document.getElementById('rightDrawerClose');
   const toggleTopBtn = document.getElementById('rightToggleTopApp');
+  const toggleHpBtn = document.getElementById('rightToggleHpApp');
   const splitToggle = document.getElementById('rightSplitToggle');
   const splitPicker = document.getElementById('rightSplitPicker');
   const splitTopSelect = document.getElementById('rightSplitTopSelect');
@@ -134,6 +136,26 @@ export function bindRightPanel() {
     }),
   });
 
+  // HP Tracker split hosts (mount into top/bottom mounts)
+  const hpTopHost = createMiniAppHost({
+    surfaceId: 'rightPanelHpTop',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightNotepadMount'),
+    }),
+  });
+  const hpBottomHost = createMiniAppHost({
+    surfaceId: 'rightPanelHpBottom',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightTodoMount'),
+    }),
+  });
+
   const drawerContent = drawer; // use attribute on this element to signal split mode
 
   function updateToggleTopButtonLabel() {
@@ -176,6 +198,29 @@ export function bindRightPanel() {
 
   toggleTopBtn?.addEventListener('click', toggleTopApp);
 
+  function toggleHpApp() {
+    const st = getState() || {};
+    const split = !!st.rightPanelSplitActive;
+    if (split) {
+      const cur = st.rightSplitTopApp || 'notepad';
+      if (cur !== 'hp') {
+        updateState({ rightPrevTopAppHp: cur, rightSplitTopApp: 'hp' });
+      } else {
+        const back = st.rightPrevTopAppHp || 'notepad';
+        updateState({ rightSplitTopApp: back });
+      }
+      showSplit();
+    } else {
+      const curOverlay = st.rightNotepadOverlayApp || null;
+      const next = curOverlay === 'hp' ? null : 'hp';
+      updateState({ rightPanelTab: 'notepad', rightPanelLastSingleTab: 'notepad', rightNotepadOverlayApp: next });
+      show('notepad');
+    }
+    updateToggleHpButtonLabel();
+  }
+
+  toggleHpBtn?.addEventListener('click', toggleHpApp);
+
   function setPanelHeadersDefault() {
     const np = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
     const tp = drawer.querySelector(".right-panel[data-panel='todo'] h3.meta");
@@ -187,11 +232,13 @@ export function bindRightPanel() {
     const st = getState() || {};
     let top = st.rightSplitTopApp || 'notepad';
     let bottom = st.rightSplitBottomApp || 'todo';
-    const ALLOWED = new Set(['notepad', 'todo', 'conditions']);
+    const ALLOWED = new Set(['notepad', 'todo', 'conditions', 'hp']);
     if (!ALLOWED.has(top)) top = 'notepad';
     if (!ALLOWED.has(bottom)) bottom = 'todo';
     if (top === bottom) {
-      if (top !== 'todo') bottom = 'todo'; else bottom = 'notepad';
+      const ORDER = ['notepad','todo','conditions','hp'];
+      const next = ORDER.find(x => x !== top) || 'todo';
+      if (bottom === top) bottom = next;
     }
     if (top !== st.rightSplitTopApp || bottom !== st.rightSplitBottomApp) {
       updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
@@ -219,7 +266,7 @@ export function bindRightPanel() {
     // Update headers
     const npH = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
     const tdH = drawer.querySelector(".right-panel[data-panel='todo'] h3.meta");
-    const labelFor = (v) => v === 'notepad' ? 'Notepad' : (v === 'todo' ? 'To-Do' : 'Conditions');
+    const labelFor = (v) => v === 'notepad' ? 'Notepad' : (v === 'todo' ? 'To-Do' : (v === 'conditions' ? 'Conditions' : (v === 'hp' ? 'HP' : String(v))));
     if (npH) npH.textContent = labelFor(top);
     if (tdH) tdH.textContent = labelFor(bottom);
 
@@ -239,6 +286,8 @@ export function bindRightPanel() {
     todoHost.show(null);
     conditionsTopHost.show(null);
     conditionsBottomHost.show(null);
+    hpTopHost.show(null);
+    hpBottomHost.show(null);
 
     // Top slot
     if (top === 'notepad') {
@@ -253,6 +302,9 @@ export function bindRightPanel() {
     } else if (top === 'conditions') {
       if (topMount) topMount.hidden = false;
       conditionsTopHost.show('conditions');
+    } else if (top === 'hp') {
+      if (topMount) topMount.hidden = false;
+      hpTopHost.show('hp');
     }
     // Bottom slot
     if (bottom === 'notepad') {
@@ -267,9 +319,12 @@ export function bindRightPanel() {
     } else if (bottom === 'conditions') {
       if (bottomMount) bottomMount.hidden = false;
       conditionsBottomHost.show('conditions');
+    } else if (bottom === 'hp') {
+      if (bottomMount) bottomMount.hidden = false;
+      hpBottomHost.show('hp');
     }
 
-    // Unmount single conditions host in split mode
+    // Split mode uses the split hosts; ensure single-tab Conditions is unmounted
     conditionsHost.show(null);
 
     // Ensure split behavior is initialized once
@@ -281,6 +336,7 @@ export function bindRightPanel() {
     applySplitUI(cfg);
     mountSplitApps(cfg);
     updateToggleTopButtonLabel();
+    updateToggleHpButtonLabel();
   }
 
   const showNotesSplit = ({ focus } = {}) => {
@@ -312,6 +368,43 @@ export function bindRightPanel() {
     }
   };
 
+  function applyNotepadOverlay() {
+    const st = getState() || {};
+    const split = !!st.rightPanelSplitActive;
+    const overlay = st.rightNotepadOverlayApp || null;
+    if (split) return;
+    const panel = (drawer.querySelector(".right-panel[data-panel='notepad']"));
+    if (!panel || panel.hidden) return;
+    const textarea = drawer.querySelector('#notepad');
+    const topMount = drawer.querySelector('#rightNotepadMount');
+    if (!textarea || !topMount) return;
+    if (overlay === 'hp') {
+      textarea.hidden = true;
+      topMount.hidden = false;
+      hpTopHost.show('hp');
+    } else {
+      textarea.hidden = false;
+      topMount.hidden = true;
+      hpTopHost.show(null);
+    }
+  }
+
+  function updateToggleHpButtonLabel() {
+    if (!toggleHpBtn) return;
+    try {
+      const st = getState() || {};
+      const split = !!st.rightPanelSplitActive;
+      if (split) {
+        const cur = st.rightSplitTopApp || 'notepad';
+        toggleHpBtn.textContent = cur === 'hp' ? '⇄ Notes' : '⇄ HP';
+      } else {
+        const overlay = st.rightNotepadOverlayApp || null;
+        toggleHpBtn.textContent = overlay === 'hp' ? '⇄ Notes' : '⇄ HP';
+      }
+      toggleHpBtn.setAttribute('title', 'Toggle top app (HP Tracker)');
+    } catch {}
+  }
+
   const show = (name) => {
     // Notes tabs map to split view when split toggle is active
     if (name === 'notepad' || name === 'todo') {
@@ -323,7 +416,13 @@ export function bindRightPanel() {
       notepadHost.show(name === 'notepad' ? 'notepad' : null);
       todoHost.show(name === 'todo' ? 'todo' : null);
       conditionsHost.show(null);
+      if (name === 'notepad') {
+        applyNotepadOverlay();
+      } else {
+        try { hpTopHost.show(null); const topMount = drawer.querySelector('#rightNotepadMount'); if (topMount) topMount.hidden = true; } catch {}
+      }
       updateToggleTopButtonLabel();
+      updateToggleHpButtonLabel();
       return;
     }
     // Non-note tabs: hide both note panels, unmount hosts, show selected panel
@@ -335,9 +434,12 @@ export function bindRightPanel() {
     conditionsHost.show(null);
     conditionsTopHost.show(null);
     conditionsBottomHost.show(null);
+    hpTopHost.show(null);
+    hpBottomHost.show(null);
     if (name === 'conditions') conditionsHost.show('conditions');
     if (name === 'settings') renderSettingsPanel();
     updateToggleTopButtonLabel();
+    updateToggleHpButtonLabel();
   };
   // initialize active tab
   let initial = s.rightPanelTab || 'notepad';
@@ -402,14 +504,20 @@ export function bindRightPanel() {
   splitTopSelect?.addEventListener('change', () => {
     let top = splitTopSelect.value;
     let bottom = getState().rightSplitBottomApp || 'todo';
-    if (top === bottom) bottom = top === 'todo' ? 'notepad' : 'todo';
+    if (top === bottom) {
+      const ORDER = ['notepad','todo','conditions','hp'];
+      bottom = ORDER.find(x => x !== top) || 'todo';
+    }
     updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
     showSplit();
   });
   splitBottomSelect?.addEventListener('change', () => {
     let bottom = splitBottomSelect.value;
     let top = getState().rightSplitTopApp || 'notepad';
-    if (top === bottom) top = bottom === 'todo' ? 'notepad' : 'todo';
+    if (top === bottom) {
+      const ORDER = ['notepad','todo','conditions','hp'];
+      top = ORDER.find(x => x !== bottom) || 'notepad';
+    }
     updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
     showSplit();
   });
@@ -417,7 +525,10 @@ export function bindRightPanel() {
     const cfg = readSplitConfig();
     let newTop = cfg.bottom;
     let newBottom = cfg.top;
-    if (newTop === newBottom) newBottom = newTop === 'todo' ? 'notepad' : 'todo';
+    if (newTop === newBottom) {
+      const ORDER = ['notepad','todo','conditions','hp'];
+      newBottom = ORDER.find(x => x !== newTop) || 'todo';
+    }
     updateState({ rightSplitTopApp: newTop, rightSplitBottomApp: newBottom });
     showSplit();
   });

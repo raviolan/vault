@@ -1,4 +1,4 @@
-import { sendJson, readBody, parseJsonSafe } from '../lib/http.js';
+import { sendJson, readBody, parseJsonSafe, decodePathParam } from '../lib/http.js';
 import { badRequest, notFound } from '../lib/errors.js';
 
 export function routeTags(req, res, ctx) {
@@ -15,7 +15,7 @@ export function routeTags(req, res, ctx) {
   // /api/pages/:id/tags
   const pageTagsMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/tags$/);
   if (pageTagsMatch) {
-    const pageId = pageTagsMatch[1];
+    const pageId = decodePathParam(pageTagsMatch[1]);
     // Do not infer existence from tag rows; check pages table directly
     const exists = !!ctx.db.prepare('SELECT 1 FROM pages WHERE id = ? LIMIT 1').get(pageId);
     if (!exists) { notFound(res); return true; }

@@ -25,7 +25,7 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
         // keep as-is
         frag.appendChild(document.createTextNode(part));
       } else {
-        appendBoldItalicAndHashtags(part, frag);
+        appendExternalLinksThenStyle(part, frag);
       }
     }
   };
@@ -63,6 +63,41 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
   const rest = text.slice(lastIndex);
   if (rest) appendFormatted(rest);
   return frag;
+}
+
+function appendExternalLinksThenStyle(text, outFrag) {
+  if (!text) return;
+  // Recognize markdown links [label](url) where url is http(s) or mailto
+  // and bare links: http(s)://... or mailto:...
+  const re = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\))|((https?:\/\/[^\s]+)|(mailto:[^\s]+))/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const before = text.slice(last, m.index);
+    if (before) appendBoldItalicAndHashtags(before, outFrag);
+    let label = '';
+    let url = '';
+    const isMarkdown = !!m[1];
+    if (isMarkdown) {
+      label = m[2] || '';
+      url = m[3] || '';
+    } else {
+      url = (m[5] || m[6] || '').trim();
+      // Trim common trailing punctuation for bare URLs
+      while (/[\]\),.!?:]$/.test(url)) url = url.slice(0, -1);
+      label = url;
+    }
+    const a = document.createElement('a');
+    a.className = 'extlink';
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = label;
+    outFrag.appendChild(a);
+    last = re.lastIndex;
+  }
+  const rest = text.slice(last);
+  if (rest) appendBoldItalicAndHashtags(rest, outFrag);
 }
 
 function appendBoldItalicAndHashtags(text, outFrag) {
@@ -108,20 +143,14 @@ function appendHashtags(text, target) {
     const boundary = m[1] || '';
     if (boundary) target.appendChild(document.createTextNode(boundary));
     const tag = m[2];
-    // Avoid linkifying inside URLs (e.g., http://x#frag)
-    const leftCtxStart = Math.max(0, (text.lastIndexOf(' ', m.index) + 1) || 0);
-    const leftCtx = text.slice(leftCtxStart, m.index + 1); // include '#'
-    if (/^[a-zA-Z]+:\/\/.+?$/.test(leftCtx)) {
-      // treat as plain text
-      target.appendChild(document.createTextNode('#' + tag));
-    } else {
-      const a = document.createElement('a');
-      a.className = 'hashtag';
-      a.href = `/tags?tag=${encodeURIComponent(tag)}`;
-      a.setAttribute('data-link', '');
-      a.textContent = `#${tag}`;
-      target.appendChild(a);
-    }
+    // At this stage, we only receive plain text (URLs already extracted into <a>),
+    // so safe to always linkify hashtags here.
+    const a = document.createElement('a');
+    a.className = 'hashtag';
+    a.href = `/tags?tag=${encodeURIComponent(tag)}`;
+    a.setAttribute('data-link', '');
+    a.textContent = `#${tag}`;
+    target.appendChild(a);
     last = re.lastIndex;
   }
   const rest = text.slice(last);

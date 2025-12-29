@@ -1,4 +1,5 @@
 import { getAppState, setAppState } from '../../miniapps/state.js';
+import { handleFormatShortcutKeydown } from '../../lib/formatShortcuts.js';
 
 const APP_ID = 'notepad';
 
@@ -20,12 +21,14 @@ export const NotepadApp = {
       timer = setTimeout(() => setAppState(APP_ID, val), 300);
     };
     textarea.addEventListener('input', onInput);
+    const onKeydown = (e) => { if (handleFormatShortcutKeydown(e, textarea)) return; };
+    textarea.addEventListener('keydown', onKeydown);
 
     return () => {
       textarea.removeEventListener('input', onInput);
+      textarea.removeEventListener('keydown', onKeydown);
       clearTimeout(timer);
     };
   },
   unmount() {},
 };
-

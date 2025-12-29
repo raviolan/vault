@@ -11,7 +11,7 @@ export function render(container, ctx = {}) {
   if (!container) return;
   // Page-like layout to reuse existing CSS and editor behaviors
   container.innerHTML = `
-    <article class="page">
+    <article class="page page--dashboard">
       <div id="surfaceHeader"></div>
       <div class="page-identity">
         <div class="avatar-col"></div>
@@ -60,6 +60,7 @@ export function render(container, ctx = {}) {
       cover: media,
       profile: null,
       showProfile: false,
+      variant: 'tall',
       async onUploadCover(file) {
         const resp = await uploadMedia({ scope: 'surface', surfaceId, slot: 'header', file });
         media = { url: resp.url, posX: resp.posX, posY: resp.posY };

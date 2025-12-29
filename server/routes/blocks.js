@@ -1,4 +1,4 @@
-import { sendJson, readBody } from '../lib/http.js';
+import { sendJson, readBody, decodePathParam } from '../lib/http.js';
 import { badRequest, notFound } from '../lib/errors.js';
 
 export function routeBlocks(req, res, ctx) {
@@ -9,7 +9,7 @@ export function routeBlocks(req, res, ctx) {
   const pageBlocksMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/blocks$/);
   if (pageBlocksMatch && req.method === 'POST') {
     return (async () => {
-      const pageId = pageBlocksMatch[1];
+      const pageId = decodePathParam(pageBlocksMatch[1]);
       // Virtual Section Intro page blocks
       const secMatch = pageId.match(/^section:(.+)$/);
       if (secMatch) {
@@ -78,7 +78,7 @@ export function routeBlocks(req, res, ctx) {
   const blockMatch = pathname.match(/^\/api\/blocks\/([^\/]+)$/);
   if (blockMatch && req.method === 'PATCH') {
     return (async () => {
-      const blockIdStr = blockMatch[1];
+      const blockIdStr = decodePathParam(blockMatch[1]);
 
       // Handle Section Intro IDs first: intro_<key>_<index>
       if (String(blockIdStr).startsWith('intro_')) {
@@ -190,7 +190,7 @@ export function routeBlocks(req, res, ctx) {
   }
     if (blockMatch && req.method === 'DELETE') {
       return (async () => {
-        const blockIdStr = blockMatch[1];
+        const blockIdStr = decodePathParam(blockMatch[1]);
 
         // Handle Section Intro IDs first: intro_<key>_<index>
         if (String(blockIdStr).startsWith('intro_')) {

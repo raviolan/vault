@@ -48,6 +48,11 @@ export function parseJsonSafe(text, fallback = {}) {
   try { return JSON.parse(text || ''); } catch { return fallback; }
 }
 
+// Safely decode a path segment. Falls back to original on error.
+export function decodePathParam(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 export function writeJsonAtomic(p, obj) {
   const dir = p.substring(0, p.lastIndexOf('/'));
   if (dir) fs.mkdirSync(dir, { recursive: true });
@@ -55,4 +60,3 @@ export function writeJsonAtomic(p, obj) {
   fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), 'utf8');
   fs.renameSync(tmp, p);
 }
-
