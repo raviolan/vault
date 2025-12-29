@@ -71,6 +71,49 @@ export function routePages(req, res, ctx) {
     return true;
   }
 
+  // GET/PATCH /api/pages/:id/sheet
+  const sheetMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/sheet$/);
+  if (sheetMatch) {
+    const safeDecode = (v) => {
+      try { return decodeURIComponent(v); } catch { return String(v || ''); }
+    };
+    const pageId = typeof decodePathParam === 'function' ? decodePathParam(sheetMatch[1]) : safeDecode(sheetMatch[1]);
+    const exists = ctx.db.prepare('SELECT id, type FROM pages WHERE id=?').get(pageId);
+    if (!exists) { notFound(res); return true; }
+
+    if (req.method === 'GET') {
+      const row = ctx.db.prepare('SELECT sheet_json FROM page_sheets WHERE page_id=?').get(pageId);
+      let sheet = {};
+      try { sheet = row && row.sheet_json ? JSON.parse(row.sheet_json) : {}; } catch { sheet = {}; }
+      sendJson(res, 200, { pageId, sheet });
+      return true;
+    }
+
+    if (req.method === 'PATCH') {
+      return (async () => {
+        const body = JSON.parse(await readBody(req) || '{}');
+        const toNumOrNull = (v) => (v === '' || v === null || v === undefined) ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+        const next = {
+          ac: toNumOrNull(body.ac),
+          passivePerception: toNumOrNull(body.passivePerception),
+          passiveInsight: toNumOrNull(body.passiveInsight),
+          passiveInvestigation: toNumOrNull(body.passiveInvestigation),
+          notes: String(body.notes ?? '')
+        };
+        const ts = Math.floor(Date.now() / 1000);
+        const json = JSON.stringify(next);
+        const cur = ctx.db.prepare('SELECT page_id FROM page_sheets WHERE page_id=?').get(pageId);
+        if (cur) {
+          ctx.db.prepare('UPDATE page_sheets SET sheet_json=?, updated_at=? WHERE page_id=?').run(json, ts, pageId);
+        } else {
+          ctx.db.prepare('INSERT INTO page_sheets(page_id, sheet_json, updated_at) VALUES (?,?,?)').run(pageId, json, ts);
+        }
+        sendJson(res, 200, { ok: true, pageId, sheet: next });
+        return true;
+      })();
+    }
+  }
+
   // /api/pages/:id
   const pageIdMatch = pathname.match(/^\/api\/pages\/([^\/]+)$/);
   if (pageIdMatch) {

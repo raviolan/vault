@@ -83,7 +83,14 @@ export async function renderPage({ match }) {
           </button>
         </div>
       </div>
-      <div class=\"page-body\" id=\"pageBlocks\"></div>
+      <div id=\"pageTabs\" class=\"page-tabs\" hidden>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"sheet\">Sheet</button>
+      </div>
+      <div class=\"page-body\"> 
+        <div id=\"pageBlocks\"></div>
+        <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
+      </div>
       <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
   `;
@@ -149,6 +156,159 @@ export async function renderPage({ match }) {
     rerenderHeaderMedia = renderHM;
     renderHM();
   } catch {}
+
+  // Tabs and Sheet UI for character-like pages
+  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
+  const tabsEl = document.getElementById('pageTabs');
+  const sheetEl = document.getElementById('pageSheet');
+  const blocksEl = document.getElementById('pageBlocks');
+  const metaEl = outlet.querySelector('p.meta');
+
+  let sheetCache = null;
+  let sheetLoaded = false;
+  let saveTimer = null;
+
+  async function loadSheet() {
+    if (sheetLoaded) return sheetCache || {};
+    sheetLoaded = true;
+    try {
+      const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`);
+      sheetCache = resp?.sheet || {};
+    } catch { sheetCache = {}; }
+    return sheetCache;
+  }
+
+  function setActiveTab(tab) {
+    const st = getState() || {};
+    const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
+    updateState({ pageTabsV1: { ...(st.pageTabsV1||{}), pages: { ...pages, [page.id]: tab } } });
+
+    for (const b of tabsEl?.querySelectorAll?.('.page-tab') || []) {
+      b.classList.toggle('is-active', b.dataset.tab === tab);
+    }
+
+    if (tab === 'notes') {
+      if (sheetEl) sheetEl.hidden = true;
+      if (blocksEl) blocksEl.style.display = '';
+      if (metaEl) metaEl.style.display = '';
+    } else {
+      if (blocksEl) blocksEl.style.display = 'none';
+      if (sheetEl) sheetEl.hidden = false;
+      if (metaEl) metaEl.style.display = '';
+      void renderSheet();
+    }
+  }
+
+  async function renderSheet() {
+    if (!sheetEl) return;
+    const sheet = await loadSheet();
+    const editing = isEditingPage(page.id);
+
+    sheetEl.innerHTML = `
+      <div class=\"sheet-grid\"> 
+        <label class=\"sheet-field\">
+          <span class=\"meta\">AC</span>
+          ${editing ? `<input id="sheetAc" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetAcView"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Perception</span>
+          ${editing ? `<input id="sheetPP" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPPView"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Insight</span>
+          ${editing ? `<input id="sheetPI" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPIView"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Investigation</span>
+          ${editing ? `<input id="sheetPV" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPVView"></div>`}
+        </label>
+      </div>
+
+      <div class=\"sheet-notes\">
+        <div class=\"meta\">Notes</div>
+        ${editing
+          ? `<textarea id="sheetNotes" class="sheet-notes-input" rows="6" placeholder="Useful combat notes, tactics, special rules, reminders…"></textarea>`
+          : `<div id="sheetNotesView" class="sheet-notes-view"></div>`
+        }
+      </div>
+    `;
+
+    const setText = (id, v) => { const el = sheetEl.querySelector(id); if (el) el.textContent = (v === null || v === undefined || v === '') ? '—' : String(v); };
+
+    if (!editing) {
+      setText('#sheetAcView', sheet.ac);
+      setText('#sheetPPView', sheet.passivePerception);
+      setText('#sheetPIView', sheet.passiveInsight);
+      setText('#sheetPVView', sheet.passiveInvestigation);
+
+      try {
+        const view = sheetEl.querySelector('#sheetNotesView');
+        if (view) {
+          view.innerHTML = '';
+          const { buildWikiTextNodes } = await import('../features/wikiLinks.js');
+          (buildWikiTextNodes(String(sheet.notes || '')) || []).forEach(n => view.appendChild(n));
+        }
+      } catch {
+        const view = sheetEl.querySelector('#sheetNotesView');
+        if (view) view.textContent = String(sheet.notes || '');
+      }
+      return;
+    }
+
+    const ac = sheetEl.querySelector('#sheetAc'); if (ac) ac.value = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
+    const pp = sheetEl.querySelector('#sheetPP'); if (pp) pp.value = (sheet.passivePerception ?? '') === null ? '' : String(sheet.passivePerception ?? '');
+    const pi = sheetEl.querySelector('#sheetPI'); if (pi) pi.value = (sheet.passiveInsight ?? '') === null ? '' : String(sheet.passiveInsight ?? '');
+    const pv = sheetEl.querySelector('#sheetPV'); if (pv) pv.value = (sheet.passiveInvestigation ?? '') === null ? '' : String(sheet.passiveInvestigation ?? '');
+    const notes = sheetEl.querySelector('#sheetNotes'); if (notes) notes.value = String(sheet.notes || '');
+
+    try { const { autosizeTextarea } = await import('../lib/autosizeTextarea.js'); if (notes) autosizeTextarea(notes); } catch {}
+
+    function queueSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        const next = {
+          ac: ac ? ac.value : '',
+          passivePerception: pp ? pp.value : '',
+          passiveInsight: pi ? pi.value : '',
+          passiveInvestigation: pv ? pv.value : '',
+          notes: notes ? notes.value : ''
+        };
+        try {
+          const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, {
+            method: 'PATCH',
+            body: JSON.stringify(next),
+          });
+          sheetCache = resp?.sheet || sheetCache;
+        } catch (e) {
+          console.error('Failed to save sheet', e);
+        }
+      }, 250);
+    }
+
+    for (const el of [ac, pp, pi, pv, notes].filter(Boolean)) {
+      el.addEventListener('input', () => {
+        sheetCache = sheetCache || {};
+        if (el === ac) sheetCache.ac = el.value === '' ? null : Number(el.value);
+        if (el === pp) sheetCache.passivePerception = el.value === '' ? null : Number(el.value);
+        if (el === pi) sheetCache.passiveInsight = el.value === '' ? null : Number(el.value);
+        if (el === pv) sheetCache.passiveInvestigation = el.value === '' ? null : Number(el.value);
+        if (el === notes) sheetCache.notes = el.value;
+        queueSave();
+      });
+    }
+  }
+
+  if (isCharLike) {
+    if (tabsEl) tabsEl.hidden = false;
+    tabsEl?.querySelectorAll('.page-tab').forEach(btn => btn.onclick = () => setActiveTab(btn.dataset.tab));
+    const st = getState() || {};
+    const saved = st.pageTabsV1?.pages?.[page.id];
+    setActiveTab(saved === 'sheet' ? 'sheet' : 'notes');
+  }
+
   const blocksRoot = document.getElementById('pageBlocks');
   setCurrentPageBlocks(page.blocks || []);
   if (isEditingPage(page.id)) {
@@ -284,6 +444,8 @@ export async function renderPage({ match }) {
         try { mountSaveIndicator(); } catch {}
         // Keep header media callbacks by reusing stable re-render
         try { rerenderHeaderMedia?.(); } catch {}
+        // If on Sheet tab, re-render sheet for edit mode
+        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
       } else {
         setUiMode(null);
         disablePageTitleEdit(page);
@@ -300,6 +462,8 @@ export async function renderPage({ match }) {
         try { unmountSaveIndicator(); } catch {}
         // Keep header media callbacks by reusing stable re-render
         try { rerenderHeaderMedia?.(); } catch {}
+        // If on Sheet tab, re-render sheet for view mode
+        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
       }
     };
     if (btnEdit) btnEdit.onclick = onClick;
@@ -351,7 +515,14 @@ export async function renderPageBySlug({ match }) {
           </button>
         </div>
       </div>
-      <div class=\"page-body\" id=\"pageBlocks\"></div>
+      <div id=\"pageTabs\" class=\"page-tabs\" hidden>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"sheet\">Sheet</button>
+      </div>
+      <div class=\"page-body\"> 
+        <div id=\"pageBlocks\"></div>
+        <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
+      </div>
       <p class=\"meta\">Section: ${escapeHtml(sectionLabel2 || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
     </article>
   `;
@@ -417,6 +588,158 @@ export async function renderPageBySlug({ match }) {
     rerenderHeaderMedia = renderHM;
     renderHM();
   } catch {}
+
+  // Tabs and Sheet UI for character-like pages (slug route)
+  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
+  const tabsEl = document.getElementById('pageTabs');
+  const sheetEl = document.getElementById('pageSheet');
+  const blocksEl = document.getElementById('pageBlocks');
+  const metaEl = outlet.querySelector('p.meta');
+
+  let sheetCache = null;
+  let sheetLoaded = false;
+  let saveTimer = null;
+
+  async function loadSheet() {
+    if (sheetLoaded) return sheetCache || {};
+    sheetLoaded = true;
+    try {
+      const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`);
+      sheetCache = resp?.sheet || {};
+    } catch { sheetCache = {}; }
+    return sheetCache;
+  }
+
+  function setActiveTab(tab) {
+    const st = getState() || {};
+    const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
+    updateState({ pageTabsV1: { ...(st.pageTabsV1||{}), pages: { ...pages, [page.id]: tab } } });
+
+    for (const b of tabsEl?.querySelectorAll?.('.page-tab') || []) {
+      b.classList.toggle('is-active', b.dataset.tab === tab);
+    }
+
+    if (tab === 'notes') {
+      if (sheetEl) sheetEl.hidden = true;
+      if (blocksEl) blocksEl.style.display = '';
+      if (metaEl) metaEl.style.display = '';
+    } else {
+      if (blocksEl) blocksEl.style.display = 'none';
+      if (sheetEl) sheetEl.hidden = false;
+      if (metaEl) metaEl.style.display = '';
+      void renderSheet();
+    }
+  }
+
+  async function renderSheet() {
+    if (!sheetEl) return;
+    const sheet = await loadSheet();
+    const editing = isEditingPage(page.id);
+
+    sheetEl.innerHTML = `
+      <div class=\"sheet-grid\"> 
+        <label class=\"sheet-field\">
+          <span class=\"meta\">AC</span>
+          ${editing ? `<input id="sheetAc" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetAcView"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Perception</span>
+          ${editing ? `<input id="sheetPP" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPPView"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Insight</span>
+          ${editing ? `<input id="sheetPI" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPIView"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Investigation</span>
+          ${editing ? `<input id="sheetPV" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPVView"></div>`}
+        </label>
+      </div>
+
+      <div class=\"sheet-notes\">
+        <div class=\"meta\">Notes</div>
+        ${editing
+          ? `<textarea id="sheetNotes" class="sheet-notes-input" rows="6" placeholder="Useful combat notes, tactics, special rules, reminders…"></textarea>`
+          : `<div id="sheetNotesView" class="sheet-notes-view"></div>`
+        }
+      </div>
+    `;
+
+    const setText = (id, v) => { const el = sheetEl.querySelector(id); if (el) el.textContent = (v === null || v === undefined || v === '') ? '—' : String(v); };
+
+    if (!editing) {
+      setText('#sheetAcView', sheet.ac);
+      setText('#sheetPPView', sheet.passivePerception);
+      setText('#sheetPIView', sheet.passiveInsight);
+      setText('#sheetPVView', sheet.passiveInvestigation);
+
+      try {
+        const view = sheetEl.querySelector('#sheetNotesView');
+        if (view) {
+          view.innerHTML = '';
+          const { buildWikiTextNodes } = await import('../features/wikiLinks.js');
+          (buildWikiTextNodes(String(sheet.notes || '')) || []).forEach(n => view.appendChild(n));
+        }
+      } catch {
+        const view = sheetEl.querySelector('#sheetNotesView');
+        if (view) view.textContent = String(sheet.notes || '');
+      }
+      return;
+    }
+
+    const ac = sheetEl.querySelector('#sheetAc'); if (ac) ac.value = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
+    const pp = sheetEl.querySelector('#sheetPP'); if (pp) pp.value = (sheet.passivePerception ?? '') === null ? '' : String(sheet.passivePerception ?? '');
+    const pi = sheetEl.querySelector('#sheetPI'); if (pi) pi.value = (sheet.passiveInsight ?? '') === null ? '' : String(sheet.passiveInsight ?? '');
+    const pv = sheetEl.querySelector('#sheetPV'); if (pv) pv.value = (sheet.passiveInvestigation ?? '') === null ? '' : String(sheet.passiveInvestigation ?? '');
+    const notes = sheetEl.querySelector('#sheetNotes'); if (notes) notes.value = String(sheet.notes || '');
+
+    try { const { autosizeTextarea } = await import('../lib/autosizeTextarea.js'); if (notes) autosizeTextarea(notes); } catch {}
+
+    function queueSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        const next = {
+          ac: ac ? ac.value : '',
+          passivePerception: pp ? pp.value : '',
+          passiveInsight: pi ? pi.value : '',
+          passiveInvestigation: pv ? pv.value : '',
+          notes: notes ? notes.value : ''
+        };
+        try {
+          const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, {
+            method: 'PATCH',
+            body: JSON.stringify(next),
+          });
+          sheetCache = resp?.sheet || sheetCache;
+        } catch (e) {
+          console.error('Failed to save sheet', e);
+        }
+      }, 250);
+    }
+
+    for (const el of [ac, pp, pi, pv, notes].filter(Boolean)) {
+      el.addEventListener('input', () => {
+        sheetCache = sheetCache || {};
+        if (el === ac) sheetCache.ac = el.value === '' ? null : Number(el.value);
+        if (el === pp) sheetCache.passivePerception = el.value === '' ? null : Number(el.value);
+        if (el === pi) sheetCache.passiveInsight = el.value === '' ? null : Number(el.value);
+        if (el === pv) sheetCache.passiveInvestigation = el.value === '' ? null : Number(el.value);
+        if (el === notes) sheetCache.notes = el.value;
+        queueSave();
+      });
+    }
+  }
+
+  if (isCharLike) {
+    if (tabsEl) tabsEl.hidden = false;
+    tabsEl?.querySelectorAll('.page-tab').forEach(btn => btn.onclick = () => setActiveTab(btn.dataset.tab));
+    const st = getState() || {};
+    const saved = st.pageTabsV1?.pages?.[page.id];
+    setActiveTab(saved === 'sheet' ? 'sheet' : 'notes');
+  }
   const blocksRoot = document.getElementById('pageBlocks');
   setCurrentPageBlocks(page.blocks || []);
   if (isEditingPage(page.id)) {
@@ -528,6 +851,8 @@ export async function renderPageBySlug({ match }) {
         try { mountSaveIndicator(); } catch {}
         // Keep header media callbacks by reusing stable re-render
         try { rerenderHeaderMedia?.(); } catch {}
+        // If on Sheet tab, re-render sheet for edit mode
+        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
       } else {
         setUiMode(null);
         disablePageTitleEdit(page);
@@ -544,6 +869,8 @@ export async function renderPageBySlug({ match }) {
         try { unmountSaveIndicator(); } catch {}
         // Keep header media callbacks by reusing stable re-render
         try { rerenderHeaderMedia?.(); } catch {}
+        // If on Sheet tab, re-render sheet for view mode
+        try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
       }
     };
     if (btnEdit) btnEdit.onclick = onClick;

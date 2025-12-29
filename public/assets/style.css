@@ -3289,3 +3289,56 @@ article.page.has-profile-media > #pageTitleInput {
   outline-offset: 2px;
   transition: outline-color 250ms ease;
 }
+
+/* Page tabs + Sheet UI */
+.page-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.page-tabs .page-tab.is-active {
+  outline: 2px solid var(--border);
+}
+
+.page-sheet {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-4);
+  padding: var(--space-3);
+  background: var(--panel);
+}
+
+.sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.sheet-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sheet-val {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-3);
+  background: var(--bg);
+}
+
+.sheet-notes {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-notes-input {
+  width: 100%;
+  min-height: 120px;
+}
+
+.sheet-notes-view {
+  white-space: pre-wrap;
+}
