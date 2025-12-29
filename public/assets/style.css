@@ -3183,6 +3183,11 @@ body[data-theme='light'] .page-header::after {
   position: relative;
   overflow: hidden;
 }
+.headerMedia.headerMedia--contain .cover {
+  /* Show entire image; allow letterboxing */
+  background-size: contain;
+  background-color: var(--panel);
+}
 .headerMedia.headerMedia--tall { --headerMediaCoverH: 720px; }
 /* Avatar sizing: expose variable + clamp for responsiveness */
 .headerMedia { --avatar-size: 280px; --avatar-size-clamped: clamp(120px, var(--avatar-size), 320px); }

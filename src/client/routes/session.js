@@ -2,7 +2,7 @@ import { renderWidgetsArea } from '../features/widgets.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
 import { setUiMode } from '../lib/uiMode.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
-import { loadState } from '../lib/state.js';
+import { getState } from '../lib/state.js';
 
 export function render(container, ctx = {}) {
   if (!container) return;
@@ -22,14 +22,19 @@ export function render(container, ctx = {}) {
   const headerHost = container.querySelector('#surfaceHeader');
   const btn = container.querySelector('#btnCustomize');
   async function refresh() {
-    const state = await loadState();
+    const state = getState();
     const surf = state?.surfaceMediaV1?.surfaces?.[surfaceId] || null;
     media = surf && surf.header ? { url: `/media/${surf.header.path}`, posX: surf.header.posX, posY: surf.header.posY } : null;
+    const styleCfg = state?.surfaceStyleV1?.surfaces?.[surfaceId]?.header || {};
+    const sizeMode = (styleCfg?.fit === true) ? 'contain' : 'cover';
+    const heightPx = Number.isFinite(styleCfg?.heightPx) ? styleCfg.heightPx : null;
     renderHeaderMedia(headerHost, {
       mode: customizing ? 'edit' : 'view',
       cover: media,
       profile: null,
       showProfile: false,
+      sizeMode,
+      heightPx,
       async onUploadCover(file) {
         const resp = await uploadMedia({ scope: 'surface', surfaceId, slot: 'header', file });
         media = { url: resp.url, posX: resp.posX, posY: resp.posY };

@@ -172,11 +172,13 @@ export async function render(outlet, { key }) {
     };
     const refresh = async () => {
       const customizing = document?.body?.dataset?.mode === 'edit';
-      const state = await loadState();
+      const state = getState();
       const surf = state?.surfaceMediaV1?.surfaces?.[surfId] || null;
       media = surf && surf.header ? { url: `/media/${surf.header.path}`, posX: surf.header.posX, posY: surf.header.posY, zoom: Number(surf.header.zoom ?? 1) } : null;
-      // Section color state
-      const curColor = state?.surfaceStyleV1?.surfaces?.[surfId]?.color || null;
+      // Section style state
+      const styleBlock = state?.surfaceStyleV1?.surfaces?.[surfId] || {};
+      const curColor = styleBlock?.color || null;
+      const curHeaderStyle = styleBlock?.header || {};
       // Apply color immediately to the header host (CSS can read --section-accent)
       try { if (curColor) hmHost.style.setProperty('--section-accent', curColor); else hmHost.style.removeProperty('--section-accent'); } catch {}
       renderHeaderMedia(hmHost, {
@@ -185,6 +187,8 @@ export async function render(outlet, { key }) {
         profile: null,
         showProfile: false,
         variant: 'tall',
+        sizeMode: (curHeaderStyle?.fit === true) ? 'contain' : 'cover',
+        heightPx: Number.isFinite(curHeaderStyle?.heightPx) ? curHeaderStyle.heightPx : null,
         async onUploadCover(file) {
           const resp = await uploadMedia({ scope: 'surface', surfaceId: surfId, slot: 'header', file });
           media = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
@@ -219,6 +223,15 @@ export async function render(outlet, { key }) {
           <span class="meta">Section color</span>
           <input id="sectionColorHex" placeholder="#rrggbb" value="${escapeHtml(cur)}" style="width:110px;" />
           <div style="display:flex;gap:6px;align-items:center;">${sw}</div>
+          <div style="flex:1"></div>
+          <span class="meta">Header</span>
+          <label style="display:flex;gap:6px;align-items:center">
+            <input id="sectionHeaderFit" type="checkbox" ${curHeaderStyle?.fit === true ? 'checked' : ''} />
+            <span>Show full image</span>
+          </label>
+          <label class="meta">Height</label>
+          <input id="sectionHeaderHeight" type="number" min="140" max="800" step="10" value="${Number.isFinite(curHeaderStyle?.heightPx) ? curHeaderStyle.heightPx : ''}" placeholder="auto" style="width:90px" />
+          <span class="meta" style="opacity:0.7">px</span>
         `;
         const inp = colorCtl.querySelector('#sectionColorHex');
         const applyColor = (hex) => {
@@ -241,6 +254,31 @@ export async function render(outlet, { key }) {
             if (hex) { applyColor(hex); const inputEl = colorCtl.querySelector('#sectionColorHex'); if (inputEl) inputEl.value = hex; }
           });
         });
+        // Header fit/height controls
+        const fitEl = colorCtl.querySelector('#sectionHeaderFit');
+        const hEl = colorCtl.querySelector('#sectionHeaderHeight');
+        fitEl?.addEventListener('change', () => {
+          const st = getState();
+          const block = { ...(st.surfaceStyleV1 || { surfaces: {} }) };
+          const surfaces = { ...(block.surfaces || {}) };
+          const prev = surfaces[surfId] || {};
+          const header = { ...(prev.header || {}), fit: !!fitEl.checked };
+          surfaces[surfId] = { ...prev, header };
+          updateState({ surfaceStyleV1: { surfaces } });
+          refresh();
+        });
+        hEl?.addEventListener('change', () => {
+          const v = Number(hEl.value);
+          const heightPx = Number.isFinite(v) && v > 0 ? Math.max(140, Math.min(800, Math.floor(v))) : null;
+          const st = getState();
+          const block = { ...(st.surfaceStyleV1 || { surfaces: {} }) };
+          const surfaces = { ...(block.surfaces || {}) };
+          const prev = surfaces[surfId] || {};
+          const header = { ...(prev.header || {}), ...(heightPx ? { heightPx } : { heightPx: null }) };
+          surfaces[surfId] = { ...prev, header };
+          updateState({ surfaceStyleV1: { surfaces } });
+          refresh();
+        });
       } else if (colorCtl) {
         // Remove control when not customizing
         try { colorCtl.remove(); } catch {}
@@ -248,11 +286,12 @@ export async function render(outlet, { key }) {
       }
     };
     // Wire top toolbar Edit button to toggle section header edit mode
-    const onTopEditClick = () => {
+    const onTopEditClick = async () => {
       const currentlyEdit = document?.body?.dataset?.mode === 'edit';
       const nextMode = currentlyEdit ? null : 'edit';
       if (topEditBtn) topEditBtn.textContent = nextMode ? 'Done' : 'Edit';
       try { setUiMode(nextMode); } catch {}
+      if (!nextMode) { try { await saveStateNow(); } catch {} }
       // Re-render whole route to reveal/hide organizer and widget controls
       void rerender();
     };

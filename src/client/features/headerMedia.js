@@ -14,6 +14,11 @@ export function renderHeaderMedia(hostEl, opts) {
     onRemoveProfile = null,
     onSavePosition = null,
     variant = 'default',
+    // New: control how the cover image fits inside the header
+    // 'cover' (crop/fill) or 'contain' (show all with letterboxing)
+    sizeMode = 'cover',
+    // New: optional custom height (number in px)
+    heightPx = null,
   } = opts || {};
 
   if (!hostEl) return;
@@ -31,11 +36,16 @@ export function renderHeaderMedia(hostEl, opts) {
   wrap.className = 'headerMedia';
   if (mode === 'edit') wrap.classList.add('headerMedia--edit');
   if (variant === 'tall') wrap.classList.add('headerMedia--tall');
+  if (sizeMode === 'contain') wrap.classList.add('headerMedia--contain');
   // Ensure positioning anchor for absolute children
   wrap.style.position = 'relative';
   const coverDiv = document.createElement('div');
   coverDiv.className = 'cover';
   coverDiv.style.position = 'relative';
+  // Apply explicit height override if provided (wins over CSS rules)
+  if (Number.isFinite(heightPx) && heightPx > 0) {
+    try { coverDiv.style.height = `${Math.floor(heightPx)}px`; } catch {}
+  }
   if (cover && cover.url) {
     coverDiv.style.setProperty('background-image', `url(${cover.url})`);
     coverDiv.style.setProperty('--pos', posStr(cover));
