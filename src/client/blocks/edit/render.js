@@ -204,16 +204,32 @@ export function stableRender(rootEl, page, blocks, preferFocusId = null) {
   });
 }
 
-export function renderBlocksEdit(rootEl, page, blocks) {
-  setCurrentPageBlocks(blocks);
-  // One-time toolbar + focus tracker setup
-  try {
-    const host = rootEl.parentElement;
-    if (host && !host.querySelector('#editorToolbar')) {
-      const tb = document.createElement('div');
-      tb.id = 'editorToolbar';
-      tb.className = 'editor-toolbar';
-      tb.innerHTML = `
+// PRIVATE: inject toolbar if missing and return references
+function ensureEditorToolbar(hostEl, rootEl) {
+  if (!hostEl) return { created: false, toolbarEl: null, refs: {} };
+  const existing = hostEl.querySelector('#editorToolbar');
+  if (existing) {
+    const byId = (id) => existing.querySelector(`#${id}`);
+    return {
+      created: false,
+      toolbarEl: existing,
+      refs: {
+        typeSelectEl: byId('tbType'),
+        boldBtnEl: byId('tbBold'),
+        italicBtnEl: byId('tbItalic'),
+        linkBtnEl: byId('tbLink'),
+        addH1BtnEl: byId('tbAddH1'),
+        addH2BtnEl: byId('tbAddH2'),
+        addH3BtnEl: byId('tbAddH3'),
+        addBodyBtnEl: byId('tbAddBody'),
+        highlightToggleEl: byId('tbSectionHL')
+      }
+    };
+  }
+  const tb = document.createElement('div');
+  tb.id = 'editorToolbar';
+  tb.className = 'editor-toolbar';
+  tb.innerHTML = `
         <div class="row">
           <select id="tbType">
             <option value="p">Paragraph</option>
@@ -233,230 +249,246 @@ export function renderBlocksEdit(rootEl, page, blocks) {
           <span class="sep"></span>
           <button type="button" id="tbSectionHL" class="chip" title="Toggle section highlight">Section HL</button>
         </div>`;
-      host.insertBefore(tb, rootEl);
-
-      // Event wiring
-      const byId = (id) => tb.querySelector(`#${id}`);
-      const selType = byId('tbType');
-      selType?.addEventListener('change', async () => {
-        const id = activeBlockId;
-        if (!id) return;
-        const levelMap = { h1: 1, h2: 2, h3: 3 };
-        const v = selType.value;
-        if (v === 'p') return; // no-op for now
-        const level = levelMap[v] || 2;
-        const all = getCurrentPageBlocks();
-        const cur = all.find(x => String(x.id) === String(id));
-        if (!cur) return;
-        try {
-          const { apiPatchBlock, apiCreateBlock } = await import('./apiBridge.js');
-          if (cur.type === 'section') {
-            const existingProps = parseMaybeJson(cur.propsJson) || {};
-            const nextProps = { ...existingProps, level };
-            await apiPatchBlock(cur.id, { props: nextProps });
-            // Update local props (preserve other props like collapsed)
-            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
-            const container = document.getElementById('pageBlocks');
-            stableRender(container, page, getCurrentPageBlocks(), cur.id);
-            return;
-          }
-          if (cur.type === 'heading') {
-            const existingProps = parseMaybeJson(cur.propsJson) || {};
-            const nextProps = { ...existingProps, level };
-            await apiPatchBlock(cur.id, { props: nextProps });
-            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
-            const container = document.getElementById('pageBlocks');
-            stableRender(container, page, getCurrentPageBlocks(), cur.id);
-            return;
-          }
-          if (cur.type === 'paragraph') {
-            // Convert paragraph to section: title = first line of plain text; remainder as child paragraph
-            const text = String((parseMaybeJson(cur.contentJson)?.text) || '').replace(/\r\n/g, '\n');
-            const lines = text.split('\n');
-            const title = (lines[0] || '').trim() || 'Untitled';
-            const remainder = lines.slice(1).join('\n').replace(/\s+$/,'');
-            const existingProps = parseMaybeJson(cur.propsJson) || {};
-            const nextProps = { ...existingProps, collapsed: false, level };
-            await apiPatchBlock(cur.id, { type: 'section', props: nextProps, content: { title } });
-            updateCurrentBlocks(b => b.id === cur.id ? { ...b, type: 'section', propsJson: JSON.stringify(nextProps), contentJson: JSON.stringify({ title }) } : b);
-            if (remainder && remainder.trim().length) {
-              const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: cur.id, sort: 0, props: {}, content: { text: remainder } });
-              setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-            }
-            const container = document.getElementById('pageBlocks');
-            stableRender(container, page, getCurrentPageBlocks(), cur.id);
-          }
-        } catch (err) { console.error('toolbar heading change failed', err); }
-      });
-
-      const ensureRichActive = () => {
-        const ae = document.activeElement;
-        if (!ae) return null;
-        const isRich = ae && ae.isContentEditable && ae.classList.contains('block-rich');
-        return isRich ? ae : null;
-      };
-      const triggerSave = (el) => { try { el?.dispatchEvent(new Event('input', { bubbles: true })); } catch {} };
-
-      // Section highlight toggle control (persisted)
-      const btnHL = byId('tbSectionHL');
-      if (btnHL) {
-        btnHL.addEventListener('click', () => {
-          try {
-            const st = getState() || {};
-            const on = st?.uiPrefsV1?.sectionHeaderHighlight !== false;
-            const next = { ...(st.uiPrefsV1 || {}), sectionHeaderHighlight: !on };
-            updateState({ uiPrefsV1: next });
-            try { saveStateNow(); } catch {}
-            applyUiPrefsToBody({ ...(st || {}), uiPrefsV1: next });
-          } catch {}
-        });
-      }
-
-      // Insertion helper utilities (outline-aware)
-      function getById(all, id) { return all.find(x => String(x.id) === String(id)); }
-      function getProps(b) { return b?.props || parseMaybeJson(b?.propsJson) || {}; }
-      function getLevel(b) { const p = getProps(b); return Number(p.level || 0) || 0; }
-      function getParent(all, b) { if (!b?.parentId) return null; return getById(all, b.parentId); }
-      function getPathToRoot(all, cur) {
-        const path = [];
-        let n = cur;
-        while (n) { path.push(n); n = getParent(all, n); }
-        return path; // leaf-first
-      }
-      function firstInPathWithParent(path, parentId) {
-        for (const n of path) {
-          if ((n.parentId ?? null) === (parentId ?? null)) return n;
-        }
-        return null;
-      }
-      function computeHeadingInsert(all, cur, desiredLevel) {
-        if (!cur) {
-          const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
-          const last = roots[roots.length-1] || null;
-          return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
-        }
-        const path = getPathToRoot(all, cur);
-        const ancestors = path.filter(n => n.type === 'section');
-        let parentId = null;
-        if (desiredLevel === 1) {
-          parentId = null;
-        } else {
-          const want = desiredLevel - 1;
-          let parentSec = ancestors.find(s => getLevel(s) === want);
-          if (!parentSec) parentSec = ancestors.find(s => getLevel(s) > 0 && getLevel(s) < desiredLevel) || null;
-          parentId = parentSec ? parentSec.id : null;
-        }
-        const directChild = firstInPathWithParent(path, parentId);
-        const sortBase = directChild ? Number(directChild.sort||0) : (
-          (() => {
-            const sibs = all.filter(b => (b.parentId ?? null) === (parentId ?? null));
-            return sibs.length ? Math.max(...sibs.map(s => Number(s.sort||0))) : -1;
-          })()
-        );
-        return { parentId, sortBase };
-      }
-      function computeBodyInsert(all, cur) {
-        if (!cur) {
-          const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
-          const last = roots[roots.length-1] || null;
-          return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
-        }
-        // If cur is root-level, keep root-level and insert after it
-        if ((cur.parentId ?? null) === null) return { parentId: null, sortBase: Number(cur.sort||0) };
-        // If cur is a section, insert after this section at its parent level
-        if (cur.type === 'section') {
-          return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
-        }
-        // Otherwise, find the nearest ancestor section and insert after it
-        const path = getPathToRoot(all, cur);
-        const nearestSection = path.find(n => n.type === 'section');
-        if (nearestSection) {
-          return { parentId: nearestSection.parentId ?? null, sortBase: Number(nearestSection.sort || 0) };
-        }
-        // Fallback: insert after current block at its parent level
-        return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
-      }
-
-      byId('tbBold')?.addEventListener('click', () => {
-        const el = ensureRichActive(); if (!el) return;
-        try { document.execCommand('bold'); } catch {}
-        triggerSave(el);
-      });
-      byId('tbItalic')?.addEventListener('click', () => {
-        const el = ensureRichActive(); if (!el) return;
-        try { document.execCommand('italic'); } catch {}
-        triggerSave(el);
-      });
-      byId('tbLink')?.addEventListener('click', () => {
-        const ae = document.activeElement;
-        const richEl = ensureRichActive();
-        if (richEl) {
-          const sel = window.getSelection();
-          const url = window.prompt('Link URL:');
-          if (!url) return;
-          try {
-            if (sel && !sel.isCollapsed) {
-              document.execCommand('createLink', false, url);
-            } else {
-              // No selection in rich text: insert the URL as plain text
-              document.execCommand('insertText', false, url);
-            }
-          } catch {}
-          triggerSave(richEl);
-          return;
-        }
-        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
-          insertMarkdownLink(ae);
-          return;
-        }
-      });
-
-      async function createSectionAfterActive(level) {
-        const id = activeBlockId;
-        const all = getCurrentPageBlocks();
-        const cur = id ? all.find(x => String(x.id) === String(id)) : null;
-        const { parentId, sortBase } = computeHeadingInsert(all, cur, level);
-        try {
-          const { apiCreateBlock } = await import('./apiBridge.js');
-          const created = await apiCreateBlock(page.id, { type: 'section', parentId, sort: Number(sortBase || 0) + 1, props: { collapsed: false, level }, content: { title: '' } });
-          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-          const container = document.getElementById('pageBlocks') || rootEl;
-          stableRender(container, page, getCurrentPageBlocks(), created.id);
-        } catch (err) { console.error('toolbar create section failed', err); }
-      }
-
-      async function createBodyAfterActive() {
-        const id = activeBlockId;
-        const all = getCurrentPageBlocks();
-        const cur = id ? all.find(x => String(x.id) === String(id)) : null;
-        try {
-          if (cur && cur.type === 'section') {
-            // For sections, insert a new paragraph as the first child of the section.
-            await insertFirstChildParagraph({ page, sectionId: cur.id, rootEl });
-            return;
-          }
-          const { parentId, sortBase } = computeBodyInsert(all, cur);
-          const { apiCreateBlock } = await import('./apiBridge.js');
-          const created = await apiCreateBlock(page.id, {
-            type: 'paragraph',
-            parentId,
-            sort: Number(sortBase || 0) + 1,
-            props: {},
-            content: { text: '' }
-          });
-          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-          const container = document.getElementById('pageBlocks') || rootEl;
-          stableRender(container, page, getCurrentPageBlocks(), created.id);
-        } catch (err) { console.error('toolbar create body failed', err); }
-      }
-      byId('tbAddH1')?.addEventListener('click', () => void createSectionAfterActive(1));
-      byId('tbAddH2')?.addEventListener('click', () => void createSectionAfterActive(2));
-      byId('tbAddH3')?.addEventListener('click', () => void createSectionAfterActive(3));
-      byId('tbAddBody')?.addEventListener('click', () => void createBodyAfterActive());
+  hostEl.insertBefore(tb, rootEl);
+  const byId = (id) => tb.querySelector(`#${id}`);
+  return {
+    created: true,
+    toolbarEl: tb,
+    refs: {
+      typeSelectEl: byId('tbType'),
+      boldBtnEl: byId('tbBold'),
+      italicBtnEl: byId('tbItalic'),
+      linkBtnEl: byId('tbLink'),
+      addH1BtnEl: byId('tbAddH1'),
+      addH2BtnEl: byId('tbAddH2'),
+      addH3BtnEl: byId('tbAddH3'),
+      addBodyBtnEl: byId('tbAddBody'),
+      highlightToggleEl: byId('tbSectionHL')
     }
-  } catch {}
+  };
+}
 
-  // Track focus to set active block and sync toolbar selection
+// PRIVATE: outline helpers; returns helpers used by toolbar and render
+function buildOutlineIndex() {
+  function getById(all, id) { return all.find(x => String(x.id) === String(id)); }
+  function getProps(b) { return b?.props || parseMaybeJson(b?.propsJson) || {}; }
+  function getLevel(b) { const p = getProps(b); return Number(p.level || 0) || 0; }
+  function getParent(all, b) { if (!b?.parentId) return null; return getById(all, b.parentId); }
+  function getPathToRoot(all, cur) {
+    const path = [];
+    let n = cur;
+    while (n) { path.push(n); n = getParent(all, n); }
+    return path; // leaf-first
+  }
+  function firstInPathWithParent(path, parentId) {
+    for (const n of path) {
+      if ((n.parentId ?? null) === (parentId ?? null)) return n;
+    }
+    return null;
+  }
+  function computeHeadingInsert(all, cur, desiredLevel) {
+    if (!cur) {
+      const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
+      const last = roots[roots.length-1] || null;
+      return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
+    }
+    const path = getPathToRoot(all, cur);
+    const ancestors = path.filter(n => n.type === 'section');
+    let parentId = null;
+    if (desiredLevel === 1) {
+      parentId = null;
+    } else {
+      const want = desiredLevel - 1;
+      let parentSec = ancestors.find(s => getLevel(s) === want);
+      if (!parentSec) parentSec = ancestors.find(s => getLevel(s) > 0 && getLevel(s) < desiredLevel) || null;
+      parentId = parentSec ? parentSec.id : null;
+    }
+    const directChild = firstInPathWithParent(path, parentId);
+    const sortBase = directChild ? Number(directChild.sort||0) : (
+      (() => {
+        const sibs = all.filter(b => (b.parentId ?? null) === (parentId ?? null));
+        return sibs.length ? Math.max(...sibs.map(s => Number(s.sort||0))) : -1;
+      })()
+    );
+    return { parentId, sortBase };
+  }
+  function computeBodyInsert(all, cur) {
+    if (!cur) {
+      const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
+      const last = roots[roots.length-1] || null;
+      return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
+    }
+    if ((cur.parentId ?? null) === null) return { parentId: null, sortBase: Number(cur.sort||0) };
+    if (cur.type === 'section') {
+      return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
+    }
+    const path = getPathToRoot(all, cur);
+    const nearestSection = path.find(n => n.type === 'section');
+    if (nearestSection) {
+      return { parentId: nearestSection.parentId ?? null, sortBase: Number(nearestSection.sort || 0) };
+    }
+    return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
+  }
+  return { getById, getProps, getLevel, getParent, getPathToRoot, firstInPathWithParent, computeHeadingInsert, computeBodyInsert };
+}
+
+// PRIVATE: bind toolbar button/select actions (only once)
+function bindToolbarActions({ page, rootEl, refs, outline }) {
+  const byRef = (k) => refs?.[k] || null;
+
+  const selType = byRef('typeSelectEl');
+  selType?.addEventListener('change', async () => {
+    const id = activeBlockId;
+    if (!id) return;
+    const levelMap = { h1: 1, h2: 2, h3: 3 };
+    const v = selType.value;
+    if (v === 'p') return; // no-op for now
+    const level = levelMap[v] || 2;
+    const all = getCurrentPageBlocks();
+    const cur = all.find(x => String(x.id) === String(id));
+    if (!cur) return;
+    try {
+      const { apiPatchBlock, apiCreateBlock } = await import('./apiBridge.js');
+      if (cur.type === 'section') {
+        const existingProps = parseMaybeJson(cur.propsJson) || {};
+        const nextProps = { ...existingProps, level };
+        await apiPatchBlock(cur.id, { props: nextProps });
+        updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
+        const container = document.getElementById('pageBlocks');
+        stableRender(container, page, getCurrentPageBlocks(), cur.id);
+        return;
+      }
+      if (cur.type === 'heading') {
+        const existingProps = parseMaybeJson(cur.propsJson) || {};
+        const nextProps = { ...existingProps, level };
+        await apiPatchBlock(cur.id, { props: nextProps });
+        updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
+        const container = document.getElementById('pageBlocks');
+        stableRender(container, page, getCurrentPageBlocks(), cur.id);
+        return;
+      }
+      if (cur.type === 'paragraph') {
+        const text = String((parseMaybeJson(cur.contentJson)?.text) || '').replace(/\r\n/g, '\n');
+        const lines = text.split('\n');
+        const title = (lines[0] || '').trim() || 'Untitled';
+        const remainder = lines.slice(1).join('\n').replace(/\s+$/,'');
+        const existingProps = parseMaybeJson(cur.propsJson) || {};
+        const nextProps = { ...existingProps, collapsed: false, level };
+        await apiPatchBlock(cur.id, { type: 'section', props: nextProps, content: { title } });
+        updateCurrentBlocks(b => b.id === cur.id ? { ...b, type: 'section', propsJson: JSON.stringify(nextProps), contentJson: JSON.stringify({ title }) } : b);
+        if (remainder && remainder.trim().length) {
+          const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: cur.id, sort: 0, props: {}, content: { text: remainder } });
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+        }
+        const container = document.getElementById('pageBlocks');
+        stableRender(container, page, getCurrentPageBlocks(), cur.id);
+      }
+    } catch (err) { console.error('toolbar heading change failed', err); }
+  });
+
+  const ensureRichActive = () => {
+    const ae = document.activeElement;
+    if (!ae) return null;
+    const isRich = ae && ae.isContentEditable && ae.classList.contains('block-rich');
+    return isRich ? ae : null;
+  };
+  const triggerSave = (el) => { try { el?.dispatchEvent(new Event('input', { bubbles: true })); } catch {} };
+
+  const btnHL = byRef('highlightToggleEl');
+  if (btnHL) {
+    btnHL.addEventListener('click', () => {
+      try {
+        const st = getState() || {};
+        const on = st?.uiPrefsV1?.sectionHeaderHighlight !== false;
+        const next = { ...(st.uiPrefsV1 || {}), sectionHeaderHighlight: !on };
+        updateState({ uiPrefsV1: next });
+        try { saveStateNow(); } catch {}
+        applyUiPrefsToBody({ ...(st || {}), uiPrefsV1: next });
+      } catch {}
+    });
+  }
+
+  function createSectionAfterActiveFactory(level) {
+    return async () => {
+      const id = activeBlockId;
+      const all = getCurrentPageBlocks();
+      const cur = id ? all.find(x => String(x.id) === String(id)) : null;
+      const { parentId, sortBase } = outline.computeHeadingInsert(all, cur, level);
+      try {
+        const { apiCreateBlock } = await import('./apiBridge.js');
+        const created = await apiCreateBlock(page.id, { type: 'section', parentId, sort: Number(sortBase || 0) + 1, props: { collapsed: false, level }, content: { title: '' } });
+        setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+        const container = document.getElementById('pageBlocks') || rootEl;
+        stableRender(container, page, getCurrentPageBlocks(), created.id);
+      } catch (err) { console.error('toolbar create section failed', err); }
+    };
+  }
+
+  async function createBodyAfterActive() {
+    const id = activeBlockId;
+    const all = getCurrentPageBlocks();
+    const cur = id ? all.find(x => String(x.id) === String(id)) : null;
+    try {
+      if (cur && cur.type === 'section') {
+        await insertFirstChildParagraph({ page, sectionId: cur.id, rootEl });
+        return;
+      }
+      const { parentId, sortBase } = outline.computeBodyInsert(all, cur);
+      const { apiCreateBlock } = await import('./apiBridge.js');
+      const created = await apiCreateBlock(page.id, {
+        type: 'paragraph',
+        parentId,
+        sort: Number(sortBase || 0) + 1,
+        props: {},
+        content: { text: '' }
+      });
+      setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+      const container = document.getElementById('pageBlocks') || rootEl;
+      stableRender(container, page, getCurrentPageBlocks(), created.id);
+    } catch (err) { console.error('toolbar create body failed', err); }
+  }
+
+  byRef('boldBtnEl')?.addEventListener('click', () => {
+    const el = ensureRichActive(); if (!el) return;
+    try { document.execCommand('bold'); } catch {}
+    triggerSave(el);
+  });
+  byRef('italicBtnEl')?.addEventListener('click', () => {
+    const el = ensureRichActive(); if (!el) return;
+    try { document.execCommand('italic'); } catch {}
+    triggerSave(el);
+  });
+  byRef('linkBtnEl')?.addEventListener('click', () => {
+    const ae = document.activeElement;
+    const richEl = ensureRichActive();
+    if (richEl) {
+      const sel = window.getSelection();
+      const url = window.prompt('Link URL:');
+      if (!url) return;
+      try {
+        if (sel && !sel.isCollapsed) {
+          document.execCommand('createLink', false, url);
+        } else {
+          document.execCommand('insertText', false, url);
+        }
+      } catch {}
+      triggerSave(richEl);
+      return;
+    }
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
+      insertMarkdownLink(ae);
+      return;
+    }
+  });
+
+  byRef('addH1BtnEl')?.addEventListener('click', () => void createSectionAfterActiveFactory(1)());
+  byRef('addH2BtnEl')?.addEventListener('click', () => void createSectionAfterActiveFactory(2)());
+  byRef('addH3BtnEl')?.addEventListener('click', () => void createSectionAfterActiveFactory(3)());
+  byRef('addBodyBtnEl')?.addEventListener('click', () => void createBodyAfterActive());
+}
+
+// PRIVATE: track focus to set activeBlockId and sync toolbar select
+function ensureFocusTracker(rootEl) {
   try {
     if (!rootEl.__focusTrackerBound) {
       rootEl.__focusTrackerBound = true;
@@ -465,7 +497,6 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         const blockEl = ae?.closest?.('.block[data-block-id]');
         if (blockEl) {
           activeBlockId = blockEl.getAttribute('data-block-id');
-          // Update toolbar dropdown to reflect current block type
           const selType = rootEl.parentElement?.querySelector?.('#editorToolbar #tbType');
           if (selType) {
             try {
@@ -488,6 +519,10 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       });
     }
   } catch {}
+}
+
+// PRIVATE: main DOM creation/render loop
+function renderEditorDom({ rootEl, page }) {
   if (!getCurrentPageBlocks().length) {
     const empty = document.createElement('div');
     empty.innerHTML = `<div class="block" data-block-id="" data-parent-id="">\n      <textarea class="block-input" placeholder="Start typing..."></textarea>\n    </div>`;
@@ -504,7 +539,6 @@ export function renderBlocksEdit(rootEl, page, blocks) {
     });
     rootEl.innerHTML = '';
     rootEl.appendChild(empty.firstElementChild);
-    // Autosize and focus initial canvas input
     try { bindAutosizeTextarea(ta); } catch {}
     setTimeout(() => ta.focus(), 0);
     return;
@@ -557,9 +591,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       const lvl = Math.min(3, Math.max(0, Number((b.props && b.props.level) || 0)));
       const header = document.createElement('div');
       header.className = 'section-header';
-      // Expose collapsed state for CSS styling
       header.dataset.collapsed = b.props?.collapsed ? '1' : '0';
-      // Drag handle (before toggle)
       const dragBtn = document.createElement('button');
       dragBtn.type = 'button';
       dragBtn.className = 'section-drag';
@@ -581,7 +613,6 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       title.value = b.content?.title || '';
       header.appendChild(title);
 
-      // Controls container (right-aligned): up, down, delete-empty, add
       const controls = document.createElement('div');
       controls.className = 'section-controls';
 
@@ -604,7 +635,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       delBtn.className = 'chip section-delete-empty';
       delBtn.textContent = '×';
       delBtn.title = 'Remove heading (keeps content)';
-      delBtn.hidden = true; // visibility controlled by handlers
+      delBtn.hidden = true;
       controls.appendChild(delBtn);
 
       const addBtn = document.createElement('button');
@@ -615,7 +646,6 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       controls.appendChild(addBtn);
 
       header.appendChild(controls);
-      // Mark as a section block for styling/drag state
       wrap.classList.add('section-block');
       if (lvl) wrap.classList.add(`section--lvl${lvl}`); else wrap.classList.add('section--plain');
       wrap.appendChild(header);
@@ -628,7 +658,6 @@ export function renderBlocksEdit(rootEl, page, blocks) {
 
       bindSectionHeaderControls({ page, block: b, rootEl: wrap, titleInput: title, onAfterChange: async () => { renderStable(b.id); }, focus });
       bindSectionTitleHandlers({ page, block: b, inputEl: title, rootEl: wrap, renderStable: renderStable, focus });
-      // Bind drag on sections only
       (async () => {
         const { bindSectionDrag } = await import('./handlersSection.js');
         bindSectionDrag({ page, block: b, wrapEl: wrap, headerEl: header, handleEl: dragBtn, onAfterChange: async () => { renderStable(b.id); }, focus });
@@ -655,4 +684,22 @@ export function renderBlocksEdit(rootEl, page, blocks) {
   }
 
   for (const node of tree) rootEl.appendChild(renderNodeEdit(node, 0));
+}
+
+// PRIVATE: finalize step placeholder for parity
+function finalizeRender() { /* no-op; behavior unchanged */ }
+
+export function renderBlocksEdit(rootEl, page, blocks) {
+  setCurrentPageBlocks(blocks);
+  try {
+    const host = rootEl.parentElement;
+    const { created, refs } = ensureEditorToolbar(host, rootEl);
+    const outline = buildOutlineIndex();
+    if (created) bindToolbarActions({ page, rootEl, refs, outline });
+  } catch {}
+
+  ensureFocusTracker(rootEl);
+
+  renderEditorDom({ rootEl, page });
+  finalizeRender();
 }

@@ -20,134 +20,165 @@ import { openDb, migrate, backfillSlugs, listPages as dbListPages, searchPages a
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT || 8080);
+// PRIVATE HELPERS (pure refactor; no behavior changes)
 
-const STATIC_DIR = resolveStaticDir();
-const DATA_DIR = getDataRoot();
-const DB_FILE_PATH = path.join(DATA_DIR, 'vault', 'vault.sqlite');
-const USER_DIR = path.join(DATA_DIR, 'user');
+function resolveRuntimePaths() {
+  const PORT = Number(process.env.PORT || 8080);
+  const STATIC_DIR = resolveStaticDir();
+  const DATA_DIR = getDataRoot();
+  const DB_FILE_PATH = path.join(DATA_DIR, 'vault', 'vault.sqlite');
+  const USER_DIR = path.join(DATA_DIR, 'user');
+  return { PORT, STATIC_DIR, DATA_DIR, DB_FILE_PATH, USER_DIR };
+}
 
-// Initialize DB + run migrations + seed optional welcome page
-let db = openDb();
-migrate(db);
-try { backfillSlugs(db); } catch {}
-
-function reloadDb() {
-  try { db?.close?.(); } catch {}
-  db = openDb();
+function initializeDatabase({ paths }) {
+  let db = openDb();
   migrate(db);
   try { backfillSlugs(db); } catch {}
-}
-try {
-  const cnt = db.prepare('SELECT COUNT(*) AS n FROM pages').get().n;
-  if (!cnt) {
-    const page = dbCreatePage(db, { title: 'Welcome to DM Vault', type: 'note' });
-    const ts = Math.floor(Date.now() / 1000);
-    const insertBlock = db.prepare('INSERT INTO blocks(id, page_id, parent_id, sort, type, props_json, content_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const b1 = {
-      id: randomUUID(),
-      sort: 0,
-      type: 'heading',
-      props: { level: 2 },
-      content: { text: 'Hello! Your vault is ready.' },
-    };
-    insertBlock.run(b1.id, page.id, null, b1.sort, b1.type, JSON.stringify(b1.props), JSON.stringify(b1.content), ts, ts);
-    const b2 = {
-      id: randomUUID(),
-      sort: 1,
-      type: 'paragraph',
-      props: {},
-      content: { text: 'Content is stored locally in a SQLite DB under your data root.' },
-    };
-    insertBlock.run(b2.id, page.id, null, b2.sort, b2.type, JSON.stringify(b2.props), JSON.stringify(b2.content), ts, ts);
+
+  function reloadDb() {
+    try { db?.close?.(); } catch {}
+    db = openDb();
+    migrate(db);
+    try { backfillSlugs(db); } catch {}
   }
-} catch {}
 
-// Ensure user dir and default state
-ensureUserDirs({ USER_DIR });
-
-const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const pathname = url.pathname;
-    const ctx = {
-      db,
-      reloadDb,
-      DATA_DIR,
-      USER_DIR,
-      STATIC_DIR,
-      DB_FILE_PATH,
-      dbListPages,
-      dbSearchPages,
-      dbGetBacklinks,
-      dbCreatePage,
-      dbGetPageWithBlocks,
-      dbGetPageWithBlocksBySlug,
-      dbPatchPage,
-      dbDeletePage,
-      dbCreateBlock,
-      dbPatchBlock,
-      dbDeleteBlock,
-      dbReorderBlocks,
-      dbEnsureTag,
-      dbListTagsWithCounts,
-      dbGetPageTags,
-      dbSetPageTags,
-      dbGetPageSnapshots,
-      dbSetPageMedia,
-      dbClearPageMediaSlot,
-    };
-
-    // Optional minimal request logging for /api/* endpoints
-    const LOG_REQUESTS = process.env.DMV_LOG_REQUESTS === '1' || process.env.DMV_LOG_REQUESTS === 'true';
-    const start = Date.now();
-    const shouldLog = LOG_REQUESTS && pathname.startsWith('/api/');
-    if (shouldLog) {
-      res.once('finish', () => {
-        try {
-          const dur = Date.now() - start;
-          // Single-line log: method, path, statusCode, durationMs
-          console.log(`[api] ${req.method} ${pathname} ${res.statusCode} ${dur}ms`);
-        } catch {}
-      });
+    const cnt = db.prepare('SELECT COUNT(*) AS n FROM pages').get().n;
+    if (!cnt) {
+      const page = dbCreatePage(db, { title: 'Welcome to DM Vault', type: 'note' });
+      const ts = Math.floor(Date.now() / 1000);
+      const insertBlock = db.prepare('INSERT INTO blocks(id, page_id, parent_id, sort, type, props_json, content_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      const b1 = {
+        id: randomUUID(),
+        sort: 0,
+        type: 'heading',
+        props: { level: 2 },
+        content: { text: 'Hello! Your vault is ready.' },
+      };
+      insertBlock.run(b1.id, page.id, null, b1.sort, b1.type, JSON.stringify(b1.props), JSON.stringify(b1.content), ts, ts);
+      const b2 = {
+        id: randomUUID(),
+        sort: 1,
+        type: 'paragraph',
+        props: {},
+        content: { text: 'Content is stored locally in a SQLite DB under your data root.' },
+      };
+      insertBlock.run(b2.id, page.id, null, b2.sort, b2.type, JSON.stringify(b2.props), JSON.stringify(b2.content), ts, ts);
     }
+  } catch {}
 
-    const handled = await routeRequest(req, res, ctx);
-    if (handled) return;
+  return { db, reloadDb };
+}
 
-    // Server-side redirect: /page/:id -> /p/:slug when available
-    if (req.method === 'GET') {
-      const m = pathname.match(/^\/page\/([^\/]+)$/);
-      if (m) {
-        const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return String(v || ''); } };
-        const id = safeDecode(m[1]);
-        try {
-          const row = db.prepare("SELECT slug FROM pages WHERE id = ? AND slug IS NOT NULL AND slug != ''").get(id);
-          const slug = row?.slug;
-          if (slug) {
-            res.statusCode = 302;
-            res.setHeader('Location', `/p/${encodeURIComponent(slug)}`);
-            res.end('Found');
-            return;
-          }
-        } catch {}
-        // Fall through to SPA if no slug found
+function ensureUserState({ paths }) {
+  const { USER_DIR } = paths;
+  // Ensure user dir and default state (same behavior)
+  ensureUserDirs({ USER_DIR });
+}
+
+function createRequestListener({ db, reloadDb, paths }) {
+  const { DATA_DIR, USER_DIR, STATIC_DIR, DB_FILE_PATH } = paths;
+
+  return async (req, res) => {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const pathname = url.pathname;
+      const ctx = {
+        db,
+        reloadDb,
+        DATA_DIR,
+        USER_DIR,
+        STATIC_DIR,
+        DB_FILE_PATH,
+        dbListPages,
+        dbSearchPages,
+        dbGetBacklinks,
+        dbCreatePage,
+        dbGetPageWithBlocks,
+        dbGetPageWithBlocksBySlug,
+        dbPatchPage,
+        dbDeletePage,
+        dbCreateBlock,
+        dbPatchBlock,
+        dbDeleteBlock,
+        dbReorderBlocks,
+        dbEnsureTag,
+        dbListTagsWithCounts,
+        dbGetPageTags,
+        dbSetPageTags,
+        dbGetPageSnapshots,
+        dbSetPageMedia,
+        dbClearPageMediaSlot,
+      };
+
+      // Optional minimal request logging for /api/* endpoints
+      const LOG_REQUESTS = process.env.DMV_LOG_REQUESTS === '1' || process.env.DMV_LOG_REQUESTS === 'true';
+      const start = Date.now();
+      const shouldLog = LOG_REQUESTS && pathname.startsWith('/api/');
+      if (shouldLog) {
+        res.once('finish', () => {
+          try {
+            const dur = Date.now() - start;
+            // Single-line log: method, path, statusCode, durationMs
+            console.log(`[api] ${req.method} ${pathname} ${res.statusCode} ${dur}ms`);
+          } catch {}
+        });
       }
+
+      const handled = await routeRequest(req, res, ctx);
+      if (handled) return;
+
+      // Server-side redirect: /page/:id -> /p/:slug when available
+      if (req.method === 'GET') {
+        const m = pathname.match(/^\/page\/([^\/]+)$/);
+        if (m) {
+          const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return String(v || ''); } };
+          const id = safeDecode(m[1]);
+          try {
+            const row = db.prepare("SELECT slug FROM pages WHERE id = ? AND slug IS NOT NULL AND slug != ''").get(id);
+            const slug = row?.slug;
+            if (slug) {
+              res.statusCode = 302;
+              res.setHeader('Location', `/p/${encodeURIComponent(slug)}`);
+              res.end('Found');
+              return;
+            }
+          } catch {}
+          // Fall through to SPA if no slug found
+        }
+      }
+
+      // Static and SPA fallback if not handled by routes
+      const served = serveStaticOrSpa(req, res, ctx);
+      if (served) return;
+
+      return sendText(res, 404, 'not found');
+    } catch (err) {
+      console.error(err);
+      return sendText(res, 500, 'internal error');
     }
+  };
+}
 
-    // Static and SPA fallback if not handled by routes
-    const served = serveStaticOrSpa(req, res, ctx);
-    if (served) return;
+function createApp({ db, reloadDb, paths }) {
+  const listener = createRequestListener({ db, reloadDb, paths });
+  return http.createServer(listener);
+}
 
-    return sendText(res, 404, 'not found');
-  } catch (err) {
-    console.error(err);
-    return sendText(res, 500, 'internal error');
-  }
-});
+function startServer(server, { paths }) {
+  const { PORT, STATIC_DIR, DATA_DIR } = paths;
+  server.listen(PORT, () => {
+    console.log(`[dm-vault] running on http://localhost:${PORT}`);
+    console.log(`[dm-vault] static: ${STATIC_DIR}`);
+    console.log(`[dm-vault] data:   ${DATA_DIR}`);
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`[dm-vault] running on http://localhost:${PORT}`);
-  console.log(`[dm-vault] static: ${STATIC_DIR}`);
-  console.log(`[dm-vault] data:   ${DATA_DIR}`);
-});
+// MAIN FLOW (thin orchestrator; order preserved)
+const paths = resolveRuntimePaths();
+const { PORT, STATIC_DIR, DATA_DIR, DB_FILE_PATH, USER_DIR } = paths; // preserved bindings for logs/ctx
+const { db, reloadDb } = initializeDatabase({ paths });
+ensureUserState({ paths });
+const server = createApp({ db, reloadDb, paths });
+startServer(server, { paths });

@@ -19,6 +19,461 @@ import { addPageToSection, removePageFromSection, normalizeSections } from '../l
 import { canonicalPageHref } from '../lib/pageUrl.js';
 import { setActivePage } from '../lib/activePage.js';
 
+// ---------- Private helpers (pure refactor; no behavior change intended)
+
+function getPageOutletOrNull() {
+  return document.getElementById('outlet');
+}
+
+function computeSectionLabel(page) {
+  const folderTitle = getFolderTitleForPage(page.id);
+  return folderTitle || sectionForType(page.type);
+}
+
+function renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar }) {
+  if (!outlet) return;
+  if (includeTagsToolbar) {
+    // Exact template from ID-based route (includes #pageTags toolbar)
+    outlet.innerHTML = `
+    <article class="page page--${escapeHtml(page.type || 'page')}">
+      <div id=\"pageHeaderMedia\"></div>
+      <div class=\"page-identity\" id=\"pageIdentity\">
+        <div class=\"avatar-col\"></div>
+        <div class=\"name-col\"> 
+          <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+          <div id=\"pageTags\" class=\"toolbar\"></div>
+        </div>
+        
+      </div>
+      <div id=\"pageTabs\" class=\"page-tabs\" hidden>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"sheet\">Sheet</button>
+      </div>
+      <div class=\"page-body\"> 
+        <div id=\"pageBlocks\"></div>
+        <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
+      </div>
+      <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+    </article>
+  `;
+  } else {
+    // Exact template from slug-based route (no #pageTags toolbar)
+    outlet.innerHTML = `
+    <article class=\"page page--${escapeHtml(page.type || 'page')}\"> 
+      <div id=\"pageHeaderMedia\"></div>
+      <div class=\"page-identity\" id=\"pageIdentity\"> 
+        <div class=\"avatar-col\"></div>
+        <div class=\"name-col\">
+          <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+        </div>
+        
+      </div>
+      <div id=\"pageTabs\" class=\"page-tabs\" hidden>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
+        <button type=\"button\" class=\"chip page-tab\" data-tab=\"sheet\">Sheet</button>
+      </div>
+      <div class=\"page-body\"> 
+        <div id=\"pageBlocks\"></div>
+        <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
+      </div>
+      <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+    </article>
+  `;
+  }
+}
+
+function initHeaderMedia(outlet, page) {
+  let rerenderHeaderMedia = null;
+  try {
+    const host = document.getElementById('pageHeaderMedia');
+    const showProfile = (page.type === 'npc' || page.type === 'character');
+    const renderHM = () => {
+      const mode = isEditingPage(page.id) ? 'edit' : 'view';
+      const article = outlet?.querySelector?.('article.page');
+      if (article) {
+        if (showProfile && page.media?.profile) article.classList.add('has-profile-media'); else article.classList.remove('has-profile-media');
+      }
+      renderHeaderMedia(host, {
+        mode,
+        cover: page.media?.header || null,
+        profile: showProfile ? (page.media?.profile || null) : null,
+        showProfile,
+        async onUploadCover(file) {
+          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
+          page.media = page.media || {};
+          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
+          renderHM();
+        },
+        async onUploadProfile(file) {
+          if (!showProfile) return;
+          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
+          page.media = page.media || {};
+          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
+          renderHM();
+        },
+        async onRemoveCover() {
+          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'header' });
+          if (page.media) page.media.header = null;
+          renderHM();
+        },
+        async onRemoveProfile() {
+          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'profile' });
+          if (page.media) page.media.profile = null;
+          renderHM();
+        },
+        async onSavePosition(slot, x, y, zoom) {
+          try {
+            await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y, ...(Number.isFinite(zoom) ? { zoom } : {}) });
+            if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; if (Number.isFinite(zoom)) page.media.header.zoom = zoom; }
+            if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; if (Number.isFinite(zoom)) page.media.profile.zoom = zoom; }
+            renderHM();
+          } catch (e) {
+            console.error('[media] failed to save position', e);
+          }
+        },
+      });
+      // Reserve identity left column to match avatar width (if present)
+      try {
+        const identity = document.getElementById('pageIdentity');
+        const clip = host?.querySelector?.('.profileWrap');
+        const w = clip ? Math.round(clip.getBoundingClientRect().width) : 0;
+        const reserve = (showProfile && page.media?.profile && w) ? `${w}px` : '0px';
+        if (identity) identity.style.setProperty('--avatar-slot', reserve);
+      } catch {}
+    };
+    rerenderHeaderMedia = renderHM;
+    renderHM();
+  } catch {}
+  return rerenderHeaderMedia;
+}
+
+function initCharTabsAndSheet(outlet, page) {
+  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
+  const tabsEl = document.getElementById('pageTabs');
+  const sheetEl = document.getElementById('pageSheet');
+  const blocksEl = document.getElementById('pageBlocks');
+  const metaEl = outlet?.querySelector?.('p.meta') || null;
+
+  let sheetCache = null;
+  let sheetLoaded = false;
+  let saveTimer = null;
+
+  async function loadSheet() {
+    if (sheetLoaded) return sheetCache || {};
+    sheetLoaded = true;
+    try {
+      const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`);
+      sheetCache = resp?.sheet || {};
+    } catch { sheetCache = {}; }
+    return sheetCache;
+  }
+
+  function setActiveTab(tab) {
+    const st = getState() || {};
+    const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
+    updateState({ pageTabsV1: { ...(st.pageTabsV1||{}), pages: { ...pages, [page.id]: tab } } });
+
+    for (const b of tabsEl?.querySelectorAll?.('.page-tab') || []) {
+      b.classList.toggle('is-active', b.dataset.tab === tab);
+    }
+
+    if (tab === 'notes') {
+      if (sheetEl) sheetEl.hidden = true;
+      if (blocksEl) blocksEl.style.display = '';
+      if (metaEl) metaEl.style.display = '';
+    } else {
+      if (blocksEl) blocksEl.style.display = 'none';
+      if (sheetEl) sheetEl.hidden = false;
+      if (metaEl) metaEl.style.display = '';
+      void renderSheet();
+    }
+  }
+
+  async function renderSheet() {
+    if (!sheetEl) return;
+    const sheet = await loadSheet();
+    const editing = isEditingPage(page.id);
+
+    sheetEl.innerHTML = `
+      <div class=\"sheet-grid\"> 
+        <label class=\"sheet-field\">
+          <span class=\"meta\">AC</span>
+          ${editing ? `<input id=\"sheetAc\" type=\"number\" inputmode=\"numeric\" />` : `<div class=\"sheet-val\" id=\"sheetAcView\"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Perception</span>
+          ${editing ? `<input id=\"sheetPP\" type=\"number\" inputmode=\"numeric\" />` : `<div class=\"sheet-val\" id=\"sheetPPView\"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Insight</span>
+          ${editing ? `<input id=\"sheetPI\" type=\"number\" inputmode=\"numeric\" />` : `<div class=\"sheet-val\" id=\"sheetPIView\"></div>`}
+        </label>
+
+        <label class=\"sheet-field\">
+          <span class=\"meta\">Passive Investigation</span>
+          ${editing ? `<input id=\"sheetPV\" type=\"number\" inputmode=\"numeric\" />` : `<div class=\"sheet-val\" id=\"sheetPVView\"></div>`}
+        </label>
+      </div>
+
+      <div class=\"sheet-notes\">
+        <div class=\"meta\">Notes</div>
+        ${editing
+          ? `<textarea id=\"sheetNotes\" class=\"sheet-notes-input\" rows=\"6\" placeholder=\"Useful combat notes, tactics, special rules, reminders…\"></textarea>`
+          : `<div id=\"sheetNotesView\" class=\"sheet-notes-view\"></div>`
+        }
+      </div>
+    `;
+
+    const setText = (id, v) => { const el = sheetEl.querySelector(id); if (el) el.textContent = (v === null || v === undefined || v === '') ? '—' : String(v); };
+
+    if (!editing) {
+      setText('#sheetAcView', sheet.ac);
+      setText('#sheetPPView', sheet.passivePerception);
+      setText('#sheetPIView', sheet.passiveInsight);
+      setText('#sheetPVView', sheet.passiveInvestigation);
+
+      try {
+        const view = sheetEl.querySelector('#sheetNotesView');
+        if (view) {
+          view.innerHTML = '';
+          const { buildWikiTextNodes } = await import('../features/wikiLinks.js');
+          (buildWikiTextNodes(String(sheet.notes || '')) || []).forEach(n => view.appendChild(n));
+        }
+      } catch {
+        const view = sheetEl.querySelector('#sheetNotesView');
+        if (view) view.textContent = String(sheet.notes || '');
+      }
+      return;
+    }
+
+    const ac = sheetEl.querySelector('#sheetAc'); if (ac) ac.value = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
+    const pp = sheetEl.querySelector('#sheetPP'); if (pp) pp.value = (sheet.passivePerception ?? '') === null ? '' : String(sheet.passivePerception ?? '');
+    const pi = sheetEl.querySelector('#sheetPI'); if (pi) pi.value = (sheet.passiveInsight ?? '') === null ? '' : String(sheet.passiveInsight ?? '');
+    const pv = sheetEl.querySelector('#sheetPV'); if (pv) pv.value = (sheet.passiveInvestigation ?? '') === null ? '' : String(sheet.passiveInvestigation ?? '');
+    const notes = sheetEl.querySelector('#sheetNotes'); if (notes) notes.value = String(sheet.notes || '');
+
+    try { const { autosizeTextarea } = await import('../lib/autosizeTextarea.js'); if (notes) autosizeTextarea(notes); } catch {}
+
+    function queueSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        const next = {
+          ac: ac ? ac.value : '',
+          passivePerception: pp ? pp.value : '',
+          passiveInsight: pi ? pi.value : '',
+          passiveInvestigation: pv ? pv.value : '',
+          notes: notes ? notes.value : ''
+        };
+        try {
+          const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, {
+            method: 'PATCH',
+            body: JSON.stringify(next),
+          });
+          sheetCache = resp?.sheet || sheetCache;
+        } catch (e) {
+          console.error('Failed to save sheet', e);
+        }
+      }, 250);
+    }
+
+    for (const el of [ac, pp, pi, pv, notes].filter(Boolean)) {
+      el.addEventListener('input', () => {
+        sheetCache = sheetCache || {};
+        if (el === ac) sheetCache.ac = el.value === '' ? null : Number(el.value);
+        if (el === pp) sheetCache.passivePerception = el.value === '' ? null : Number(el.value);
+        if (el === pi) sheetCache.passiveInsight = el.value === '' ? null : Number(el.value);
+        if (el === pv) sheetCache.passiveInvestigation = el.value === '' ? null : Number(el.value);
+        if (el === notes) sheetCache.notes = el.value;
+        queueSave();
+      });
+    }
+  }
+
+  if (isCharLike) {
+    if (tabsEl) tabsEl.hidden = false;
+    tabsEl?.querySelectorAll('.page-tab').forEach(btn => btn.onclick = () => setActiveTab(btn.dataset.tab));
+    const st = getState() || {};
+    const saved = st.pageTabsV1?.pages?.[page.id];
+    setActiveTab(saved === 'sheet' ? 'sheet' : 'notes');
+  }
+
+  return { isCharLike, renderSheet };
+}
+
+function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, rerenderHeaderMedia, cheatHtml }) {
+  const applyEditState = async () => {
+    const now = isEditingPage(page.id);
+    if (now) {
+      try { setUiMode('edit'); } catch {}
+      enablePageTitleEdit(page);
+      renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+      try { mountSaveIndicator(); } catch {}
+      try { rerenderHeaderMedia?.(); } catch {}
+      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+    } else {
+      try { setUiMode(null); } catch {}
+      disablePageTitleEdit(page);
+      try { await flushDebouncedPatches(); } catch (e) { console.error('Failed to flush debounced patches', e); }
+      try {
+        const fresh = await refreshBlocksFromServer(page.id);
+        if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
+      } catch (e) { console.error('Failed to refresh blocks from server', e); }
+      renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+      try { unmountSaveIndicator(); } catch {}
+      try { rerenderHeaderMedia?.(); } catch {}
+      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+    }
+  };
+
+  // Initial edit-mode UI scaffolding (only when already editing on first render)
+  const initialEditing = isEditingPage(page.id);
+  if (initialEditing) {
+    try {
+      const article = outlet.querySelector('article.page');
+      const titleEl = article.querySelector('#pageTitleInput');
+      const metaEl = article.querySelector('p.meta');
+      const tagsEl = article.querySelector('#pageTags');
+      const editorWrap = document.createElement('div');
+      editorWrap.className = 'page-editor';
+      if (titleEl) titleEl.before(editorWrap);
+      if (titleEl) editorWrap.appendChild(titleEl);
+      const cheat = document.createElement('div');
+      cheat.className = 'page-cheatsheet';
+      cheat.innerHTML = cheatHtml;
+      editorWrap.appendChild(cheat);
+      const bodyEl = article.querySelector('#pageBlocks');
+      if (tagsEl) editorWrap.appendChild(tagsEl);
+      if (bodyEl) editorWrap.appendChild(bodyEl);
+      const controls = document.createElement('div');
+      controls.className = 'editor-add-controls';
+      controls.innerHTML = `
+        <button type="button" class="chip" id="btnAddBlock">+ Add block (⌥⏎)</button>
+        <button type="button" class="chip" id="btnAddSection">+ Section (⌥⇧⏎)</button>
+      `;
+      editorWrap.appendChild(controls);
+      const getFocusedContext = () => {
+        const active = document.activeElement;
+        const blockEl = active?.closest?.('.block[data-block-id]');
+        if (blockEl) {
+          const id = blockEl.getAttribute('data-block-id');
+          const all = getCurrentPageBlocks();
+          const cur = all.find(x => String(x.id) === String(id));
+          if (cur) return { parentId: cur.parentId ?? null, sort: Number(cur.sort || 0) };
+        }
+        const roots = (getCurrentPageBlocks() || []).filter(x => (x.parentId || null) === null).sort((a,b) => a.sort - b.sort);
+        const last = roots[roots.length - 1] || null;
+        return { parentId: null, sort: last ? Number(last.sort || 0) : -1 };
+      };
+      const doCreate = async (type) => {
+        try {
+          const { apiCreateBlock, refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
+          const { renderBlocksEdit } = await import('../blocks/edit/render.js');
+          const { focusBlockInput } = await import('../blocks/edit/focus.js');
+          const ctx = getFocusedContext();
+          const payload = (type === 'section')
+            ? { type: 'section', parentId: ctx.parentId, sort: ctx.sort + 1, props: { collapsed: false }, content: { title: '' } }
+            : { type: 'paragraph', parentId: ctx.parentId, sort: ctx.sort + 1, props: {}, content: { text: '' } };
+          const created = await apiCreateBlock(page.id, payload);
+          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+          await refreshBlocksFromServer(page.id);
+          renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+          focusBlockInput(created.id);
+        } catch (e) { console.error('Failed to create block from add-controls', e); }
+      };
+      const btnAddBlock = controls.querySelector('#btnAddBlock');
+      const btnAddSection = controls.querySelector('#btnAddSection');
+      if (btnAddBlock) btnAddBlock.addEventListener('click', () => void doCreate('paragraph'));
+      if (btnAddSection) btnAddSection.addEventListener('click', () => void doCreate('section'));
+      if (metaEl) { metaEl.classList.add('page-edit-meta-footer'); editorWrap.after(metaEl); }
+    } catch {}
+
+    // Install autosize-on-resize handler and store for cleanup
+    try {
+      const autoAll = () => {
+        if (document.body.dataset.mode !== 'edit') return;
+        document.querySelectorAll('textarea.block-input').forEach((el) => {
+          try { autosizeTextarea(el); } catch {}
+        });
+      };
+      requestAnimationFrame(autoAll);
+      const onResize = () => autoAll();
+      window.addEventListener('resize', onResize);
+      outlet.__editResizeHandler = onResize;
+    } catch {}
+  }
+
+  try { window.addEventListener('vault:modechange', applyEditState); } catch {}
+  void applyEditState();
+
+  const cleanupEditLifecycle = () => {
+    try { setUiMode(null); } catch {}
+    try { unmountSaveIndicator(); } catch {}
+    try { window.removeEventListener('vault:modechange', applyEditState); } catch {}
+    try {
+      if (outlet.__editResizeHandler) {
+        window.removeEventListener('resize', outlet.__editResizeHandler);
+        delete outlet.__editResizeHandler;
+      }
+    } catch {}
+  };
+
+  return { applyEditState, cleanupEditLifecycle };
+}
+
+function initBacklinks(page) {
+  void renderBacklinksPanel(page.id);
+}
+
+async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
+  setPageBreadcrumb(page);
+  setPageActionsEnabled({ canEdit: true, canDelete: true });
+
+  const outlet = getPageOutletOrNull();
+  if (!outlet) return () => {};
+
+  const sectionLabel = computeSectionLabel(page);
+  renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar });
+
+  const rerenderHeaderMedia = initHeaderMedia(outlet, page);
+  const { isCharLike, renderSheet } = initCharTabsAndSheet(outlet, page);
+
+  const blocksRoot = document.getElementById('pageBlocks');
+  setCurrentPageBlocks(page.blocks || []);
+  if (isEditingPage(page.id)) {
+    setUiMode('edit');
+    enablePageTitleEdit(page);
+    renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
+    try { mountSaveIndicator(); } catch {}
+  } else {
+    setUiMode(null);
+    renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
+    try { unmountSaveIndicator(); } catch {}
+  }
+
+  if (includeTagsToolbar) { void renderPageTags(page.id); }
+
+  const btnDelete = document.getElementById('btnDeletePage');
+  if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
+
+  const { cleanupEditLifecycle } = initEditLifecycle({
+    outlet,
+    page,
+    blocksRoot,
+    isCharLike,
+    renderSheet,
+    rerenderHeaderMedia,
+    cheatHtml,
+  });
+
+  initBacklinks(page);
+
+  return () => {
+    cleanupEditLifecycle();
+  };
+}
+
 function getFolderTitleForPage(pageId) {
   const st = getState();
   const { sections } = normalizeSections(st || {});
@@ -67,407 +522,12 @@ export async function renderPage({ match }) {
     return await renderPageBySlug({ match: [null, page.slug] });
   }
 
-  setPageBreadcrumb(page);
-  setPageActionsEnabled({ canEdit: true, canDelete: true });
-
-  const outlet = document.getElementById('outlet');
-  if (!outlet) return;
-  // Stable re-render hook for Header Media
-  let rerenderHeaderMedia = null;
-
-  const folderTitle = getFolderTitleForPage(page.id);
-  const sectionLabel = folderTitle || sectionForType(page.type);
-  outlet.innerHTML = `
-    <article class="page page--${escapeHtml(page.type || 'page')}">
-      <div id=\"pageHeaderMedia\"></div>
-      <div class=\"page-identity\" id=\"pageIdentity\">
-        <div class=\"avatar-col\"></div>
-        <div class=\"name-col\"> 
-          <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
-          <div id=\"pageTags\" class=\"toolbar\"></div>
-        </div>
-        
-      </div>
-      <div id=\"pageTabs\" class=\"page-tabs\" hidden>
-        <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
-        <button type=\"button\" class=\"chip page-tab\" data-tab=\"sheet\">Sheet</button>
-      </div>
-      <div class=\"page-body\"> 
-        <div id=\"pageBlocks\"></div>
-        <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
-      </div>
-      <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
-    </article>
-  `;
-  // Render header media (view or edit depending on current state)
-  try {
-    const host = document.getElementById('pageHeaderMedia');
-    const showProfile = (page.type === 'npc' || page.type === 'character');
-    const renderHM = () => {
-      const mode = isEditingPage(page.id) ? 'edit' : 'view';
-      const article = outlet.querySelector('article.page');
-      if (article) {
-        if (showProfile && page.media?.profile) article.classList.add('has-profile-media'); else article.classList.remove('has-profile-media');
-      }
-      renderHeaderMedia(host, {
-        mode,
-        cover: page.media?.header || null,
-        profile: showProfile ? (page.media?.profile || null) : null,
-        showProfile,
-        async onUploadCover(file) {
-          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
-          page.media = page.media || {};
-          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
-          renderHM();
-        },
-        async onUploadProfile(file) {
-          if (!showProfile) return;
-          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
-          page.media = page.media || {};
-          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
-          renderHM();
-        },
-        async onRemoveCover() {
-          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'header' });
-          if (page.media) page.media.header = null;
-          renderHM();
-        },
-        async onRemoveProfile() {
-          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'profile' });
-          if (page.media) page.media.profile = null;
-          renderHM();
-        },
-        async onSavePosition(slot, x, y, zoom) {
-          try {
-            await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y, ...(Number.isFinite(zoom) ? { zoom } : {}) });
-            if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; if (Number.isFinite(zoom)) page.media.header.zoom = zoom; }
-            if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; if (Number.isFinite(zoom)) page.media.profile.zoom = zoom; }
-            renderHM();
-          } catch (e) {
-            console.error('[media] failed to save position', e);
-          }
-        },
-      });
-      // Reserve identity left column to match avatar width (if present)
-      try {
-        const identity = document.getElementById('pageIdentity');
-        const clip = host.querySelector('.profileWrap');
-        const w = clip ? Math.round(clip.getBoundingClientRect().width) : 0;
-        const reserve = (showProfile && page.media?.profile && w) ? `${w}px` : '0px';
-        if (identity) identity.style.setProperty('--avatar-slot', reserve);
-      } catch {}
-    };
-    // Expose stable re-render function so edit toggles keep callbacks intact
-    rerenderHeaderMedia = renderHM;
-    renderHM();
-  } catch {}
-
-  // Tabs and Sheet UI for character-like pages
-  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
-  const tabsEl = document.getElementById('pageTabs');
-  const sheetEl = document.getElementById('pageSheet');
-  const blocksEl = document.getElementById('pageBlocks');
-  const metaEl = outlet.querySelector('p.meta');
-
-  let sheetCache = null;
-  let sheetLoaded = false;
-  let saveTimer = null;
-
-  async function loadSheet() {
-    if (sheetLoaded) return sheetCache || {};
-    sheetLoaded = true;
-    try {
-      const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`);
-      sheetCache = resp?.sheet || {};
-    } catch { sheetCache = {}; }
-    return sheetCache;
-  }
-
-  function setActiveTab(tab) {
-    const st = getState() || {};
-    const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
-    updateState({ pageTabsV1: { ...(st.pageTabsV1||{}), pages: { ...pages, [page.id]: tab } } });
-
-    for (const b of tabsEl?.querySelectorAll?.('.page-tab') || []) {
-      b.classList.toggle('is-active', b.dataset.tab === tab);
-    }
-
-    if (tab === 'notes') {
-      if (sheetEl) sheetEl.hidden = true;
-      if (blocksEl) blocksEl.style.display = '';
-      if (metaEl) metaEl.style.display = '';
-    } else {
-      if (blocksEl) blocksEl.style.display = 'none';
-      if (sheetEl) sheetEl.hidden = false;
-      if (metaEl) metaEl.style.display = '';
-      void renderSheet();
-    }
-  }
-
-  async function renderSheet() {
-    if (!sheetEl) return;
-    const sheet = await loadSheet();
-    const editing = isEditingPage(page.id);
-
-    sheetEl.innerHTML = `
-      <div class=\"sheet-grid\"> 
-        <label class=\"sheet-field\">
-          <span class=\"meta\">AC</span>
-          ${editing ? `<input id="sheetAc" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetAcView"></div>`}
-        </label>
-
-        <label class=\"sheet-field\">
-          <span class=\"meta\">Passive Perception</span>
-          ${editing ? `<input id="sheetPP" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPPView"></div>`}
-        </label>
-
-        <label class=\"sheet-field\">
-          <span class=\"meta\">Passive Insight</span>
-          ${editing ? `<input id="sheetPI" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPIView"></div>`}
-        </label>
-
-        <label class=\"sheet-field\">
-          <span class=\"meta\">Passive Investigation</span>
-          ${editing ? `<input id="sheetPV" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPVView"></div>`}
-        </label>
-      </div>
-
-      <div class=\"sheet-notes\">
-        <div class=\"meta\">Notes</div>
-        ${editing
-          ? `<textarea id="sheetNotes" class="sheet-notes-input" rows="6" placeholder="Useful combat notes, tactics, special rules, reminders…"></textarea>`
-          : `<div id="sheetNotesView" class="sheet-notes-view"></div>`
-        }
-      </div>
-    `;
-
-    const setText = (id, v) => { const el = sheetEl.querySelector(id); if (el) el.textContent = (v === null || v === undefined || v === '') ? '—' : String(v); };
-
-    if (!editing) {
-      setText('#sheetAcView', sheet.ac);
-      setText('#sheetPPView', sheet.passivePerception);
-      setText('#sheetPIView', sheet.passiveInsight);
-      setText('#sheetPVView', sheet.passiveInvestigation);
-
-      try {
-        const view = sheetEl.querySelector('#sheetNotesView');
-        if (view) {
-          view.innerHTML = '';
-          const { buildWikiTextNodes } = await import('../features/wikiLinks.js');
-          (buildWikiTextNodes(String(sheet.notes || '')) || []).forEach(n => view.appendChild(n));
-        }
-      } catch {
-        const view = sheetEl.querySelector('#sheetNotesView');
-        if (view) view.textContent = String(sheet.notes || '');
-      }
-      return;
-    }
-
-    const ac = sheetEl.querySelector('#sheetAc'); if (ac) ac.value = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
-    const pp = sheetEl.querySelector('#sheetPP'); if (pp) pp.value = (sheet.passivePerception ?? '') === null ? '' : String(sheet.passivePerception ?? '');
-    const pi = sheetEl.querySelector('#sheetPI'); if (pi) pi.value = (sheet.passiveInsight ?? '') === null ? '' : String(sheet.passiveInsight ?? '');
-    const pv = sheetEl.querySelector('#sheetPV'); if (pv) pv.value = (sheet.passiveInvestigation ?? '') === null ? '' : String(sheet.passiveInvestigation ?? '');
-    const notes = sheetEl.querySelector('#sheetNotes'); if (notes) notes.value = String(sheet.notes || '');
-
-    try { const { autosizeTextarea } = await import('../lib/autosizeTextarea.js'); if (notes) autosizeTextarea(notes); } catch {}
-
-    function queueSave() {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(async () => {
-        const next = {
-          ac: ac ? ac.value : '',
-          passivePerception: pp ? pp.value : '',
-          passiveInsight: pi ? pi.value : '',
-          passiveInvestigation: pv ? pv.value : '',
-          notes: notes ? notes.value : ''
-        };
-        try {
-          const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, {
-            method: 'PATCH',
-            body: JSON.stringify(next),
-          });
-          sheetCache = resp?.sheet || sheetCache;
-        } catch (e) {
-          console.error('Failed to save sheet', e);
-        }
-      }, 250);
-    }
-
-    for (const el of [ac, pp, pi, pv, notes].filter(Boolean)) {
-      el.addEventListener('input', () => {
-        sheetCache = sheetCache || {};
-        if (el === ac) sheetCache.ac = el.value === '' ? null : Number(el.value);
-        if (el === pp) sheetCache.passivePerception = el.value === '' ? null : Number(el.value);
-        if (el === pi) sheetCache.passiveInsight = el.value === '' ? null : Number(el.value);
-        if (el === pv) sheetCache.passiveInvestigation = el.value === '' ? null : Number(el.value);
-        if (el === notes) sheetCache.notes = el.value;
-        queueSave();
-      });
-    }
-  }
-
-  if (isCharLike) {
-    if (tabsEl) tabsEl.hidden = false;
-    tabsEl?.querySelectorAll('.page-tab').forEach(btn => btn.onclick = () => setActiveTab(btn.dataset.tab));
-    const st = getState() || {};
-    const saved = st.pageTabsV1?.pages?.[page.id];
-    setActiveTab(saved === 'sheet' ? 'sheet' : 'notes');
-  }
-
-  const blocksRoot = document.getElementById('pageBlocks');
-  setCurrentPageBlocks(page.blocks || []);
-  if (isEditingPage(page.id)) {
-    setUiMode('edit');
-    enablePageTitleEdit(page);
-    renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-    // Show save status indicator while editing
-    try { mountSaveIndicator(); } catch {}
-
-    // Restructure edit layout: wrap editor fields, move meta to bottom, insert cheat sheet
-    try {
-      const article = outlet.querySelector('article.page');
-      const titleEl = article.querySelector('#pageTitleInput');
-      const metaEl = article.querySelector('p.meta');
-      const tagsEl = article.querySelector('#pageTags');
-      const editorWrap = document.createElement('div');
-      editorWrap.className = 'page-editor';
-      // Insert wrapper before the first editor element
-      if (titleEl) titleEl.before(editorWrap);
-      // Move elements into wrapper
-      if (titleEl) editorWrap.appendChild(titleEl);
-      // Cheat sheet strip under title
-      const cheat = document.createElement('div');
-      cheat.className = 'page-cheatsheet';
-      cheat.innerHTML = `
+  return await renderPageCore(page, {
+    includeTagsToolbar: true,
+    cheatHtml: `
         <div class="meta">Cheat Sheet — #Tags (e.g. #tavern #npc), [[Wikilinks]] (e.g. [[Bent Willow Tavern]]), Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>
-      `;
-      editorWrap.appendChild(cheat);
-      if (tagsEl) editorWrap.appendChild(tagsEl);
-      const bodyEl = article.querySelector('#pageBlocks');
-      if (bodyEl) editorWrap.appendChild(bodyEl);
-      // Add editor add-controls footer (edit-mode only)
-      const controls = document.createElement('div');
-      controls.className = 'editor-add-controls';
-      controls.innerHTML = `
-        <button type="button" class="chip" id="btnAddBlock">+ Add block (⌥⏎)</button>
-        <button type="button" class="chip" id="btnAddSection">+ Section (⌥⇧⏎)</button>
-      `;
-      editorWrap.appendChild(controls);
-      // Bind add buttons
-      const getFocusedContext = () => {
-        const active = document.activeElement;
-        const blockEl = active?.closest?.('.block[data-block-id]');
-        if (blockEl) {
-          const id = blockEl.getAttribute('data-block-id');
-          const all = getCurrentPageBlocks();
-          const cur = all.find(x => String(x.id) === String(id));
-          if (cur) return { parentId: cur.parentId ?? null, sort: Number(cur.sort || 0) };
-        }
-        // Fallback: append to end of top-level
-        const roots = (getCurrentPageBlocks() || []).filter(x => (x.parentId || null) === null).sort((a,b) => a.sort - b.sort);
-        const last = roots[roots.length - 1] || null;
-        return { parentId: null, sort: last ? Number(last.sort || 0) : -1 };
-      };
-      const doCreate = async (type) => {
-        try {
-          const { apiCreateBlock, refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
-          const { renderBlocksEdit } = await import('../blocks/edit/render.js');
-          const { focusBlockInput } = await import('../blocks/edit/focus.js');
-          const ctx = getFocusedContext();
-          const payload = (type === 'section')
-            ? { type: 'section', parentId: ctx.parentId, sort: ctx.sort + 1, props: { collapsed: false }, content: { title: '' } }
-            : { type: 'paragraph', parentId: ctx.parentId, sort: ctx.sort + 1, props: {}, content: { text: '' } };
-          const created = await apiCreateBlock(page.id, payload);
-          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-          await refreshBlocksFromServer(page.id);
-          renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-          focusBlockInput(created.id);
-        } catch (e) { console.error('Failed to create block from add-controls', e); }
-      };
-      const btnAddBlock = controls.querySelector('#btnAddBlock');
-      const btnAddSection = controls.querySelector('#btnAddSection');
-      if (btnAddBlock) btnAddBlock.addEventListener('click', () => void doCreate('paragraph'));
-      if (btnAddSection) btnAddSection.addEventListener('click', () => void doCreate('section'));
-      // Move meta to bottom as footer (outside card)
-      if (metaEl) {
-        metaEl.classList.add('page-edit-meta-footer');
-        editorWrap.after(metaEl);
-      }
-    } catch {}
-
-    // One-time autosize pass for all textareas, and keep them in sync on resize
-    try {
-      const autoAll = () => {
-        if (document.body.dataset.mode !== 'edit') return;
-        document.querySelectorAll('textarea.block-input').forEach((el) => {
-          try { autosizeTextarea(el); } catch {}
-        });
-      };
-      // Run after DOM settles
-      requestAnimationFrame(autoAll);
-      // Install and remember a resize handler for cleanup
-      const onResize = () => autoAll();
-      window.addEventListener('resize', onResize);
-      // Attach a marker for cleanup on route change
-      outlet.__editResizeHandler = onResize;
-    } catch {}
-  } else {
-    setUiMode(null);
-    renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
-    try { unmountSaveIndicator(); } catch {}
-  }
-
-  // Populate backlinks panel for this page
-  void renderBacklinksPanel(page.id);
-
-  // Tags editor
-  void renderPageTags(page.id);
-
-  // Bind delete (global only)
-  const btnDelete = document.getElementById('btnDeletePage');
-  if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
-
-  // React to centralized edit toggles
-  const applyEditState = async () => {
-    const now = isEditingPage(page.id);
-    if (now) {
-      try { setUiMode('edit'); } catch {}
-      enablePageTitleEdit(page);
-      renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-      try { mountSaveIndicator(); } catch {}
-      try { rerenderHeaderMedia?.(); } catch {}
-      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-    } else {
-      try { setUiMode(null); } catch {}
-      disablePageTitleEdit(page);
-      try { await flushDebouncedPatches(); } catch (e) { console.error('Failed to flush debounced patches', e); }
-      try {
-        const fresh = await refreshBlocksFromServer(page.id);
-        if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
-      } catch (e) { console.error('Failed to refresh blocks from server', e); }
-      renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
-      try { unmountSaveIndicator(); } catch {}
-      try { rerenderHeaderMedia?.(); } catch {}
-      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-    }
-  };
-  try { window.addEventListener('vault:modechange', applyEditState); } catch {}
-  // Ensure correct initial state (e.g., when navigating back)
-  void applyEditState();
-
-  // Cleanup on route change: ensure we exit edit mode styles/indicator
-  return () => {
-    try { setUiMode(null); } catch {}
-    try { unmountSaveIndicator(); } catch {}
-    try { window.removeEventListener('vault:modechange', applyEditState); } catch {}
-    // Cleanup autosize resize handler if present
-    try {
-      if (outlet.__editResizeHandler) {
-        window.removeEventListener('resize', outlet.__editResizeHandler);
-        delete outlet.__editResizeHandler;
-      }
-    } catch {}
-  };
+      `,
+  });
 }
 
 export async function renderPageBySlug({ match }) {
@@ -477,382 +537,10 @@ export async function renderPageBySlug({ match }) {
   // Expose current page id for global Edit toggle
   try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: true, kind: 'page' }); } catch {}
 
-  setPageBreadcrumb(page);
-  setPageActionsEnabled({ canEdit: true, canDelete: true });
-
-  const outlet = document.getElementById('outlet');
-  if (!outlet) return;
-  // Stable re-render hook for Header Media
-  let rerenderHeaderMedia = null;
-
-  const folderTitle2 = getFolderTitleForPage(page.id);
-  const sectionLabel2 = folderTitle2 || sectionForType(page.type);
-  outlet.innerHTML = `
-    <article class=\"page page--${escapeHtml(page.type || 'page')}\"> 
-      <div id=\"pageHeaderMedia\"></div>
-      <div class=\"page-identity\" id=\"pageIdentity\"> 
-        <div class=\"avatar-col\"></div>
-        <div class=\"name-col\">
-          <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
-        </div>
-        
-      </div>
-      <div id=\"pageTabs\" class=\"page-tabs\" hidden>
-        <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
-        <button type=\"button\" class=\"chip page-tab\" data-tab=\"sheet\">Sheet</button>
-      </div>
-      <div class=\"page-body\"> 
-        <div id=\"pageBlocks\"></div>
-        <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
-      </div>
-      <p class=\"meta\">Section: ${escapeHtml(sectionLabel2 || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
-    </article>
-  `;
-  // Render header media in slug route as well
-  try {
-    const host = document.getElementById('pageHeaderMedia');
-    const showProfile = (page.type === 'npc' || page.type === 'character');
-    const renderHM = () => {
-      const mode = isEditingPage(page.id) ? 'edit' : 'view';
-      const article = outlet.querySelector('article.page');
-      if (article) {
-        if (showProfile && page.media?.profile) article.classList.add('has-profile-media'); else article.classList.remove('has-profile-media');
-      }
-      renderHeaderMedia(host, {
-        mode,
-        cover: page.media?.header || null,
-        profile: showProfile ? (page.media?.profile || null) : null,
-        showProfile,
-        async onUploadCover(file) {
-          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'header', file });
-          page.media = page.media || {};
-          page.media.header = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
-          renderHM();
-        },
-        async onUploadProfile(file) {
-          if (!showProfile) return;
-          const resp = await uploadMedia({ scope: 'page', pageId: page.id, slot: 'profile', file });
-          page.media = page.media || {};
-          page.media.profile = { url: resp.url, posX: resp.posX, posY: resp.posY, zoom: Number(resp.zoom ?? 1) };
-          renderHM();
-        },
-        async onRemoveCover() {
-          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'header' });
-          if (page.media) page.media.header = null;
-          renderHM();
-        },
-        async onRemoveProfile() {
-          await deleteMedia({ scope: 'page', pageId: page.id, slot: 'profile' });
-          if (page.media) page.media.profile = null;
-          renderHM();
-        },
-        async onSavePosition(slot, x, y, zoom) {
-          try {
-            await updatePosition({ scope: 'page', pageId: page.id, slot, posX: x, posY: y, ...(Number.isFinite(zoom) ? { zoom } : {}) });
-            if (slot === 'header' && page.media?.header) { page.media.header.posX = x; page.media.header.posY = y; if (Number.isFinite(zoom)) page.media.header.zoom = zoom; }
-            if (slot === 'profile' && page.media?.profile) { page.media.profile.posX = x; page.media.profile.posY = y; if (Number.isFinite(zoom)) page.media.profile.zoom = zoom; }
-            renderHM();
-          } catch (e) {
-            console.error('[media] failed to save position', e);
-          }
-        },
-      });
-      // Reserve identity left column based on avatar size (if present)
-      try {
-        const identity = document.getElementById('pageIdentity');
-        const clip = host.querySelector('.profileWrap');
-        const w = clip ? Math.round(clip.getBoundingClientRect().width) : 0;
-        const reserve = (showProfile && page.media?.profile && w) ? `${w}px` : '0px';
-        if (identity) identity.style.setProperty('--avatar-slot', reserve);
-      } catch {}
-    };
-    // Expose stable re-render function so edit toggles keep callbacks intact
-    rerenderHeaderMedia = renderHM;
-    renderHM();
-  } catch {}
-
-  // Tabs and Sheet UI for character-like pages (slug route)
-  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
-  const tabsEl = document.getElementById('pageTabs');
-  const sheetEl = document.getElementById('pageSheet');
-  const blocksEl = document.getElementById('pageBlocks');
-  const metaEl = outlet.querySelector('p.meta');
-
-  let sheetCache = null;
-  let sheetLoaded = false;
-  let saveTimer = null;
-
-  async function loadSheet() {
-    if (sheetLoaded) return sheetCache || {};
-    sheetLoaded = true;
-    try {
-      const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`);
-      sheetCache = resp?.sheet || {};
-    } catch { sheetCache = {}; }
-    return sheetCache;
-  }
-
-  function setActiveTab(tab) {
-    const st = getState() || {};
-    const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
-    updateState({ pageTabsV1: { ...(st.pageTabsV1||{}), pages: { ...pages, [page.id]: tab } } });
-
-    for (const b of tabsEl?.querySelectorAll?.('.page-tab') || []) {
-      b.classList.toggle('is-active', b.dataset.tab === tab);
-    }
-
-    if (tab === 'notes') {
-      if (sheetEl) sheetEl.hidden = true;
-      if (blocksEl) blocksEl.style.display = '';
-      if (metaEl) metaEl.style.display = '';
-    } else {
-      if (blocksEl) blocksEl.style.display = 'none';
-      if (sheetEl) sheetEl.hidden = false;
-      if (metaEl) metaEl.style.display = '';
-      void renderSheet();
-    }
-  }
-
-  async function renderSheet() {
-    if (!sheetEl) return;
-    const sheet = await loadSheet();
-    const editing = isEditingPage(page.id);
-
-    sheetEl.innerHTML = `
-      <div class=\"sheet-grid\"> 
-        <label class=\"sheet-field\">
-          <span class=\"meta\">AC</span>
-          ${editing ? `<input id="sheetAc" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetAcView"></div>`}
-        </label>
-
-        <label class=\"sheet-field\">
-          <span class=\"meta\">Passive Perception</span>
-          ${editing ? `<input id="sheetPP" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPPView"></div>`}
-        </label>
-
-        <label class=\"sheet-field\">
-          <span class=\"meta\">Passive Insight</span>
-          ${editing ? `<input id="sheetPI" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPIView"></div>`}
-        </label>
-
-        <label class=\"sheet-field\">
-          <span class=\"meta\">Passive Investigation</span>
-          ${editing ? `<input id="sheetPV" type="number" inputmode="numeric" />` : `<div class="sheet-val" id="sheetPVView"></div>`}
-        </label>
-      </div>
-
-      <div class=\"sheet-notes\">
-        <div class=\"meta\">Notes</div>
-        ${editing
-          ? `<textarea id="sheetNotes" class="sheet-notes-input" rows="6" placeholder="Useful combat notes, tactics, special rules, reminders…"></textarea>`
-          : `<div id="sheetNotesView" class="sheet-notes-view"></div>`
-        }
-      </div>
-    `;
-
-    const setText = (id, v) => { const el = sheetEl.querySelector(id); if (el) el.textContent = (v === null || v === undefined || v === '') ? '—' : String(v); };
-
-    if (!editing) {
-      setText('#sheetAcView', sheet.ac);
-      setText('#sheetPPView', sheet.passivePerception);
-      setText('#sheetPIView', sheet.passiveInsight);
-      setText('#sheetPVView', sheet.passiveInvestigation);
-
-      try {
-        const view = sheetEl.querySelector('#sheetNotesView');
-        if (view) {
-          view.innerHTML = '';
-          const { buildWikiTextNodes } = await import('../features/wikiLinks.js');
-          (buildWikiTextNodes(String(sheet.notes || '')) || []).forEach(n => view.appendChild(n));
-        }
-      } catch {
-        const view = sheetEl.querySelector('#sheetNotesView');
-        if (view) view.textContent = String(sheet.notes || '');
-      }
-      return;
-    }
-
-    const ac = sheetEl.querySelector('#sheetAc'); if (ac) ac.value = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
-    const pp = sheetEl.querySelector('#sheetPP'); if (pp) pp.value = (sheet.passivePerception ?? '') === null ? '' : String(sheet.passivePerception ?? '');
-    const pi = sheetEl.querySelector('#sheetPI'); if (pi) pi.value = (sheet.passiveInsight ?? '') === null ? '' : String(sheet.passiveInsight ?? '');
-    const pv = sheetEl.querySelector('#sheetPV'); if (pv) pv.value = (sheet.passiveInvestigation ?? '') === null ? '' : String(sheet.passiveInvestigation ?? '');
-    const notes = sheetEl.querySelector('#sheetNotes'); if (notes) notes.value = String(sheet.notes || '');
-
-    try { const { autosizeTextarea } = await import('../lib/autosizeTextarea.js'); if (notes) autosizeTextarea(notes); } catch {}
-
-    function queueSave() {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(async () => {
-        const next = {
-          ac: ac ? ac.value : '',
-          passivePerception: pp ? pp.value : '',
-          passiveInsight: pi ? pi.value : '',
-          passiveInvestigation: pv ? pv.value : '',
-          notes: notes ? notes.value : ''
-        };
-        try {
-          const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, {
-            method: 'PATCH',
-            body: JSON.stringify(next),
-          });
-          sheetCache = resp?.sheet || sheetCache;
-        } catch (e) {
-          console.error('Failed to save sheet', e);
-        }
-      }, 250);
-    }
-
-    for (const el of [ac, pp, pi, pv, notes].filter(Boolean)) {
-      el.addEventListener('input', () => {
-        sheetCache = sheetCache || {};
-        if (el === ac) sheetCache.ac = el.value === '' ? null : Number(el.value);
-        if (el === pp) sheetCache.passivePerception = el.value === '' ? null : Number(el.value);
-        if (el === pi) sheetCache.passiveInsight = el.value === '' ? null : Number(el.value);
-        if (el === pv) sheetCache.passiveInvestigation = el.value === '' ? null : Number(el.value);
-        if (el === notes) sheetCache.notes = el.value;
-        queueSave();
-      });
-    }
-  }
-
-  if (isCharLike) {
-    if (tabsEl) tabsEl.hidden = false;
-    tabsEl?.querySelectorAll('.page-tab').forEach(btn => btn.onclick = () => setActiveTab(btn.dataset.tab));
-    const st = getState() || {};
-    const saved = st.pageTabsV1?.pages?.[page.id];
-    setActiveTab(saved === 'sheet' ? 'sheet' : 'notes');
-  }
-  const blocksRoot = document.getElementById('pageBlocks');
-  setCurrentPageBlocks(page.blocks || []);
-  if (isEditingPage(page.id)) {
-    setUiMode('edit');
-    enablePageTitleEdit(page);
-    renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-    try { mountSaveIndicator(); } catch {}
-    // Restructure edit layout in slug route as well
-    try {
-      const article = outlet.querySelector('article.page');
-      const titleEl = article.querySelector('#pageTitleInput');
-      const metaEl = article.querySelector('p.meta');
-      const editorWrap = document.createElement('div');
-      editorWrap.className = 'page-editor';
-      if (titleEl) titleEl.before(editorWrap);
-      if (titleEl) editorWrap.appendChild(titleEl);
-      const cheat = document.createElement('div');
-      cheat.className = 'page-cheatsheet';
-      cheat.innerHTML = `<div class="meta">Cheat Sheet — #Tags, [[Wikilinks]], Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>`;
-      editorWrap.appendChild(cheat);
-      const bodyEl = article.querySelector('#pageBlocks');
-      if (bodyEl) editorWrap.appendChild(bodyEl);
-      // Add editor add-controls footer (edit-mode only) for slug route
-      const controls = document.createElement('div');
-      controls.className = 'editor-add-controls';
-      controls.innerHTML = `
-        <button type="button" class="chip" id="btnAddBlock">+ Add block (⌥⏎)</button>
-        <button type="button" class="chip" id="btnAddSection">+ Section (⌥⇧⏎)</button>
-      `;
-      editorWrap.appendChild(controls);
-      const getFocusedContext = () => {
-        const active = document.activeElement;
-        const blockEl = active?.closest?.('.block[data-block-id]');
-        if (blockEl) {
-          const id = blockEl.getAttribute('data-block-id');
-          const all = getCurrentPageBlocks();
-          const cur = all.find(x => String(x.id) === String(id));
-          if (cur) return { parentId: cur.parentId ?? null, sort: Number(cur.sort || 0) };
-        }
-        const roots = (getCurrentPageBlocks() || []).filter(x => (x.parentId || null) === null).sort((a,b) => a.sort - b.sort);
-        const last = roots[roots.length - 1] || null;
-        return { parentId: null, sort: last ? Number(last.sort || 0) : -1 };
-      };
-      const doCreate = async (type) => {
-        try {
-          const { apiCreateBlock, refreshBlocksFromServer } = await import('../blocks/edit/apiBridge.js');
-          const { renderBlocksEdit } = await import('../blocks/edit/render.js');
-          const { focusBlockInput } = await import('../blocks/edit/focus.js');
-          const ctx = getFocusedContext();
-          const payload = (type === 'section')
-            ? { type: 'section', parentId: ctx.parentId, sort: ctx.sort + 1, props: { collapsed: false }, content: { title: '' } }
-            : { type: 'paragraph', parentId: ctx.parentId, sort: ctx.sort + 1, props: {}, content: { text: '' } };
-          const created = await apiCreateBlock(page.id, payload);
-          setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-          await refreshBlocksFromServer(page.id);
-          renderBlocksEdit(bodyEl, page, getCurrentPageBlocks());
-          focusBlockInput(created.id);
-        } catch (e) { console.error('Failed to create block from add-controls', e); }
-      };
-      const btnAddBlock = controls.querySelector('#btnAddBlock');
-      const btnAddSection = controls.querySelector('#btnAddSection');
-      if (btnAddBlock) btnAddBlock.addEventListener('click', () => void doCreate('paragraph'));
-      if (btnAddSection) btnAddSection.addEventListener('click', () => void doCreate('section'));
-      if (metaEl) { metaEl.classList.add('page-edit-meta-footer'); editorWrap.after(metaEl); }
-    } catch {}
-
-    // One-time autosize pass and resize handler as in id route
-    try {
-      const autoAll = () => {
-        if (document.body.dataset.mode !== 'edit') return;
-        document.querySelectorAll('textarea.block-input').forEach((el) => {
-          try { autosizeTextarea(el); } catch {}
-        });
-      };
-      requestAnimationFrame(autoAll);
-      const onResize = () => autoAll();
-      window.addEventListener('resize', onResize);
-      outlet.__editResizeHandler = onResize;
-    } catch {}
-  } else {
-    setUiMode(null);
-    renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
-    try { unmountSaveIndicator(); } catch {}
-  }
-
-  // Bind delete (global only)
-  const btnDelete = document.getElementById('btnDeletePage');
-  if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
-
-  // React to centralized edit toggles
-  const applyEditStateSlug = async () => {
-    const now = isEditingPage(page.id);
-    if (now) {
-      try { setUiMode('edit'); } catch {}
-      enablePageTitleEdit(page);
-      renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
-      try { mountSaveIndicator(); } catch {}
-      try { rerenderHeaderMedia?.(); } catch {}
-      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-    } else {
-      try { setUiMode(null); } catch {}
-      disablePageTitleEdit(page);
-      try { await flushDebouncedPatches(); } catch (e) { console.error('Failed to flush debounced patches', e); }
-      try {
-        const fresh = await refreshBlocksFromServer(page.id);
-        if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
-      } catch (e) { console.error('Failed to refresh blocks from server', e); }
-      renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
-      try { unmountSaveIndicator(); } catch {}
-      try { rerenderHeaderMedia?.(); } catch {}
-      try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
-    }
-  };
-  try { window.addEventListener('vault:modechange', applyEditStateSlug); } catch {}
-  void applyEditStateSlug();
-
-  // Backlinks
-  void renderBacklinksPanel(page.id);
-
-  // Cleanup on route change
-  return () => {
-    try { setUiMode(null); } catch {}
-    try { unmountSaveIndicator(); } catch {}
-    try { window.removeEventListener('vault:modechange', applyEditStateSlug); } catch {}
-    try {
-      if (outlet.__editResizeHandler) {
-        window.removeEventListener('resize', outlet.__editResizeHandler);
-        delete outlet.__editResizeHandler;
-      }
-    } catch {}
-  };
+  return await renderPageCore(page, {
+    includeTagsToolbar: false,
+    cheatHtml: `<div class="meta">Cheat Sheet — #Tags, [[Wikilinks]], Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>`,
+  });
 }
 
 export function enablePageTitleEdit(page) {
@@ -1197,3 +885,4 @@ export async function saveAndExitEditing() {
   // Exit edit mode by reusing the existing button handler
   try { btnEdit.click(); } catch {}
 }
+
