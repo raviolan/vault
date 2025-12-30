@@ -578,6 +578,16 @@ body[data-mode='edit'] .editor-add-controls .chip {
   }
 }
 
+/* Right panel: always use single-column layout for HP cards */
+.right-drawer-content .hpEnemyList {
+    grid-template-columns: 1fr !important;
+}
+@media (min-width: 600px) {
+  .right-drawer-content .hpEnemyList {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* Centered two-up layout for summary cards below enemies */
 .hpTotalsHost {
     display: grid;
@@ -589,6 +599,16 @@ body[data-mode='edit'] .editor-add-controls .chip {
 @media (min-width: 600px) {
   .hpTotalsHost {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Right panel: totals cards also single-column to match layout */
+.right-drawer-content .hpTotalsHost {
+    grid-template-columns: 1fr !important;
+}
+@media (min-width: 600px) {
+  .right-drawer-content .hpTotalsHost {
+    grid-template-columns: 1fr !important;
   }
 }
 
