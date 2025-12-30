@@ -12,7 +12,7 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
   inputEl.addEventListener('input', () => {
     const text = inputEl.value;
     markDirty();
-    debouncePatch(block.id, { content: { ...(block.content || {}), text } });
+    debouncePatch(block.id, { content: { text } });
     maybeHandleSlashMenu({ page, block, inputEl, orderedBlocksFlat, onAfterChange: async () => { render(); focus(block.id); } });
   });
   
@@ -78,9 +78,9 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
     const first = chunks[0];
     if (first.type === 'section') {
       // Convert block to section with appropriate level (non-blocking)
-      debouncePatch(block.id, { type: 'section', props: { ...(block.props||{}), collapsed: false, level: first.level }, content: { title: first.title || '' } });
+      debouncePatch(block.id, { type: 'section', props: { collapsed: false, level: first.level }, content: { title: first.title || '' } });
     } else {
-      debouncePatch(block.id, { type: 'paragraph', props: { ...(block.props||{}) }, content: { text: first.text } });
+      debouncePatch(block.id, { type: 'paragraph', content: { text: first.text } });
     }
 
     // Create remaining chunks as new blocks after current, preserving order
@@ -151,7 +151,7 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
         if (level >= 1 && level <= 3) {
           e.preventDefault();
           // Convert current block to section with title (debounced, non-blocking)
-          debouncePatch(block.id, { type: 'section', props: { ...(block.props||{}), collapsed: false, level }, content: { title } });
+          debouncePatch(block.id, { type: 'section', props: { collapsed: false, level }, content: { title } });
 
           // If remainder exists, create a child paragraph as first child of the new section
           let createdChildId = null;
@@ -225,7 +225,7 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
         // Allow default newline insertion; autosize will grow height
         return;
       }
-    } else if (e.key === 'Backspace' && (inputEl.value || '').trim() === '') {
+    } else if ((e.key === 'Backspace' || e.key === 'Delete') && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (inputEl.value || '').trim() === '') {
       if (block.type === 'paragraph') {
         e.preventDefault();
         const siblings = getCurrentPageBlocks().filter(x => (x.parentId || null) === (block.parentId || null)).sort((a,b) => a.sort - b.sort);
@@ -235,7 +235,6 @@ export function bindTextInputHandlers({ page, block, inputEl, orderedBlocksFlat,
         setCurrentPageBlocks(getCurrentPageBlocks().filter(x => x.id !== block.id));
         render();
         if (prev) focus(prev.id);
-        // No live refresh while editing
       }
     } else if (e.key === 'Tab' && !(e.ctrlKey || e.metaKey || e.altKey)) {
       e.preventDefault();
@@ -314,7 +313,7 @@ export function bindRichTextHandlers({ page, block, editableEl, orderedBlocksFla
       } catch {}
       markDirty();
       // Persist rich HTML in props.html and plain text in content.text
-      debouncePatch(block.id, { props: { ...(block.props || {}), html }, content: { ...(block.content || {}), text } });
+      debouncePatch(block.id, { props: { html }, content: { text } });
     } catch (err) { console.error('rich save failed', err); }
   };
 
@@ -326,7 +325,7 @@ export function bindRichTextHandlers({ page, block, editableEl, orderedBlocksFla
       const html = sanitizeRichHtml(rawHtml);
       const text = plainTextFromHtmlContainer(editableEl);
       markDirty();
-      debouncePatch(block.id, { props: { ...(block.props || {}), html }, content: { ...(block.content || {}), text } }, 0);
+      debouncePatch(block.id, { props: { html }, content: { text } }, 0);
     } catch (err) { console.error('force rich save failed', err); }
   };
 
@@ -373,6 +372,25 @@ export function bindRichTextHandlers({ page, block, editableEl, orderedBlocksFla
       } catch {}
       debounceLocal(scheduleSave);
       return;
+    }
+    // Delete empty paragraph via Option/Alt+Backspace/Delete
+    if ((e.key === 'Backspace' || e.key === 'Delete') && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      try {
+        const text = (plainTextFromHtmlContainer(editableEl) || '').trim();
+        if (text === '') {
+          e.preventDefault();
+          (async () => {
+            const siblings = getCurrentPageBlocks().filter(x => (x.parentId || null) === (block.parentId || null)).sort((a,b) => a.sort - b.sort);
+            const idx = siblings.findIndex(x => x.id === block.id);
+            const prev = idx > 0 ? siblings[idx-1] : null;
+            await apiDeleteBlock(block.id).catch(() => {});
+            setCurrentPageBlocks(getCurrentPageBlocks().filter(x => x.id !== block.id));
+            render();
+            if (prev) focus(prev.id);
+          })();
+          return;
+        }
+      } catch {}
     }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
       // Common formatting shortcuts: schedule a save after browser applies

@@ -1,7 +1,7 @@
 import { parseMaybeJson, blocksToTree } from '../tree.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
 import { bindTextInputHandlers, bindRichTextHandlers } from './handlersText.js';
-import { bindSectionTitleHandlers, bindSectionHeaderControls } from './handlersSection.js';
+import { bindSectionTitleHandlers, bindSectionHeaderControls, insertFirstChildParagraph } from './handlersSection.js';
 import { focusBlockInput } from './focus.js';
 import { bindAutosizeTextarea } from '../../lib/autosizeTextarea.js';
 import { insertMarkdownLink } from '../../lib/formatShortcuts.js';
@@ -251,49 +251,34 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         try {
           const { apiPatchBlock, apiCreateBlock } = await import('./apiBridge.js');
           if (cur.type === 'section') {
-            await apiPatchBlock(cur.id, { props: { ...(cur.props || {}), level } });
-            // Update local props
-            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify({ ...(cur.props || {}), level }) } : b);
-            // Normalize outline parent for new level
-            try {
-              const want = Math.min(3, Math.max(1, Number(level)));
-              const getById = (arr, bid) => arr.find(x => String(x.id) === String(bid));
-              const getParent = (arr, b) => (b?.parentId ? getById(arr, b.parentId) : null);
-              const ancestors = [];
-              let n = cur;
-              while (n) { ancestors.push(n); n = getParent(all, n); }
-              let nextParentId = null;
-              if (want > 1) {
-                const wantParentLevel = want - 1;
-                const found = ancestors.find(a => a.type === 'section' && Number((a.props && a.props.level) || 0) === wantParentLevel);
-                nextParentId = found ? found.id : null;
-              } else {
-                nextParentId = null;
-              }
-              if ((cur.parentId ?? null) !== (nextParentId ?? null)) {
-                await apiPatchBlock(cur.id, { parentId: nextParentId });
-                updateCurrentBlocks(b => b.id === cur.id ? { ...b, parentId: nextParentId ?? null } : b);
-              }
-            } catch (e) { console.warn('normalize section parent failed', e); }
+            const existingProps = parseMaybeJson(cur.propsJson) || {};
+            const nextProps = { ...existingProps, level };
+            await apiPatchBlock(cur.id, { props: nextProps });
+            // Update local props (preserve other props like collapsed)
+            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
             const container = document.getElementById('pageBlocks');
             stableRender(container, page, getCurrentPageBlocks(), cur.id);
             return;
           }
           if (cur.type === 'heading') {
-            await apiPatchBlock(cur.id, { props: { ...(cur.props || {}), level } });
-            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify({ ...(cur.props || {}), level }) } : b);
+            const existingProps = parseMaybeJson(cur.propsJson) || {};
+            const nextProps = { ...existingProps, level };
+            await apiPatchBlock(cur.id, { props: nextProps });
+            updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
             const container = document.getElementById('pageBlocks');
             stableRender(container, page, getCurrentPageBlocks(), cur.id);
             return;
           }
           if (cur.type === 'paragraph') {
             // Convert paragraph to section: title = first line of plain text; remainder as child paragraph
-            const text = String((cur.content?.text) || '').replace(/\r\n/g, '\n');
+            const text = String((parseMaybeJson(cur.contentJson)?.text) || '').replace(/\r\n/g, '\n');
             const lines = text.split('\n');
             const title = (lines[0] || '').trim() || 'Untitled';
             const remainder = lines.slice(1).join('\n').replace(/\s+$/,'');
-            await apiPatchBlock(cur.id, { type: 'section', props: { ...(cur.props || {}), collapsed: false, level }, content: { title } });
-            updateCurrentBlocks(b => b.id === cur.id ? { ...b, type: 'section', propsJson: JSON.stringify({ ...(cur.props || {}), collapsed: false, level }), contentJson: JSON.stringify({ title }) } : b);
+            const existingProps = parseMaybeJson(cur.propsJson) || {};
+            const nextProps = { ...existingProps, collapsed: false, level };
+            await apiPatchBlock(cur.id, { type: 'section', props: nextProps, content: { title } });
+            updateCurrentBlocks(b => b.id === cur.id ? { ...b, type: 'section', propsJson: JSON.stringify(nextProps), contentJson: JSON.stringify({ title }) } : b);
             if (remainder && remainder.trim().length) {
               const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: cur.id, sort: 0, props: {}, content: { text: remainder } });
               setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
@@ -444,8 +429,13 @@ export function renderBlocksEdit(rootEl, page, blocks) {
         const id = activeBlockId;
         const all = getCurrentPageBlocks();
         const cur = id ? all.find(x => String(x.id) === String(id)) : null;
-        const { parentId, sortBase } = computeBodyInsert(all, cur);
         try {
+          if (cur && cur.type === 'section') {
+            // For sections, insert a new paragraph as the first child of the section.
+            await insertFirstChildParagraph({ page, sectionId: cur.id, rootEl });
+            return;
+          }
+          const { parentId, sortBase } = computeBodyInsert(all, cur);
           const { apiCreateBlock } = await import('./apiBridge.js');
           const created = await apiCreateBlock(page.id, {
             type: 'paragraph',
@@ -482,10 +472,12 @@ export function renderBlocksEdit(rootEl, page, blocks) {
               const all = getCurrentPageBlocks();
               const cur = all.find(x => String(x.id) === String(activeBlockId));
               if (cur?.type === 'section') {
-                const lvl = Math.min(3, Math.max(1, Number(cur.props?.level || 1)));
+                const parsed = parseMaybeJson(cur.propsJson) || {};
+                const lvl = Math.min(3, Math.max(1, Number(parsed.level || 1)));
                 selType.value = `h${lvl}`;
               } else if (cur?.type === 'heading') {
-                const lvl = Math.min(3, Math.max(1, Number(cur.props?.level || 1)));
+                const parsed = parseMaybeJson(cur.propsJson) || {};
+                const lvl = Math.min(3, Math.max(1, Number(parsed.level || 1)));
                 selType.value = `h${lvl}`;
               } else {
                 selType.value = 'p';
@@ -611,7 +603,7 @@ export function renderBlocksEdit(rootEl, page, blocks) {
       delBtn.type = 'button';
       delBtn.className = 'chip section-delete-empty';
       delBtn.textContent = '×';
-      delBtn.title = 'Delete empty section';
+      delBtn.title = 'Remove heading (keeps content)';
       delBtn.hidden = true; // visibility controlled by handlers
       controls.appendChild(delBtn);
 

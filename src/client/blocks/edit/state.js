@@ -1,7 +1,10 @@
 import { apiPatchBlock } from './apiBridge.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
+import { parseMaybeJson } from '../tree.js';
 
 // Track pending debounced operations so we can flush them on demand.
-const pending = Object.create(null); // blockId -> { timer, fn }
+// Structure: blockId -> { timer, fn, patch }
+const pending = Object.create(null);
 
 // Lightweight save status pub/sub for UI indicators
 // States: 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -40,11 +43,92 @@ export function markDirty() {
 }
 
 export function debouncePatch(blockId, patch, delay = 400) {
+  // Merge helper: combine root keys with last-write-wins and shallow-merge props/content
+  function mergePatch(a = {}, b = {}) {
+    const out = { ...(a || {}) };
+    // root last-write-wins if provided in b
+    for (const k of ['type', 'parentId', 'sort']) {
+      if (b[k] !== undefined) out[k] = b[k];
+    }
+    // props/content shallow merge
+    if (b.props !== undefined) out.props = { ...(a?.props || {}), ...(b.props || {}) };
+    if (b.content !== undefined) out.content = { ...(a?.content || {}), ...(b.content || {}) };
+    return out;
+  }
+
   const prev = pending[blockId];
+  // Merge with any pending patch for this block
+  const mergedPatch = prev && prev.patch ? mergePatch(prev.patch, patch || {}) : (patch || {});
+
+  // Apply optimistic update to the local store immediately
+  try {
+    const blocks = getCurrentPageBlocks();
+    const idx = blocks.findIndex(b => b.id === blockId);
+    if (idx >= 0) {
+      const cur = blocks[idx];
+      let next = { ...cur };
+      if (mergedPatch.type !== undefined) next.type = String(mergedPatch.type);
+      if (mergedPatch.parentId !== undefined) next.parentId = mergedPatch.parentId ?? null;
+      if (mergedPatch.sort !== undefined) next.sort = Number(mergedPatch.sort) || 0;
+      if (mergedPatch.props !== undefined) {
+        const curProps = parseMaybeJson(cur.propsJson);
+        const mergedProps = { ...(curProps || {}), ...(mergedPatch.props || {}) };
+        // Always store JSON string form in blocks list
+        next.propsJson = JSON.stringify(mergedProps);
+      }
+      if (mergedPatch.content !== undefined) {
+        const curContent = parseMaybeJson(cur.contentJson);
+        const mergedContent = { ...(curContent || {}), ...(mergedPatch.content || {}) };
+        next.contentJson = JSON.stringify(mergedContent);
+      }
+      // commit local update
+      const copy = blocks.slice();
+      copy[idx] = next;
+      setCurrentPageBlocks(copy);
+    }
+  } catch {}
+
   if (prev && prev.timer) clearTimeout(prev.timer);
   const fn = async () => {
     try {
-      await apiPatchBlock(blockId, patch);
+      // Fetch latest local block snapshot
+      const blocks = getCurrentPageBlocks();
+      const cur = blocks.find(b => b.id === blockId);
+      if (!cur) {
+        // Block removed from store; cancel quietly
+        return;
+      }
+      // Build finalPatch by merging pending patch into the latest JSON
+      const pendingPatch = pending[blockId]?.patch || mergedPatch || {};
+      const finalPatch = {};
+      if (pendingPatch.type !== undefined) finalPatch.type = pendingPatch.type;
+      if (pendingPatch.parentId !== undefined) finalPatch.parentId = pendingPatch.parentId ?? null;
+      if (pendingPatch.sort !== undefined) finalPatch.sort = Number(pendingPatch.sort) || 0;
+      if (pendingPatch.props !== undefined) {
+        const latestProps = parseMaybeJson(cur.propsJson);
+        finalPatch.props = { ...(latestProps || {}), ...(pendingPatch.props || {}) };
+      }
+      if (pendingPatch.content !== undefined) {
+        const latestContent = parseMaybeJson(cur.contentJson);
+        finalPatch.content = { ...(latestContent || {}), ...(pendingPatch.content || {}) };
+      }
+      const updated = await apiPatchBlock(blockId, finalPatch);
+      // Update local store with server-confirmed fields
+      try {
+        setCurrentPageBlocks(getCurrentPageBlocks().map(b => (
+          b.id === blockId
+            ? {
+                ...b,
+                parentId: (updated?.parentId !== undefined ? updated.parentId : b.parentId),
+                sort: (updated?.sort !== undefined ? updated.sort : b.sort),
+                type: (updated?.type !== undefined ? updated.type : b.type),
+                propsJson: (updated?.propsJson !== undefined ? updated.propsJson : b.propsJson),
+                contentJson: (updated?.contentJson !== undefined ? updated.contentJson : b.contentJson),
+                updatedAt: updated?.updatedAt || b.updatedAt,
+              }
+            : b
+        )));
+      } catch {}
       // If this completes and no other pending remains and no error flagged,
       // consider the cycle successfully saved.
     } catch (e) {
@@ -64,7 +148,7 @@ export function debouncePatch(blockId, patch, delay = 400) {
     }
   };
   const timer = setTimeout(fn, delay);
-  pending[blockId] = { timer, fn };
+  pending[blockId] = { timer, fn, patch: mergedPatch };
   // New/updated pending work means we're saving
   hadErrorThisCycle = false; // start fresh on new cycle
   setStatus('saving');
