@@ -1,3 +1,113 @@
+/* --- Open5e Spell Details Modal (ID-scoped) --- */
+#open5eSpellDetailsModal {
+    position: fixed;
+    inset: 0;
+    z-index: 50000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+    /* Prevent scroll on body when open, handled by JS if needed */
+}
+
+#open5eSpellDetailsModal[style*="display: none"] {
+    /* Hide overlay when not shown */
+    display: none !important;
+}
+
+#open5eSpellDetailsModal .modal-inner {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.25);
+    width: min(900px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#open5eSpellDetailsModal .modal-header {
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: none;
+}
+
+#open5eSpellDetailsModal .modal-header h2 {
+    margin: 0;
+    font-size: 1.25em;
+    font-weight: 600;
+    color: var(--text);
+}
+
+#open5eSpellDetailsModal .modal-header button,
+#open5eSpellDetailsModal .modal-header [data-close] {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+#open5eSpellDetailsModal .modal-header button:hover,
+#open5eSpellDetailsModal .modal-header [data-close]:hover {
+    background: var(--ui-control-bg-hover, #f0f0f0);
+}
+
+#open5eSpellDetailsModal .modal-body {
+    flex: 1 1 auto;
+    padding: 18px 20px 22px;
+    overflow: auto;
+    line-height: 1.5;
+    background: none;
+    color: var(--text);
+}
+
+#open5eSpellDetailsModal .o5e-spell-details-meta {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 16px;
+    margin: 12px 0 16px;
+}
+#open5eSpellDetailsModal .o5e-spell-details-meta dt {
+    opacity: 0.75;
+    font-weight: 500;
+    margin: 0;
+}
+#open5eSpellDetailsModal .o5e-spell-details-meta dd {
+    margin: 0;
+}
+/* Open5e Spell Details Modal */
+.o5e-spell-details-meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    margin-bottom: 8px;
+}
+.o5e-spell-details-meta dt {
+    opacity: .8;
+    font-weight: 500;
+    margin: 0;
+}
+.o5e-spell-details-meta dd {
+    margin: 0 0 0 4px;
+    color: var(--text);
+}
+.o5e-spell-details-body {
+    line-height: 1.45;
+    color: var(--text);
+    background: none;
+    word-break: break-word;
+}
 /*
  * DM Vault - Components Stylesheet
  *

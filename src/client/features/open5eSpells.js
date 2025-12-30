@@ -1,3 +1,89 @@
+// --- Spell Details Modal logic ---
+async function openSpellDetails(slug) {
+  if (!slug) return;
+  const modal = getSpellDetailsModal();
+  if (!modal) return;
+  const titleEl = modal.querySelector('#open5eSpellDetailsTitle');
+  const bodyEl = modal.querySelector('#open5eSpellDetailsBody');
+  const closeBtn = modal.querySelector('[data-close], .btn, button');
+  // Show loading state
+  if (titleEl) titleEl.textContent = 'Loading...';
+  if (bodyEl) bodyEl.innerHTML = '<div style="padding:16px;">Loading spell details...</div>';
+  modal.style.display = 'block';
+  modal.classList.add('open');
+  let data = cache.get(slug);
+  if (!data) {
+    try {
+      data = await fetchJson(`/api/open5e/spells/${encodeURIComponent(slug)}/`);
+      cache.set(slug, data || {});
+    } catch {
+      if (titleEl) titleEl.textContent = 'Error';
+      if (bodyEl) bodyEl.innerHTML = '<div style="padding:16px; color:var(--danger,red);">Failed to load spell details.</div>';
+      return;
+    }
+  }
+  // Render details
+  if (titleEl) titleEl.textContent = data.name || 'Spell';
+  if (bodyEl) bodyEl.innerHTML = renderSpellDetails(data);
+  // Focus close button for accessibility
+  setTimeout(() => { try { closeBtn?.focus(); } catch {} }, 0);
+}
+
+// Render full spell details safely
+function renderSpellDetails(spell) {
+  if (!spell) return '';
+  const escape = escapeHtml;
+  const parts = [];
+  // Title and subheader
+  const name = spell.name || '';
+  const level = (spell.level_int != null ? spell.level_int : spell.level) ?? '';
+  const school = spell.school || '';
+  const subheader = (level === 0 ? 'Cantrip' : (level !== '' ? `Level ${level}` : '')) + (school ? ` • ${school}` : '');
+  parts.push(`<div style="font-weight:700; font-size:1.3em; margin-bottom:2px;">${escape(String(name))}</div>`);
+  if (subheader.trim()) parts.push(`<div class="meta" style="margin-bottom:8px;">${escape(subheader.trim())}</div>`);
+  // Metadata grid
+  const meta = [];
+  if (spell.casting_time || spell.castingTime) meta.push(['Casting Time', spell.casting_time || spell.castingTime]);
+  if (spell.range) meta.push(['Range', spell.range]);
+  if (spell.duration) meta.push(['Duration', spell.duration + (spell.concentration ? ' (Concentration)' : '')]);
+  if (spell.components) meta.push(['Components', spell.components]);
+  if (spell.material) meta.push(['Material', spell.material]);
+  if (spell.ritual) meta.push(['Ritual', spell.ritual ? 'Yes' : 'No']);
+  if (spell.attack_type) meta.push(['Attack/Save', spell.attack_type]);
+  if (meta.length) {
+    parts.push('<dl class="o5e-spell-details-meta" style="margin-bottom:10px;">');
+    for (const [k, v] of meta) {
+      parts.push(`<dt>${escape(String(k))}</dt><dd>${escape(String(v))}</dd>`);
+    }
+    parts.push('</dl>');
+  }
+  // Description
+  let desc = spell.desc || spell.description || '';
+  desc = escape(String(desc)).replace(/\n/g, '<br>');
+  if (desc) parts.push(`<div class="o5e-spell-details-body">${desc}</div>`);
+  // Higher level
+  if (spell.higher_level) {
+    let higher = escape(String(spell.higher_level)).replace(/\n/g, '<br>');
+    parts.push(`<div class="o5e-spell-details-body" style="margin-top:10px;"><strong>At Higher Levels:</strong> ${higher}</div>`);
+  }
+  return parts.join('');
+}
+// --- Spell Details Modal ---
+function getSpellDetailsModal() { return document.getElementById('open5eSpellDetailsModal'); }
+
+// Delegated click handler for .o5e-spell
+document.addEventListener('click', function(e) {
+  const target = e.target;
+  const el = target?.closest?.('.o5e-spell');
+  if (!el) return;
+  // Only handle in view mode (not edit mode)
+  if (document.body.classList.contains('editing')) return;
+  const slug = el.dataset.o5eSlug || el.getAttribute('data-o5e-slug') || '';
+  if (!slug) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openSpellDetails(slug);
+});
 import { fetchJson } from '../lib/http.js';
 import { $, $$, escapeHtml } from '../lib/dom.js';
 import { getCurrentPageBlocks, updateCurrentBlocks } from '../lib/pageStore.js';

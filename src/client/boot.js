@@ -49,6 +49,7 @@ export async function boot() {
   bindModalBasics('deletePageModal');
   bindModalBasics('wikilinkCreateModal');
   bindModalBasics('open5eSpellModal');
+  bindModalBasics('open5eSpellDetailsModal');
   try { installOpen5eSpellFeature(); } catch {}
   await loadState();
   // Apply UI preferences on boot
