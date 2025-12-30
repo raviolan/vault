@@ -4,6 +4,7 @@
 // - Option+B: Toggle privacy blur overlay
 // - Option+Q: Collapse all left sidebar sections except the current section
 // - Option+D: Bookmark current page into Favorites (de-dupe by href)
+// - Option+E: Collapse/expand all subsections on current page
 // - Ctrl+Enter: Save and exit editing (flush debounced saves)
 
 let installed = false;
@@ -47,6 +48,22 @@ export function initGlobalShortcuts({ navigate, patchUserState, getUserState }) 
       return;
     }
 
+    // Option+E — toggle all subsections on current page
+    if (e.altKey && !e.metaKey && !e.ctrlKey && (code === 'KeyE' || key === 'e')) {
+      // Ignore while typing in input/textarea/contenteditable
+      const ae = document.activeElement;
+      const isTyping = !!(ae && (
+        ae.closest?.('input, textarea, [contenteditable="true"], [contenteditable="plaintext-only"]') ||
+        (ae instanceof HTMLInputElement) ||
+        (ae instanceof HTMLTextAreaElement) ||
+        (ae instanceof HTMLElement && ae.isContentEditable)
+      ));
+      if (isTyping) return;
+      e.preventDefault();
+      try { await toggleAllSubsections(); } catch (err) { console.error('toggleAllSubsections failed', err); }
+      return;
+    }
+
     // Ctrl+Enter — save + exit editing everywhere
     if (e.ctrlKey && !e.metaKey && (code === 'Enter' || key === 'enter')) {
       e.preventDefault();
@@ -59,6 +76,75 @@ export function initGlobalShortcuts({ navigate, patchUserState, getUserState }) 
       return;
     }
   }, true);
+}
+
+async function toggleAllSubsections() {
+  // Lazy-load dependencies to avoid heavy upfront costs/cycles
+  const [{ getCurrentPageBlocks, updateCurrentBlocks }, { debouncePatch }] = await Promise.all([
+    import('../lib/pageStore.js'),
+    import('../blocks/edit/state.js'),
+  ]);
+
+  const blocks = getCurrentPageBlocks();
+  if (!Array.isArray(blocks) || !blocks.length) return;
+
+  // Build quick lookup maps
+  const byId = new Map(blocks.map(b => [String(b.id), b]));
+  const parseProps = (b) => {
+    const raw = b?.propsJson;
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw || {};
+    try { return JSON.parse(String(raw)); } catch { return {}; }
+  };
+
+  // Identify subsections: type==='section' and parent is a section OR level>1
+  const subsections = [];
+  for (const b of blocks) {
+    if (b?.type !== 'section') continue;
+    const props = parseProps(b);
+    const level = Number(props.level || 0);
+    const parent = b.parentId ? byId.get(String(b.parentId)) : null;
+    const parentIsSection = !!(parent && parent.type === 'section');
+    const isSub = parentIsSection || (Number.isFinite(level) && level > 1);
+    if (isSub) subsections.push({ block: b, props });
+  }
+  if (!subsections.length) return;
+
+  // Determine target collapsed state: if any expanded -> collapse all, else expand all
+  const expandedExists = subsections.some(x => !x.props?.collapsed);
+  const targetCollapsed = expandedExists ? true : false;
+
+  // Optimistically update local store so UI responds immediately
+  const idSet = new Set(subsections.map(x => String(x.block.id)));
+  updateCurrentBlocks((b) => {
+    if (!idSet.has(String(b.id))) return b;
+    const oldProps = parseProps(b);
+    const nextProps = { ...oldProps, collapsed: targetCollapsed };
+    return { ...b, propsJson: JSON.stringify(nextProps) };
+  });
+
+  // Update DOM immediately to avoid jank or requiring a full re-render
+  for (const { block } of subsections) {
+    try {
+      const root = document.querySelector(`[data-block-id="${CSS.escape(String(block.id))}"]`);
+      if (!root) continue;
+      const header = root.querySelector?.('.section-header');
+      const kidsWrap = root.querySelector?.('.section-children');
+      const toggle = root.querySelector?.('.section-toggle');
+      if (header) header.dataset.collapsed = targetCollapsed ? '1' : '0';
+      if (kidsWrap && kidsWrap instanceof HTMLElement) kidsWrap.style.display = targetCollapsed ? 'none' : '';
+      if (toggle && toggle instanceof HTMLElement) {
+        toggle.textContent = targetCollapsed ? '▸' : '▾';
+        toggle.setAttribute('aria-expanded', targetCollapsed ? 'false' : 'true');
+      }
+    } catch {}
+  }
+
+  // Queue debounced patches for each affected block (do not await)
+  for (const { block, props } of subsections) {
+    const next = { ...props, collapsed: targetCollapsed };
+    try { debouncePatch(block.id, { props: next }); } catch {}
+  }
 }
 
 function togglePrivacyBlur() {

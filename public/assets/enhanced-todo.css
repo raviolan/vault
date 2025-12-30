@@ -21,11 +21,11 @@
     border: 1px solid rgba(139, 92, 246, 0.2);
 }
 
-#todoInput {
+#todoInput, #randomOccInput {
     font-size: var(--text-lg);
 }
 
-#todoInput:focus {
+#todoInput:focus, #randomOccInput:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
@@ -513,4 +513,19 @@ body[data-theme='light'] .todo-item:hover {
 
 body[data-theme='light'] .todo-text {
     color: #0b0d12;
+}
+
+/* Random Occurrences input contrast fixes (loaded late to win cascade) */
+.right-drawer-content #randomOccInput,
+[data-panel='randomOcc'] #randomOccInput,
+#rightNotepadMount #randomOccInput {
+    color: var(--text) !important;
+    background: var(--control-bg) !important;
+    border-color: var(--control-border) !important;
+}
+.right-drawer-content #randomOccInput::placeholder,
+[data-panel='randomOcc'] #randomOccInput::placeholder,
+#rightNotepadMount #randomOccInput::placeholder {
+    color: var(--control-muted) !important;
+    opacity: 1 !important;
 }

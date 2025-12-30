@@ -7,6 +7,7 @@ import { NotepadApp } from '../miniapps/notepad/app.js';
 import { TodoApp } from '../miniapps/todo/app.js';
 import { ConditionsApp } from '../miniapps/conditions/app.js';
 import { HpTrackerApp } from '../miniapps/hp/app.js';
+import { RandomOccurrencesApp } from '../miniapps/randomOccurrences/app.js';
 import { getAppState, setAppState, getUserState, patchUserState } from '../miniapps/state.js';
 import { initRightPanelSplit } from './rightPanelSplit.js';
 
@@ -17,7 +18,7 @@ export function bindRightPanel() {
   if (!toggle || !drawer) return;
 
   // Register built-in mini apps once, keeping order stable
-  registerMany([NotepadApp, TodoApp, ConditionsApp, HpTrackerApp]);
+  registerMany([NotepadApp, TodoApp, ConditionsApp, HpTrackerApp, RandomOccurrencesApp]);
 
   // init from state
   const s = getState();
@@ -56,6 +57,7 @@ export function bindRightPanel() {
   const btnNotes = document.getElementById('rightTopAppNotes');
   const btnCond  = document.getElementById('rightTopAppConditions');
   const btnHp    = document.getElementById('rightTopAppHp');
+  const btnRandom = document.getElementById('rightTopAppRandomOcc');
   const splitToggle = document.getElementById('rightSplitToggle');
   const splitPicker = document.getElementById('rightSplitPicker');
   const splitTopSelect = document.getElementById('rightSplitTopSelect');
@@ -109,6 +111,17 @@ export function bindRightPanel() {
     }),
   });
 
+  // Random Occurrences single panel host
+  const randomHost = createMiniAppHost({
+    surfaceId: 'rightPanelRandomOcc',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightRandomOccMount'),
+    }),
+  });
+
   const conditionsHost = createMiniAppHost({
     surfaceId: 'rightPanelConditions',
     rootEl: drawer,
@@ -130,6 +143,26 @@ export function bindRightPanel() {
   });
   const conditionsBottomHost = createMiniAppHost({
     surfaceId: 'rightPanelConditionsBottom',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightTodoMount'),
+    }),
+  });
+
+  // Random Occurrences split hosts (top/bottom mounts)
+  const randomTopHost = createMiniAppHost({
+    surfaceId: 'rightPanelRandomOccTop',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightNotepadMount'),
+    }),
+  });
+  const randomBottomHost = createMiniAppHost({
+    surfaceId: 'rightPanelRandomOccBottom',
     rootEl: drawer,
     getCtx: () => ({
       pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
@@ -162,7 +195,7 @@ export function bindRightPanel() {
 
   // New unified setter for top app choice
   function setTopAppChoice(choice) {
-    // choice: 'notepad' | 'conditions' | 'hp'
+    // choice: 'notepad' | 'conditions' | 'hp' | 'randomOccurrences'
     const st = getState() || {};
     if (st.rightPanelSplitActive) {
       updateState({ rightSplitTopApp: choice });
@@ -182,6 +215,7 @@ export function bindRightPanel() {
   btnNotes && (btnNotes.onclick = () => setTopAppChoice('notepad'));
   btnCond && (btnCond.onclick  = () => setTopAppChoice('conditions'));
   btnHp && (btnHp.onclick    = () => setTopAppChoice('hp'));
+  btnRandom && (btnRandom.onclick = () => setTopAppChoice('randomOccurrences'));
 
   // Active state styling for buttons
   function updateTopAppButtonsActive() {
@@ -195,6 +229,7 @@ export function bindRightPanel() {
     btnNotes?.classList.toggle('is-active', active === 'notepad');
     btnCond?.classList.toggle('is-active', active === 'conditions');
     btnHp?.classList.toggle('is-active', active === 'hp');
+    btnRandom?.classList.toggle('is-active', active === 'randomOccurrences');
   }
 
   function setPanelHeadersDefault() {
@@ -208,11 +243,11 @@ export function bindRightPanel() {
     const st = getState() || {};
     let top = st.rightSplitTopApp || 'notepad';
     let bottom = st.rightSplitBottomApp || 'todo';
-    const ALLOWED = new Set(['notepad', 'todo', 'conditions', 'hp']);
+    const ALLOWED = new Set(['notepad', 'todo', 'conditions', 'hp', 'randomOccurrences']);
     if (!ALLOWED.has(top)) top = 'notepad';
     if (!ALLOWED.has(bottom)) bottom = 'todo';
     if (top === bottom) {
-      const ORDER = ['notepad','todo','conditions','hp'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
       const next = ORDER.find(x => x !== top) || 'todo';
       if (bottom === top) bottom = next;
     }
@@ -242,13 +277,14 @@ export function bindRightPanel() {
     // Update headers
     const npH = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
     const tdH = drawer.querySelector(".right-panel[data-panel='todo'] h3.meta");
-    const labelFor = (v) => v === 'notepad' ? 'Notepad' : (v === 'todo' ? 'To-Do' : (v === 'conditions' ? 'Conditions' : (v === 'hp' ? 'HP' : String(v))));
+    const labelFor = (v) => v === 'notepad' ? 'Notepad' : (v === 'todo' ? 'To-Do' : (v === 'conditions' ? 'Conditions' : (v === 'hp' ? 'HP' : (v === 'randomOccurrences' ? 'Random' : String(v)))));
     if (npH) npH.textContent = labelFor(top);
     if (tdH) tdH.textContent = labelFor(bottom);
 
     const textarea = drawer.querySelector('#notepad');
     const topMount = drawer.querySelector('#rightNotepadMount');
     const todoNative = drawer.querySelector('#todoNative');
+    const randomNative = drawer.querySelector('#randomOccNative');
     const bottomMount = drawer.querySelector('#rightTodoMount');
     const todoSlot = drawer.querySelector('#rightTodoSlot');
     const notepadSlot = drawer.querySelector('#rightNotepadSlot');
@@ -258,12 +294,15 @@ export function bindRightPanel() {
     if (bottomMount) bottomMount.hidden = true;
     if (textarea) textarea.hidden = true;
     if (todoNative) todoNative.hidden = true;
+    if (randomNative) randomNative.hidden = true;
     notepadHost.show(null);
     todoHost.show(null);
     conditionsTopHost.show(null);
     conditionsBottomHost.show(null);
     hpTopHost.show(null);
     hpBottomHost.show(null);
+    randomTopHost.show(null);
+    randomBottomHost.show(null);
 
     // Top slot
     if (top === 'notepad') {
@@ -281,6 +320,11 @@ export function bindRightPanel() {
     } else if (top === 'hp') {
       if (topMount) topMount.hidden = false;
       hpTopHost.show('hp');
+    } else if (top === 'randomOccurrences') {
+      if (randomNative && topMount && randomNative.parentElement !== topMount) topMount.appendChild(randomNative);
+      if (topMount) topMount.hidden = false;
+      if (randomNative) randomNative.hidden = false;
+      randomTopHost.show('randomOccurrences');
     }
     // Bottom slot
     if (bottom === 'notepad') {
@@ -298,6 +342,11 @@ export function bindRightPanel() {
     } else if (bottom === 'hp') {
       if (bottomMount) bottomMount.hidden = false;
       hpBottomHost.show('hp');
+    } else if (bottom === 'randomOccurrences') {
+      if (randomNative && bottomMount && randomNative.parentElement !== bottomMount) bottomMount.appendChild(randomNative);
+      if (bottomMount) bottomMount.hidden = false;
+      if (randomNative) randomNative.hidden = false;
+      randomBottomHost.show('randomOccurrences');
     }
 
     // Split mode uses the split hosts; ensure single-tab Conditions is unmounted
@@ -355,6 +404,7 @@ export function bindRightPanel() {
     const textarea = drawer.querySelector('#notepad');
     const topMount = drawer.querySelector('#rightNotepadMount');
     if (!textarea || !topMount) return;
+    const randomNative = drawer.querySelector('#randomOccNative');
     // Reset both overlay hosts first
     hpTopHost.show(null);
     conditionsTopHost.show(null);
@@ -366,9 +416,16 @@ export function bindRightPanel() {
       textarea.hidden = true;
       topMount.hidden = false;
       conditionsTopHost.show('conditions');
+    } else if (overlay === 'randomOccurrences') {
+      textarea.hidden = true;
+      topMount.hidden = false;
+      if (randomNative && randomNative.parentElement !== topMount) topMount.appendChild(randomNative);
+      if (randomNative) randomNative.hidden = false;
+      randomTopHost.show('randomOccurrences');
     } else {
       textarea.hidden = false;
       topMount.hidden = true;
+      try { randomTopHost.show(null); } catch {}
     }
   }
 
@@ -384,6 +441,7 @@ export function bindRightPanel() {
       notepadHost.show(name === 'notepad' ? 'notepad' : null);
       todoHost.show(name === 'todo' ? 'todo' : null);
       conditionsHost.show(null);
+      randomHost.show(null);
       if (name === 'notepad') {
         applyNotepadOverlay();
       } else {
@@ -403,7 +461,17 @@ export function bindRightPanel() {
     conditionsBottomHost.show(null);
     hpTopHost.show(null);
     hpBottomHost.show(null);
+    randomTopHost.show(null);
+    randomBottomHost.show(null);
+    randomHost.show(null);
     if (name === 'conditions') conditionsHost.show('conditions');
+    if (name === 'randomOcc') {
+      const randomNative = drawer.querySelector('#randomOccNative');
+      const randomSlot = drawer.querySelector('#rightRandomOccSlot');
+      if (randomNative && randomSlot && randomNative.parentElement !== randomSlot) randomSlot.insertBefore(randomNative, randomSlot.firstChild);
+      if (randomNative) randomNative.hidden = false;
+      randomHost.show('randomOccurrences');
+    }
     if (name === 'settings') renderSettingsPanel();
     updateTopAppButtonsActive();
   };
@@ -471,7 +539,7 @@ export function bindRightPanel() {
     let top = splitTopSelect.value;
     let bottom = getState().rightSplitBottomApp || 'todo';
     if (top === bottom) {
-      const ORDER = ['notepad','todo','conditions','hp'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
       bottom = ORDER.find(x => x !== top) || 'todo';
     }
     updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
@@ -481,7 +549,7 @@ export function bindRightPanel() {
     let bottom = splitBottomSelect.value;
     let top = getState().rightSplitTopApp || 'notepad';
     if (top === bottom) {
-      const ORDER = ['notepad','todo','conditions','hp'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
       top = ORDER.find(x => x !== bottom) || 'notepad';
     }
     updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
@@ -492,7 +560,7 @@ export function bindRightPanel() {
     let newTop = cfg.bottom;
     let newBottom = cfg.top;
     if (newTop === newBottom) {
-      const ORDER = ['notepad','todo','conditions','hp'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
       newBottom = ORDER.find(x => x !== newTop) || 'todo';
     }
     updateState({ rightSplitTopApp: newTop, rightSplitBottomApp: newBottom });

@@ -546,7 +546,60 @@ body[data-mode='edit'] .editor-add-controls .chip {
 .hpTracker {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-5);
+}
+
+/* Alternate enemy card backgrounds within the list only */
+.hpEnemyList .hpEnemy:nth-child(odd) {
+    background: var(--panel);
+}
+.hpEnemyList .hpEnemy:nth-child(even) {
+    background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+}
+
+/* Two-column layout for enemy cards */
+.hpEnemyList {
+    display: grid;
+    grid-template-columns: 1fr; /* default single column for tight spaces */
+    gap: var(--space-4);
+}
+@media (min-width: 600px) {
+  .hpEnemyList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Chessboard-style alternation across two-column grid */
+  .hpEnemyList .hpEnemy:nth-child(4n+1),
+  .hpEnemyList .hpEnemy:nth-child(4n+4) {
+    background: var(--panel);
+  }
+  .hpEnemyList .hpEnemy:nth-child(4n+2),
+  .hpEnemyList .hpEnemy:nth-child(4n+3) {
+    background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+  }
+}
+
+/* Centered two-up layout for summary cards below enemies */
+.hpTotalsHost {
+    display: grid;
+    grid-template-columns: 1fr; /* stack on narrow screens */
+    gap: var(--space-4);
+    max-width: none; /* remove clamp so the pair can expand */
+    margin: 0 auto; /* center horizontally */
+}
+@media (min-width: 600px) {
+  .hpTotalsHost {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Allow HP route to use full content width (view + edit modes) */
+.main > #outlet > section.page.page--hp {
+    max-width: none;
+    width: 100%;
+    margin-inline: 0;
+}
+body[data-mode='edit'] .main > #outlet > section.page.page--hp {
+    max-width: none;
 }
 
 .hpTrackerBar {
@@ -560,11 +613,15 @@ body[data-mode='edit'] .editor-add-controls .chip {
     border: 1px solid var(--border);
     background: var(--panel);
     border-radius: var(--radius-4);
-    padding: var(--space-3);
+    padding: var(--space-4);
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
+    font-size: 15px;
 }
+
+/* Extra space between enemy cards */
+/* Enemy list uses grid; gaps are controlled on the container */
 
 .hpEnemy--down {
     opacity: 0.9;
@@ -584,7 +641,7 @@ body[data-mode='edit'] .editor-add-controls .chip {
 }
 
 .hpEnemyPreview {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
 }
 
@@ -593,16 +650,31 @@ body[data-mode='edit'] .editor-add-controls .chip {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
 }
 
+/* XP row below target HP */
+.hpEnemyXP {
+    display: grid;
+    grid-template-columns: auto 100px;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 13px;
+}
+
 .hpBadge {
-    font-size: 11px;
+    font-size: 13px;
     padding: 2px 8px;
     border-radius: 999px;
     border: 1px solid var(--border);
     background: var(--bg);
+}
+/* Make DOWN badge red when enemy is down */
+.hpEnemy--down .hpBadge {
+    background: #c62828;
+    border-color: #c62828;
+    color: #fff;
 }
 
 .hpForm {
@@ -623,7 +695,7 @@ body[data-mode='edit'] .editor-add-controls .chip {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    font-size: 13px;
+    font-size: 15px;
 }
 
 .hpLogRow .meta {
@@ -715,6 +787,23 @@ body.dragging-right-split textarea#notepad {
 .right-drawer-content [data-panel='todo'] > .todo-row > input {
     flex: 1 1 auto;
 }
+
+/* Random Occurrences panel: mirror To-Do behavior */
+.right-drawer-content [data-panel='randomOcc'] .todo-row { flex: 0 0 auto; }
+.right-drawer-content [data-panel='randomOcc'] #randomOccList { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.right-drawer-content #rightRandomOccSlot { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.right .pane-body [data-panel='randomOcc'] { display: flex; flex-direction: column; min-height: 0; }
+.right-drawer-content [data-panel='randomOcc'] h3.meta { margin: 0 0 6px 0; }
+.right-drawer-content [data-panel='randomOcc'] > .todo-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.right-drawer-content [data-panel='randomOcc'] > .todo-row > input { flex: 1 1 auto; color: var(--text); }
+
+/* Ensure Random Occurrences input is readable in all modes (including overlay) */
+#randomOccInput {
+    color: var(--text) !important;
+    background: var(--control-bg) !important;
+    border-color: var(--control-border) !important;
+}
+#randomOccInput::placeholder { color: var(--control-muted) !important; }
 
 .right-split {
     display: grid;

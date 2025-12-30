@@ -25,6 +25,7 @@ import { setThemeMode, syncThemeButtons } from './lib/themeSwitchers.js';
 import { mountLeftPanelBottom } from './surfaces/leftPanelBottom.js';
 import { mountLeftPanelWeather } from './surfaces/leftPanelWeather.js';
 import * as WeatherSettingsRoute from './routes/weatherSettings.js';
+import * as HpRoute from './routes/hp.js';
 import * as EnemyGenerator from './tools/enemyGenerator/index.js';
 import { renderFavorites } from './features/favorites.js';
 import { initPanels } from './features/panelControls.js';
@@ -232,6 +233,12 @@ export async function boot() {
     const outlet = document.getElementById('outlet');
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     return SettingsRoute.render(outlet, {});
+  });
+  // Standalone HP Tracker content page
+  route(/^\/apps\/hp\/?$/, () => {
+    const outlet = document.getElementById('outlet');
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
+    return HpRoute.render(outlet, {});
   });
   route(/^\/section\/([^\/]+)\/?$/, (ctx) => {
     const outlet = document.getElementById('outlet');

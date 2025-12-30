@@ -21,9 +21,13 @@ export const HpTrackerApp = {
     try { mountEl.style.overflow = 'auto'; mountEl.style.minHeight = '0'; } catch {}
 
     let state = (() => {
-      const raw = getAppState(APP_ID, { enemies: [] });
-      if (raw && typeof raw === 'object' && Array.isArray(raw.enemies)) return { enemies: raw.enemies.slice() };
-      return { enemies: [] };
+      const raw = getAppState(APP_ID, { enemies: [], xpDivide: 0 });
+      if (raw && typeof raw === 'object') {
+        const enemies = Array.isArray(raw.enemies) ? raw.enemies.slice() : [];
+        const xpDivide = Number.isFinite(raw.xpDivide) ? raw.xpDivide : 0;
+        return { enemies, xpDivide };
+      }
+      return { enemies: [], xpDivide: 0 };
     })();
     const persist = debounce(() => setAppState(APP_ID, state), 250);
 
@@ -45,13 +49,18 @@ export const HpTrackerApp = {
     root.appendChild(bar);
 
     const list = document.createElement('div');
+    list.className = 'hpEnemyList';
     root.appendChild(list);
+    const totalsHost = document.createElement('div');
+    totalsHost.className = 'hpTotalsHost';
+    root.appendChild(totalsHost);
 
     function ensureEnemyDefaults(e) {
       return {
         id: e.id || crypto.randomUUID(),
         label: typeof e.label === 'string' ? e.label : '',
         target: Number.isFinite(e.target) ? e.target : 0,
+        xp: Number.isFinite(e.xp) ? e.xp : 0,
         log: Array.isArray(e.log) ? e.log.map(l => ({ id: l.id || crypto.randomUUID(), who: l.who || '', dmg: Number(l.dmg) || 0, ts: l.ts || Date.now() })) : [],
       };
     }
@@ -102,6 +111,13 @@ export const HpTrackerApp = {
       persist();
     }
 
+    function updateEnemyXp(enemyId, next) {
+      const e = state.enemies.find(x => x.id === enemyId);
+      if (!e) return;
+      e.xp = Math.max(0, Math.floor(Number(next) || 0));
+      persist();
+    }
+
     function renderEnemyCard(e) {
       e = ensureEnemyDefaults(e);
       const total = sum(e.log || []);
@@ -145,6 +161,25 @@ export const HpTrackerApp = {
       inputs.appendChild(label);
       inputs.appendChild(targetInput);
       card.appendChild(inputs);
+
+      // XP row (small input below total HP)
+      const xpRow = document.createElement('div');
+      xpRow.className = 'hpEnemyXP';
+      const xpLabel = document.createElement('label');
+      xpLabel.textContent = 'XP';
+      xpLabel.className = 'meta';
+      xpLabel.setAttribute('for', `xp-${e.id}`);
+      const xpInput = document.createElement('input');
+      xpInput.id = `xp-${e.id}`;
+      xpInput.type = 'number';
+      xpInput.min = '0';
+      xpInput.step = '1';
+      xpInput.inputMode = 'numeric';
+      xpInput.placeholder = 'XP';
+      xpInput.value = String(Math.max(0, Math.floor(Number(e.xp) || 0)));
+      xpRow.appendChild(xpLabel);
+      xpRow.appendChild(xpInput);
+      card.appendChild(xpRow);
 
       // Preview line for label (wikilink-aware)
       const preview = document.createElement('div');
@@ -245,6 +280,10 @@ export const HpTrackerApp = {
           if (badge.isConnected) header.removeChild(badge);
         }
       });
+      xpInput.addEventListener('input', () => {
+        const v = formatInt(xpInput.value);
+        updateEnemyXp(e.id, v);
+      });
       form.addEventListener('submit', (ev) => {
         ev.preventDefault();
         addLogEntry(e.id, whoInput.value, dmgInput.value);
@@ -255,10 +294,130 @@ export const HpTrackerApp = {
       return card;
     }
 
+    function computeTotalsByWho() {
+      const map = new Map(); // key: lowercased who, value: { who,label,total }
+      for (const e of (state.enemies || [])) {
+        for (const entry of (e?.log || [])) {
+          const raw = String(entry?.who || '').trim();
+          if (!raw) continue;
+          const key = raw.toLowerCase();
+          const cur = map.get(key) || { who: raw, total: 0 };
+          cur.total += Math.max(0, Math.floor(Number(entry?.dmg) || 0));
+          if (!map.has(key)) map.set(key, cur);
+        }
+      }
+      return Array.from(map.values()).sort((a, b) => b.total - a.total || a.who.localeCompare(b.who));
+    }
+
+    function computeTotalXp() {
+      let n = 0;
+      for (const e of (state.enemies || [])) n += Math.max(0, Math.floor(Number(e?.xp) || 0));
+      return n;
+    }
+
+    function renderTotalsCard() {
+      const card = document.createElement('div');
+      card.className = 'hpEnemy';
+      const header = document.createElement('div');
+      header.className = 'hpEnemyHeader';
+      const title = document.createElement('div');
+      title.textContent = 'Totals by Attacker';
+      header.appendChild(title);
+      card.appendChild(header);
+
+      const rows = document.createElement('div');
+      rows.className = 'hpLog';
+      const totals = computeTotalsByWho();
+      if (!totals.length) {
+        const p = document.createElement('p');
+        p.className = 'meta';
+        p.textContent = 'No damage entries yet.';
+        card.appendChild(p);
+      } else {
+        for (const t of totals) {
+          const row = document.createElement('div');
+          row.className = 'hpLogRow';
+          const left = document.createElement('div');
+          left.textContent = `${t.who}`;
+          const right = document.createElement('div');
+          right.textContent = `${t.total}`;
+          row.appendChild(left);
+          row.appendChild(right);
+          rows.appendChild(row);
+        }
+        card.appendChild(rows);
+      }
+      return card;
+    }
+
+    function renderXpSummaryCard() {
+      const card = document.createElement('div');
+      card.className = 'hpEnemy';
+      const header = document.createElement('div');
+      header.className = 'hpEnemyHeader';
+      const title = document.createElement('div');
+      title.textContent = 'Total XP';
+      header.appendChild(title);
+      card.appendChild(header);
+
+      const total = computeTotalXp();
+      const stats = document.createElement('div');
+      stats.className = 'hpEnemyStats';
+      const left = document.createElement('span');
+      left.textContent = `Total ${total} XP`;
+      const right = document.createElement('span');
+      right.textContent = '';
+      stats.appendChild(left);
+      stats.appendChild(right);
+      card.appendChild(stats);
+
+      const row = document.createElement('div');
+      row.className = 'hpEnemyXP';
+      const lab = document.createElement('label');
+      lab.textContent = 'Divide by';
+      lab.className = 'meta';
+      lab.setAttribute('for', `xpDivide`);
+      const inp = document.createElement('input');
+      inp.id = 'xpDivide';
+      inp.type = 'number';
+      inp.min = '0';
+      inp.step = '1';
+      inp.inputMode = 'numeric';
+      inp.placeholder = 'Party size';
+      inp.value = String(Math.max(0, Math.floor(Number(state.xpDivide) || 0)));
+      row.appendChild(lab);
+      row.appendChild(inp);
+      card.appendChild(row);
+
+      const per = document.createElement('div');
+      per.className = 'hpEnemyStats';
+      const perLabel = document.createElement('span');
+      perLabel.textContent = 'Each';
+      const perVal = document.createElement('span');
+      const divBy = Math.max(0, Math.floor(Number(state.xpDivide) || 0));
+      perVal.textContent = divBy > 0 ? `${Math.floor(total / divBy)} XP` : '—';
+      per.appendChild(perLabel);
+      per.appendChild(perVal);
+      card.appendChild(per);
+
+      inp.addEventListener('input', () => {
+        const v = formatInt(inp.value);
+        state.xpDivide = v;
+        persist();
+        try { perVal.textContent = v > 0 ? `${Math.floor(computeTotalXp() / v)} XP` : '—'; } catch {}
+      });
+
+      return card;
+    }
+
     function renderList() {
       list.innerHTML = '';
       const arr = Array.isArray(state.enemies) ? state.enemies : [];
       for (const e of arr) list.appendChild(renderEnemyCard(e));
+      // Summary card with totals by attacker across all enemies (render outside the enemy list)
+      totalsHost.innerHTML = '';
+      totalsHost.appendChild(renderXpSummaryCard());
+      totalsHost.appendChild(renderTotalsCard());
     }
 
     addBtn.addEventListener('click', addEnemy);
@@ -276,4 +435,3 @@ export const HpTrackerApp = {
   },
   unmount() {},
 };
-

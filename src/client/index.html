@@ -119,6 +119,7 @@
           <button id="rightTopAppNotes" class="chip panelToggle" type="button" title="Show Notes">Notes</button>
           <button id="rightTopAppConditions" class="chip panelToggle" type="button" title="Show Conditions">Conditions</button>
           <button id="rightTopAppHp" class="chip panelToggle" type="button" title="Show HP Tracker">HP</button>
+          <button id="rightTopAppRandomOcc" class="chip panelToggle" type="button" title="Show Random Occurrences">Random</button>
         </div>
 
         <div id="rightDrawer" class="right-drawer-content" hidden>
@@ -127,6 +128,7 @@
             <button class="chip" data-tab="notepad" hidden>Notepad</button>
             <button class="chip" data-tab="conditions" hidden>Conditions</button>
             <button class="chip" data-tab="todo" hidden>To-Do</button>
+            <button class="chip" data-tab="randomOcc" hidden>Random</button>
             <button class="chip" data-tab="backlinks" hidden>Backlinks</button>
             <button class="chip" data-tab="settings" hidden>Settings</button>
             <button id="rightSplitToggle" class="chip" aria-pressed="false" title="Split view" hidden>Split</button>
@@ -149,6 +151,7 @@
                 <option value="notepad">Notepad</option>
                 <option value="conditions">Conditions</option>
                 <option value="todo">To-Do</option>
+                <option value="randomOcc">Random Occurrences</option>
                 <option value="backlinks">Backlinks</option>
                 <option value="settings">Settings</option>
               </select>
@@ -161,6 +164,7 @@
                 <option value="todo">To-Do</option>
                 <option value="conditions">Conditions</option>
                 <option value="hp">HP</option>
+                <option value="randomOccurrences">Random</option>
               </select>
               <span class="meta">Bottom</span>
               <select id="rightSplitBottomSelect">
@@ -168,6 +172,7 @@
                 <option value="todo">To-Do</option>
                 <option value="conditions">Conditions</option>
                 <option value="hp">HP</option>
+                <option value="randomOccurrences">Random</option>
               </select>
               <button id="rightSplitSwap" class="chip" type="button" title="Swap">⇅</button>
             </div>
@@ -203,6 +208,20 @@
                 <ul id="todoList"></ul>
               </div>
               <div id="rightTodoMount" class="split-mount" hidden></div>
+            </div>
+          </section>
+
+          <section class="right-panel" data-panel="randomOcc" hidden>
+            <h3 class="meta">Random Occurrences</h3>
+            <div id="rightRandomOccSlot">
+              <div id="randomOccNative">
+                <div class="todo-row">
+                  <input id="randomOccInput" placeholder="Add a random occurrence" />
+                  <button id="randomOccAdd" class="chip">Add</button>
+                </div>
+                <ul id="randomOccList"></ul>
+              </div>
+              <div id="rightRandomOccMount" class="split-mount" hidden></div>
             </div>
           </section>
 
