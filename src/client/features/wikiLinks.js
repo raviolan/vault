@@ -37,7 +37,11 @@ function resetWikilinkModal(modal) {
 // Avoid formatting inside inline code spans delimited by backticks.
 export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
   const frag = document.createDocumentFragment();
-  const re = /\[\[(?:page:([0-9a-fA-F-]{36})\|([^\]]*?)|([^\]]+))\]\]/g; // [[page:<uuid>|Label]] or [[Title]]
+  // Supported tokens:
+  // - [[o5e:spell:<slug>|Label]]
+  // - [[page:<uuid>|Label]]
+  // - [[Title]] (legacy unresolved)
+  const re = /\[\[(?:o5e:spell:([a-z0-9-]+)\|([^\]]*?)|page:([0-9a-fA-F-]{36})\|([^\]]*?)|([^\]]+))\]\]/gi;
   let lastIndex = 0;
   let m;
 
@@ -59,8 +63,17 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
   while ((m = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, m.index);
     if (before) appendFormatted(before);
-    const [full, idPart, labelPart, legacyTitle] = m;
-    if (idPart) {
+    const [full, spellSlug, spellLabel, idPart, labelPart, legacyTitle] = m;
+    if (spellSlug) {
+      const slug = (spellSlug || '').trim();
+      const label = (spellLabel || '').trim() || slug;
+      const span = document.createElement('span');
+      span.className = 'o5e-spell';
+      span.setAttribute('data-o5e-type', 'spell');
+      span.setAttribute('data-o5e-slug', slug);
+      span.textContent = label;
+      frag.appendChild(span);
+    } else if (idPart) {
       const id = idPart;
       const label = (labelPart || '').trim();
       const a = document.createElement('a');

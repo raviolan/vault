@@ -19,6 +19,7 @@ import { bindModalBasics, openCreateModal, createPageFromModal } from './feature
 import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav, installNavActiveSync } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
+import { installOpen5eSpellFeature } from './features/open5eSpells.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
 import { setThemeMode, syncThemeButtons } from './lib/themeSwitchers.js';
@@ -47,6 +48,8 @@ export async function boot() {
   bindModalBasics('createPageModal');
   bindModalBasics('deletePageModal');
   bindModalBasics('wikilinkCreateModal');
+  bindModalBasics('open5eSpellModal');
+  try { installOpen5eSpellFeature(); } catch {}
   await loadState();
   // Apply UI preferences on boot
   try { applyUiPrefsToBody(getState()); } catch {}
