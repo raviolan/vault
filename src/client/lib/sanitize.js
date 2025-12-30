@@ -1,8 +1,8 @@
 // Minimal rich-text sanitizer for inline formatting inside paragraph blocks.
-// Allowed tags: <strong>/<b>, <em>/<i>, <a href>, <br>
-// Everything else is stripped; disallowed attributes removed.
+// Allowed tags: <strong>, <em>, <a href>, <br>
+// Everything else is unwrapped; disallowed attributes removed.
 
-const ALLOWED_TAGS = new Set(['STRONG', 'B', 'EM', 'I', 'A', 'BR']);
+const ALLOWED_TAGS = new Set(['STRONG', 'EM', 'A', 'BR']);
 
 function isSafeHref(href) {
   try {
@@ -25,46 +25,14 @@ export function sanitizeRichHtml(html) {
     const root = doc.body.firstElementChild;
     if (!root) return '';
 
-    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
-    const toRemove = [];
-    const toCleanAttrs = [];
-
-    let node = root;
-    while (node) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = node.tagName.toUpperCase();
-        if (!ALLOWED_TAGS.has(tag)) {
-          toRemove.push(node);
-        } else {
-          // Clean attributes
-          if (tag === 'A') {
-            for (const attr of Array.from(node.attributes)) {
-              if (attr.name.toLowerCase() !== 'href') node.removeAttribute(attr.name);
-            }
-            const href = node.getAttribute('href');
-            if (!isSafeHref(href)) node.removeAttribute('href');
-            // Security: default to rel noopener for external links (render-time concern, but safe to add)
-            node.setAttribute('rel', 'noopener noreferrer');
-          } else {
-            for (const attr of Array.from(node.attributes)) node.removeAttribute(attr.name);
-          }
-          toCleanAttrs.push(node);
-        }
-      }
-      node = walker.nextNode();
+    function unwrap(el) {
+      const p = el.parentNode;
+      if (!p) return;
+      while (el.firstChild) p.insertBefore(el.firstChild, el);
+      p.removeChild(el);
     }
 
-    // Remove disallowed nodes but keep their text content where sensible.
-    for (const el of toRemove) {
-      const parent = el.parentNode;
-      if (!parent) continue;
-      // Replace with its text content and <br> for line breaks if it was a block-level; but since we only allow inline,
-      // simply unwrap children.
-      while (el.firstChild) parent.insertBefore(el.firstChild, el);
-      parent.removeChild(el);
-    }
-
-    // Normalize <b>/<i> to <strong>/<em> for consistency (optional)
+    // Normalize b/i to strong/em BEFORE pruning so they won't be stripped.
     const mapTag = (src, dst) => {
       root.querySelectorAll(src).forEach((el) => {
         const repl = doc.createElement(dst.toUpperCase());
@@ -75,8 +43,78 @@ export function sanitizeRichHtml(html) {
     mapTag('b', 'strong');
     mapTag('i', 'em');
 
-    // Ensure no scripts snuck in via malformed HTML
-    root.querySelectorAll('script, style').forEach((el) => el.remove());
+    // Normalize styled <span> produced by editors into allowed <strong>/<em>
+    // Do this before pruning so formatting is preserved.
+    root.querySelectorAll('span').forEach((span) => {
+      const style = String(span.getAttribute('style') || '').toLowerCase();
+      if (!style) return; // no inline style; span will be stripped later
+
+      // Detect bold: font-weight: bold/bolder or >= 600
+      let isBold = false;
+      const fwMatch = style.match(/font-weight\s*:\s*([^;]+)/);
+      if (fwMatch) {
+        const val = fwMatch[1].trim();
+        if (val === 'bold' || val === 'bolder') {
+          isBold = true;
+        } else {
+          const num = parseInt(val, 10);
+          if (!Number.isNaN(num) && num >= 600) isBold = true;
+        }
+      }
+
+      // Detect italic: font-style: italic
+      let isItalic = /font-style\s*:\s*(italic|oblique)/.test(style);
+
+      if (!isBold && !isItalic) return; // leave as-is to be stripped later
+
+      // Build the replacement wrapper(s): <em> then <strong> if applicable
+      const frag = doc.createDocumentFragment();
+      while (span.firstChild) frag.appendChild(span.firstChild);
+
+      let wrapped = frag;
+      if (isItalic) {
+        const em = doc.createElement('EM');
+        em.appendChild(wrapped);
+        wrapped = em;
+      }
+      if (isBold) {
+        const strong = doc.createElement('STRONG');
+        strong.appendChild(wrapped);
+        wrapped = strong;
+      }
+
+      span.replaceWith(wrapped);
+    });
+
+    // Process all elements deepest-to-shallowest and unwrap disallowed tags.
+    const all = Array.from(root.querySelectorAll('*')).reverse();
+    for (const el of all) {
+      const tag = el.tagName.toUpperCase();
+
+      // Remove script/style outright
+      if (tag === 'SCRIPT' || tag === 'STYLE') {
+        el.remove();
+        continue;
+      }
+
+      if (ALLOWED_TAGS.has(tag)) {
+        // Strip attributes; for <a> keep only a safe href and set rel
+        if (tag === 'A') {
+          for (const attr of Array.from(el.attributes)) {
+            if (attr.name.toLowerCase() !== 'href') el.removeAttribute(attr.name);
+          }
+          const href = el.getAttribute('href');
+          if (!isSafeHref(href)) el.removeAttribute('href');
+          el.setAttribute('rel', 'noopener noreferrer');
+        } else {
+          for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
+        }
+        continue;
+      }
+
+      // Disallowed tag: unwrap it to preserve children/formatting
+      unwrap(el);
+    }
 
     // Return innerHTML of the container
     return root.innerHTML
@@ -97,4 +135,3 @@ export function plainTextFromHtmlContainer(el) {
     return '';
   }
 }
-

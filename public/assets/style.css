@@ -2575,6 +2575,10 @@ main.main>section[id].collapsed .section-content {
 #pageBlocks > .section-block:first-child{ margin-top: 0; }
 .section-children > .section-block{ margin-top: 10px; }
 
+/* Ensure rich text emphasis is visually reflected in read-only blocks */
+#pageBlocks strong { font-weight: 700; }
+#pageBlocks em { font-style: italic; }
+
 /* Header row: clean row w/ subtle hover + no layout shifts */
 .section-header{
   display:flex;

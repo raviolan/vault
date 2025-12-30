@@ -133,6 +133,12 @@ export async function boot() {
 
     if (!now) {
       try {
+        // Force-save all rich blocks to persist formatting before flushing
+        document.querySelectorAll('.block-rich[contenteditable="true"]').forEach((el) => {
+          try { el.__vaultForceSave?.(); } catch {}
+        });
+      } catch {}
+      try {
         const { flushDebouncedPatches } = await import('./blocks/edit/state.js');
         await flushDebouncedPatches();
       } catch {}
