@@ -39,8 +39,8 @@
 }
 
 /* Collapsible section headers inside Settings */
-#settingsRouteRoot details > summary,
-#settingsPanel details > summary {
+#settingsRouteRoot details>summary,
+#settingsPanel details>summary {
     font-size: var(--text-lg);
     font-weight: 700;
     padding: 6px 2px;
@@ -102,10 +102,12 @@
 .theme-card {
     transition: transform .06s ease, box-shadow .15s ease;
 }
+
 .theme-card:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-2);
 }
+
 .theme-card[data-selected="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
@@ -333,6 +335,7 @@ body[data-mode='edit'] .editor-add-controls {
     display: flex;
     gap: 8px;
 }
+
 body[data-mode='edit'] .editor-add-controls .chip {
     padding: 6px 10px;
 }
@@ -362,11 +365,16 @@ body[data-mode='edit'] .editor-add-controls .chip {
 .right .right-drawer-handle {
     flex: 0 0 auto;
 }
+
 /* Add spacing between multiple toggle buttons in handle */
-.right-drawer-handle { gap: 8px; }
+.right-drawer-handle {
+    gap: 8px;
+}
 
 /* Compact spacing for the top-app toggle next to Tools */
-.right .right-drawer-handle .panelToggleCond { margin-left: 6px; }
+.right .right-drawer-handle .panelToggleCond {
+    margin-left: 6px;
+}
 
 /* Subtle active state for panel toggle chips */
 .panelToggle.is-active {
@@ -392,7 +400,8 @@ body[data-mode='edit'] .editor-add-controls .chip {
 #rightDrawer.right-drawer-content {
     flex: 1 1 auto;
     min-height: 0;
-    height: 100%; /* keep consistent with existing behavior */
+    height: 100%;
+    /* keep consistent with existing behavior */
 }
 
 /* Right panel tabs: add spacing and allow wrapping */
@@ -403,6 +412,7 @@ body[data-mode='edit'] .editor-add-controls .chip {
     row-gap: 6px;
     padding: 6px 6px 10px 6px;
 }
+
 .right-drawer-content .right-panel-tabs .chip {
     padding: 6px 10px;
     line-height: 1.1;
@@ -421,12 +431,34 @@ body[data-mode='edit'] .editor-add-controls .chip {
 }
 
 /* Ensure To-Do panel forms a proper flex column chain that allows internal scrolling */
-.right-drawer-content .right-panel[data-panel='todo'] { display: flex; flex-direction: column; min-height: 0; }
+.right-drawer-content .right-panel[data-panel='todo'] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
 /* In both single and split modes, make the slot and native container flex columns with a shrinkable height */
-#rightTodoSlot { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
-#todoNative { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#rightTodoSlot {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#todoNative {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 /* Make the list itself the scroll region and contain overscroll */
-#todoList { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+#todoList {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
 
 /* Split view: Notepad (top ~40%), To-Do (bottom ~60%) */
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='notepad'] {
@@ -434,16 +466,19 @@ body[data-mode='edit'] .editor-add-controls .chip {
     min-height: 160px;
     overflow: hidden;
 }
+
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='todo'] {
     flex: 1 1 auto;
     overflow: hidden;
 }
+
 /* removed empty block for #rightNotepadSlot; see combined slot sizing below */
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='notepad'] #notepad {
     width: 100%;
     height: 100%;
     resize: none;
 }
+
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='todo'] #todoList {
     overflow: auto;
 }
@@ -452,11 +487,14 @@ body[data-mode='edit'] .editor-add-controls .chip {
 #rightSplitHandle {
     position: relative;
     height: 16px;
-    margin: -3px 0; /* net 16-6 = 10px -> same visual spacing as before */
+    margin: -3px 0;
+    /* net 16-6 = 10px -> same visual spacing as before */
     cursor: row-resize;
-    z-index: 5; /* ensure it sits above slot content */
+    z-index: 5;
+    /* ensure it sits above slot content */
     touch-action: none;
 }
+
 #rightSplitHandle::before {
     content: '';
     position: absolute;
@@ -470,7 +508,9 @@ body[data-mode='edit'] .editor-add-controls .chip {
 }
 
 /* Only show split handle in split mode */
-.right-drawer-content:not([data-notes-split='true']) #rightSplitHandle { display: none; }
+.right-drawer-content:not([data-notes-split='true']) #rightSplitHandle {
+    display: none;
+}
 
 /* Split picker bar */
 .right-split-picker {
@@ -480,13 +520,17 @@ body[data-mode='edit'] .editor-add-controls .chip {
     padding: 0 6px 10px 6px;
     flex-wrap: wrap;
 }
-.right-split-picker select { height: 30px; }
+
+.right-split-picker select {
+    height: 30px;
+}
 
 /* Right panel: collapsible controls wrapper */
 #rightPanelControls {
     margin: 2px 6px 6px 6px;
 }
-#rightPanelControls > summary {
+
+#rightPanelControls>summary {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -497,36 +541,59 @@ body[data-mode='edit'] .editor-add-controls .chip {
     line-height: 1.2;
     padding: 4px 8px;
     border: 1px solid var(--border);
-    border-radius: 999px; /* chip-like */
+    border-radius: 999px;
+    /* chip-like */
     background: transparent;
     user-select: none;
 }
-#rightPanelControls > summary::-webkit-details-marker { display: none; }
-#rightPanelControls > summary::marker { content: ''; }
-#rightPanelControls > summary::after {
+
+#rightPanelControls>summary::-webkit-details-marker {
+    display: none;
+}
+
+#rightPanelControls>summary::marker {
+    content: '';
+}
+
+#rightPanelControls>summary::after {
     content: '▸';
     display: inline-block;
     margin-left: 6px;
     color: var(--muted);
 }
-#rightPanelControls[open] > summary::after { content: '▾'; }
+
+#rightPanelControls[open]>summary::after {
+    content: '▾';
+}
 
 /* Split inner layout: allow internal scroll in mounts */
-.split-mount { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.split-mount #notepad { width: 100%; height: 100%; resize: none; }
+.split-mount {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.split-mount #notepad {
+    width: 100%;
+    height: 100%;
+    resize: none;
+}
+
 .right-drawer-content[data-notes-split='true'] #rightNotepadSlot,
 .right-drawer-content[data-notes-split='true'] #rightTodoSlot {
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
+
 /* Notepad textarea fills its slot */
-.right-drawer-content[data-notes-split='true'] #rightNotepadSlot #notepad{
+.right-drawer-content[data-notes-split='true'] #rightNotepadSlot #notepad {
     flex: 1 1 auto;
     min-height: 0;
     height: 100%;
     resize: none;
 }
+
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='todo'] #todoNative,
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='todo'] #rightTodoMount {
     flex: 1 1 auto;
@@ -553,6 +620,7 @@ body[data-mode='edit'] .editor-add-controls .chip {
 .hpEnemyList .hpEnemy:nth-child(odd) {
     background: var(--panel);
 }
+
 .hpEnemyList .hpEnemy:nth-child(even) {
     background: color-mix(in srgb, var(--panel) 88%, var(--bg));
 }
@@ -560,65 +628,76 @@ body[data-mode='edit'] .editor-add-controls .chip {
 /* Two-column layout for enemy cards */
 .hpEnemyList {
     display: grid;
-    grid-template-columns: 1fr; /* default single column for tight spaces */
+    grid-template-columns: 1fr;
+    /* default single column for tight spaces */
     gap: var(--space-4);
 }
+
 @media (min-width: 600px) {
-  .hpEnemyList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  /* Chessboard-style alternation across two-column grid */
-  .hpEnemyList .hpEnemy:nth-child(4n+1),
-  .hpEnemyList .hpEnemy:nth-child(4n+4) {
-    background: var(--panel);
-  }
-  .hpEnemyList .hpEnemy:nth-child(4n+2),
-  .hpEnemyList .hpEnemy:nth-child(4n+3) {
-    background: color-mix(in srgb, var(--panel) 88%, var(--bg));
-  }
+    .hpEnemyList {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    /* Chessboard-style alternation across two-column grid */
+    .hpEnemyList .hpEnemy:nth-child(4n+1),
+    .hpEnemyList .hpEnemy:nth-child(4n+4) {
+        background: var(--panel);
+    }
+
+    .hpEnemyList .hpEnemy:nth-child(4n+2),
+    .hpEnemyList .hpEnemy:nth-child(4n+3) {
+        background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+    }
 }
 
 /* Right panel: always use single-column layout for HP cards */
 .right-drawer-content .hpEnemyList {
     grid-template-columns: 1fr !important;
 }
+
 @media (min-width: 600px) {
-  .right-drawer-content .hpEnemyList {
-    grid-template-columns: 1fr !important;
-  }
+    .right-drawer-content .hpEnemyList {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 /* Centered two-up layout for summary cards below enemies */
 .hpTotalsHost {
     display: grid;
-    grid-template-columns: 1fr; /* stack on narrow screens */
+    grid-template-columns: 1fr;
+    /* stack on narrow screens */
     gap: var(--space-4);
-    max-width: none; /* remove clamp so the pair can expand */
-    margin: 0 auto; /* center horizontally */
+    max-width: none;
+    /* remove clamp so the pair can expand */
+    margin: 0 auto;
+    /* center horizontally */
 }
+
 @media (min-width: 600px) {
-  .hpTotalsHost {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+    .hpTotalsHost {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 /* Right panel: totals cards also single-column to match layout */
 .right-drawer-content .hpTotalsHost {
     grid-template-columns: 1fr !important;
 }
+
 @media (min-width: 600px) {
-  .right-drawer-content .hpTotalsHost {
-    grid-template-columns: 1fr !important;
-  }
+    .right-drawer-content .hpTotalsHost {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 /* Allow HP route to use full content width (view + edit modes) */
-.main > #outlet > section.page.page--hp {
+.main>#outlet>section.page.page--hp {
     max-width: none;
     width: 100%;
     margin-inline: 0;
 }
-body[data-mode='edit'] .main > #outlet > section.page.page--hp {
+
+body[data-mode='edit'] .main>#outlet>section.page.page--hp {
     max-width: none;
 }
 
@@ -690,6 +769,7 @@ body[data-mode='edit'] .main > #outlet > section.page.page--hp {
     border: 1px solid var(--border);
     background: var(--bg);
 }
+
 /* Make DOWN badge red when enemy is down */
 .hpEnemy--down .hpBadge {
     background: #c62828;
@@ -721,16 +801,22 @@ body[data-mode='edit'] .main > #outlet > section.page.page--hp {
 .hpLogRow .meta {
     margin: 0;
 }
+
 .cond-item summary {
     cursor: pointer;
     font-weight: 600;
 }
-.cond-item summary::-webkit-details-marker { display: none; }
+
+.cond-item summary::-webkit-details-marker {
+    display: none;
+}
+
 .cond-desc {
     margin-top: var(--space-3);
     white-space: pre-wrap;
     color: var(--text);
 }
+
 #rightSplitHandle::after {
     content: '⋮';
     position: absolute;
@@ -742,6 +828,7 @@ body[data-mode='edit'] .main > #outlet > section.page.page--hp {
     font-size: 14px;
     opacity: .9;
 }
+
 #rightSplitHandle:hover,
 #rightSplitHandle:focus-visible {
     background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -786,36 +873,87 @@ body.dragging-right-split textarea#notepad {
 
 /* Ensure To-Do layout flexes and scrolls properly in both single and split modes */
 /* Single mode: make the slot a flex column container so the list can flex */
-.right-drawer-content #rightTodoSlot { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.right-drawer-content #rightTodoSlot {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
 /* Generic safety: if hosted in pane layouts, ensure the panel acts as a flex column */
-.right .pane-body [data-panel='todo'] { display: flex; flex-direction: column; min-height: 0; }
-.right .pane-body [data-panel='todo'] #todoList, 
-.right .pane-body [data-panel='todo'] .todo-list-container { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.right .pane-body [data-panel='todo'] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.right .pane-body [data-panel='todo'] #todoList,
+.right .pane-body [data-panel='todo'] .todo-list-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
 
 /* To-Do header spacing + compact toolbar */
-.right-drawer-content [data-panel='todo'] h3.meta { margin: 0 0 6px 0; }
+.right-drawer-content [data-panel='todo'] h3.meta {
+    margin: 0 0 6px 0;
+}
+
 .right-drawer-content [data-panel='todo'] #todoToggleCompleted {
     margin: 0 0 8px 0 !important;
 }
+
 /* Add row: input grows, consistent gap */
-.right-drawer-content [data-panel='todo'] > .todo-row {
+.right-drawer-content [data-panel='todo']>.todo-row {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 8px;
 }
-.right-drawer-content [data-panel='todo'] > .todo-row > input {
+
+.right-drawer-content [data-panel='todo']>.todo-row>input {
     flex: 1 1 auto;
 }
 
 /* Random Occurrences panel: mirror To-Do behavior */
-.right-drawer-content [data-panel='randomOcc'] .todo-row { flex: 0 0 auto; }
-.right-drawer-content [data-panel='randomOcc'] #randomOccList { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.right-drawer-content #rightRandomOccSlot { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
-.right .pane-body [data-panel='randomOcc'] { display: flex; flex-direction: column; min-height: 0; }
-.right-drawer-content [data-panel='randomOcc'] h3.meta { margin: 0 0 6px 0; }
-.right-drawer-content [data-panel='randomOcc'] > .todo-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.right-drawer-content [data-panel='randomOcc'] > .todo-row > input { flex: 1 1 auto; color: var(--text); }
+.right-drawer-content [data-panel='randomOcc'] .todo-row {
+    flex: 0 0 auto;
+}
+
+.right-drawer-content [data-panel='randomOcc'] #randomOccList {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.right-drawer-content #rightRandomOccSlot {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.right .pane-body [data-panel='randomOcc'] {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.right-drawer-content [data-panel='randomOcc'] h3.meta {
+    margin: 0 0 6px 0;
+}
+
+.right-drawer-content [data-panel='randomOcc']>.todo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.right-drawer-content [data-panel='randomOcc']>.todo-row>input {
+    flex: 1 1 auto;
+    color: var(--text);
+}
 
 /* Ensure Random Occurrences input is readable in all modes (including overlay) */
 #randomOccInput {
@@ -823,7 +961,10 @@ body.dragging-right-split textarea#notepad {
     background: var(--control-bg) !important;
     border-color: var(--control-border) !important;
 }
-#randomOccInput::placeholder { color: var(--control-muted) !important; }
+
+#randomOccInput::placeholder {
+    color: var(--control-muted) !important;
+}
 
 .right-split {
     display: grid;
@@ -1075,7 +1216,7 @@ body.left-collapsed .left {
     height: var(--party-drawer-h, 55vh);
     border-top: 1px solid var(--border);
     background: var(--bg);
-    box-shadow: 0 -10px 30px rgba(0,0,0,.25);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, .25);
     transform: translateY(100%);
     transition: transform 160ms ease;
     padding: var(--space-3);
@@ -1102,43 +1243,301 @@ body.left-collapsed .left {
     height: calc(var(--party-drawer-h, 55vh) - 60px);
 }
 
+
+/* Party Drawer Card Styles (refined) */
 .partyCard {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
     border: 1px solid var(--border);
     background: var(--panel);
-    border-radius: var(--radius-4);
-    padding: var(--space-3);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .18);
+    padding: 0;
+    /* height removed for adaptive sizing */
+}
+
+.partyCardBg {
+    position: absolute;
+    inset: 0;
+    background-image: var(--bg);
+    background-size: cover;
+    background-position: center;
+    filter: blur(12px);
+    transform: scale(1.12);
+    opacity: 0.65;
+}
+
+.partyCardBg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom,
+            color-mix(in srgb, var(--panel) 55%, transparent),
+            color-mix(in srgb, var(--panel) 20%, transparent) 45%,
+            color-mix(in srgb, var(--panel) 60%, transparent));
+}
+
+.partyCardInner {
+    position: relative;
+    padding: 14px 14px 12px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    height: 100%;
 }
 
-.partyCardTop {
+/* Internal scroll area for card content */
+.partyCardScroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+}
+
+.partyCardScroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.partyCardScroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--border) 75%, transparent);
+    border-radius: 999px;
+}
+
+
+/* ROW 1: avatar + name + AC + unpin */
+.partyTopRow {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
+    background: color-mix(in srgb, var(--panel) 78%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 10px 10px;
 }
 
-.partyCardName {
-    font-weight: 600;
+.partyIdentity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
     cursor: pointer;
 }
 
-.partyStats {
-    display: flex;
-    gap: 10px;
-    font-size: 12px;
-    color: var(--muted);
-    flex-wrap: wrap;
+.partyAvatarLg {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid color-mix(in srgb, var(--panel) 85%, transparent);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
 }
 
-.partyNotesPreview {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: pre-wrap;
-    max-height: 4.5em;
+.partyCardName {
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.05;
+    color: var(--text);
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
+
+.partyAcCircle {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    display: grid;
+    grid-template-rows: 12px 1fr;
+    align-items: center;
+    justify-items: center;
+    padding-top: 4px;
+    background: color-mix(in srgb, var(--panel) 92%, white);
+    border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    flex: 0 0 auto;
+}
+
+.partyAcLabel {
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    opacity: 0.75;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
+}
+
+.partyAcVal {
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
+}
+
+.partyIconBtn.partyUnpinBtn {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel) 85%, transparent);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+/* Passives: framed rows with badge */
+.partyPassives {
+    display: grid;
+    gap: 8px;
+}
+
+.partyPassiveRow {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 86%, white);
+}
+
+.partyPassiveVal {
+    width: 46px;
+    height: 34px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    background: color-mix(in srgb, var(--panel) 92%, white);
+    border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.partyPassiveLabel {
+    font-weight: 900;
+    letter-spacing: .05em;
+    font-size: 12px;
+    text-transform: uppercase;
+    opacity: 0.92;
+}
+
+/* Notes block (sheet.notes) — 2-line clamp */
+.partyNote {
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+    background: color-mix(in srgb, var(--panel) 82%, transparent);
+    color: var(--text);
+    font-size: 12.5px;
+    line-height: 1.35;
+    min-height: 36px;
+    max-height: 120px;
+    overflow: auto;
+    resize: none;
+    /* Remove line clamp for adaptive height */
+}
+
+/* Footer: centered small button */
+.partyFooter {
+    display: flex;
+    justify-content: center;
+    padding-top: 2px;
+    flex: 0 0 auto;
+}
+
+.partyCharacterPageBtn {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+}
+
+.partyIdentity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.partyAvatarLg {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid color-mix(in srgb, var(--panel) 70%, transparent);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+
+.partyCardName {
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--text);
+    text-shadow: 0 2px 14px rgba(0, 0, 0, .35);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+.partyIconBtn {
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    background: color-mix(in srgb, var(--panel) 78%, transparent);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.partyCardGrid {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.partyAcShield {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: #111;
+    filter: drop-shadow(0 14px 25px rgba(0, 0, 0, .18));
+}
+
+.partyAcShield::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--panel) 92%, white);
+    border: 3px solid color-mix(in srgb, var(--accent) 75%, #b64545);
+    clip-path: polygon(50% 0%, 88% 10%, 92% 34%, 86% 74%, 50% 100%, 14% 74%, 8% 34%, 12% 10%);
+}
+
+.partyAcTop,
+.partyAcBot {
+    position: relative;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: .08em;
+    opacity: 0.75;
+}
+
+.partyAcVal {
+    position: relative;
+    font-size: 44px;
+    font-weight: 900;
+    line-height: 1;
+}
+
 
 .partyResizeHandle {
     width: 100%;
@@ -1149,6 +1548,7 @@ body.left-collapsed .left {
     justify-content: center;
     margin: -6px 0 4px 0;
 }
+
 .partyResizeHandle::after {
     content: '';
     width: 40px;
@@ -1163,7 +1563,7 @@ body.left-collapsed .left {
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid var(--border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .search {
@@ -1212,6 +1612,92 @@ pre {
 .right .drawer-handle,
 .wysiwyg-toolbar {
     color: var(--text);
+}
+
+/* --- Party Drawer Card Height/Stretch Fixes (Override) --- */
+.partyDrawerPanel {
+    display: flex;
+    flex-direction: column;
+    height: var(--party-drawer-h, 55vh);
+    min-height: 0;
+}
+
+.partyCards {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--space-3);
+    overflow: auto;
+    padding-bottom: 24px;
+}
+
+.partyCard {
+    height: 100%;
+    align-self: stretch;
+}
+
+.partyCardInner {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.partyCardScroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* --- Party Drawer Card Styling Fixes (Override) --- */
+.partyCard .partyTopRow .partyAcCircle {
+    display: grid;
+    grid-template-rows: 12px 1fr;
+    align-items: center;
+    justify-items: center;
+    padding-top: 4px;
+}
+
+.partyCard .partyTopRow .partyAcCircle .partyAcLabel {
+    font-size: 9px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.partyCard .partyTopRow .partyAcCircle .partyAcVal {
+    font-size: 16px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.partyCard .partyIdentity,
+.partyCard .partyIdentity * {
+    background: transparent;
+    text-decoration: none;
+    outline: none;
+    box-shadow: none;
+}
+
+.partyCard .partyCardName {
+    text-decoration: none;
+}
+
+.partyCard .partyIdentity:focus,
+.partyCard .partyIdentity:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
+.partyCard .partyIdentity a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.partyCard .partyIdentity a:hover {
+    text-decoration: none;
 }
 
 .toolbar svg,
@@ -1656,8 +2142,8 @@ body[data-mode='edit'] .main>#outlet>* {
 
 /* Edit-mode: prevent intermediate wrappers from imposing min-content height
    which can clamp overflow. */
-body[data-mode='edit'] .main > #outlet,
-body[data-mode='edit'] .main > #outlet > * {
+body[data-mode='edit'] .main>#outlet,
+body[data-mode='edit'] .main>#outlet>* {
     min-height: 0;
 }
 
@@ -1678,7 +2164,9 @@ body[data-mode='edit'] .page .page-editor {
 }
 
 /* Default: toolbar hidden unless in edit mode */
-.editor-toolbar { display: none; }
+.editor-toolbar {
+    display: none;
+}
 
 /* Sticky editor toolbar (edit mode only) */
 body[data-mode='edit'] .editor-toolbar {
@@ -1695,11 +2183,44 @@ body[data-mode='edit'] .editor-toolbar {
     border-radius: var(--radius-4);
     box-shadow: var(--shadow-1);
 }
-body[data-mode='edit'] .editor-toolbar .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-body[data-mode='edit'] .editor-toolbar select { height: 28px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
-body[data-mode='edit'] .editor-toolbar button { height: 28px; min-width: 28px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
-body[data-mode='edit'] .editor-toolbar button:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
-body[data-mode='edit'] .editor-toolbar .sep { width: 1px; height: 24px; background: var(--border); margin: 0 2px; }
+
+body[data-mode='edit'] .editor-toolbar .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+body[data-mode='edit'] .editor-toolbar select {
+    height: 28px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 6px;
+}
+
+body[data-mode='edit'] .editor-toolbar button {
+    height: 28px;
+    min-width: 28px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+
+body[data-mode='edit'] .editor-toolbar button:hover {
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+body[data-mode='edit'] .editor-toolbar .sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 2px;
+}
 
 body[data-mode='edit'] .page .page-body {
     max-width: 76ch;
@@ -1719,6 +2240,7 @@ body[data-mode='edit'] #pageTitleInput.page-title-input {
     border-radius: var(--radius-3);
     padding: 4px 2px;
 }
+
 body[data-mode='edit'] #pageTitleInput.page-title-input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1735,6 +2257,7 @@ body[data-mode='edit'] .block .block-input {
     border-radius: var(--radius-3);
     padding: var(--space-5) var(--space-6);
 }
+
 body[data-mode='edit'] .block .block-input.paragraph {
     line-height: 1.6;
     font-size: var(--text-lg);
@@ -1742,16 +2265,26 @@ body[data-mode='edit'] .block .block-input.paragraph {
 }
 
 /* Rich paragraph contenteditable should look like the normal input */
-body[data-mode='edit'] .block .block-input.paragraph.block-rich { white-space: pre-wrap; outline: none; }
-body[data-mode='edit'] .block .block-input.paragraph.block-rich a { color: var(--link); text-decoration: underline; }
+body[data-mode='edit'] .block .block-input.paragraph.block-rich {
+    white-space: pre-wrap;
+    outline: none;
+}
+
+body[data-mode='edit'] .block .block-input.paragraph.block-rich a {
+    color: var(--link);
+    text-decoration: underline;
+}
+
 /* Only when a single block exists (blank canvas), give it a tall starting height */
-body[data-mode='edit'] .page .page-body > .block:only-child .block-input.paragraph {
+body[data-mode='edit'] .page .page-body>.block:only-child .block-input.paragraph {
     min-height: 64vh;
 }
+
 body[data-mode='edit'] .block .block-input.heading {
     font-weight: 600;
     font-size: clamp(18px, 2.2vw, 22px);
 }
+
 body[data-mode='edit'] .block .block-input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1765,6 +2298,7 @@ body[data-mode='edit'] #pageTagInput {
     border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
     border-radius: var(--radius-3);
 }
+
 body[data-mode='edit'] #pageTagInput:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1802,11 +2336,24 @@ body[data-mode='edit'] .page .page-body h3 {
     letter-spacing: 0.1px;
 }
 
-body[data-mode='edit'] .page .page-body h1 { margin-top: 1.6em; margin-bottom: 0.5em; }
-body[data-mode='edit'] .page .page-body h2 { margin-top: 1.4em; margin-bottom: 0.45em; }
-body[data-mode='edit'] .page .page-body h3 { margin-top: 1.2em; margin-bottom: 0.4em; }
+body[data-mode='edit'] .page .page-body h1 {
+    margin-top: 1.6em;
+    margin-bottom: 0.5em;
+}
 
-body[data-mode='edit'] .page .page-body code { font-size: 0.95em; }
+body[data-mode='edit'] .page .page-body h2 {
+    margin-top: 1.4em;
+    margin-bottom: 0.45em;
+}
+
+body[data-mode='edit'] .page .page-body h3 {
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+}
+
+body[data-mode='edit'] .page .page-body code {
+    font-size: 0.95em;
+}
 
 /* Resizer cursor UX: make it obvious they are interactive */
 .layout .resizer {
@@ -1844,26 +2391,55 @@ body[data-mode='edit'] .save-status .dot {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-body[data-mode='edit'] .save-status[data-status='saving'] { color: var(--accent); }
+body[data-mode='edit'] .save-status[data-status='saving'] {
+    color: var(--accent);
+}
+
 body[data-mode='edit'] .save-status[data-status='saving'] .dot {
     background: var(--accent);
     animation: pulse 1.2s ease-in-out infinite;
 }
 
-body[data-mode='edit'] .save-status[data-status='dirty'] { color: var(--accent); }
-body[data-mode='edit'] .save-status[data-status='dirty'] .dot { background: var(--accent); animation: none; }
+body[data-mode='edit'] .save-status[data-status='dirty'] {
+    color: var(--accent);
+}
 
-body[data-mode='edit'] .save-status[data-status='saved'] { color: var(--muted); }
-body[data-mode='edit'] .save-status[data-status='saved'] .dot { background: var(--muted); animation: none; }
+body[data-mode='edit'] .save-status[data-status='dirty'] .dot {
+    background: var(--accent);
+    animation: none;
+}
+
+body[data-mode='edit'] .save-status[data-status='saved'] {
+    color: var(--muted);
+}
+
+body[data-mode='edit'] .save-status[data-status='saved'] .dot {
+    background: var(--muted);
+    animation: none;
+}
 
 /* Keep error readable without hardcoding colors; reuse accent for emphasis */
-body[data-mode='edit'] .save-status[data-status='error'] { color: var(--accent); }
-body[data-mode='edit'] .save-status[data-status='error'] .dot { background: var(--accent); animation: none; }
+body[data-mode='edit'] .save-status[data-status='error'] {
+    color: var(--accent);
+}
+
+body[data-mode='edit'] .save-status[data-status='error'] .dot {
+    background: var(--accent);
+    animation: none;
+}
 
 @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
-    70% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent); }
-    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent);
+    }
+
+    70% {
+        box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+    }
 }
 
 body[data-theme='light'] .todo-item {
@@ -2476,45 +3052,94 @@ main.main>section[id].collapsed .section-content {
 }
 
 /* Editor/Reader: Section heading levels on section blocks */
-.section-title-read.h1 { font-size: 28px; font-weight: 700; line-height: 1.2; }
-.section-title-read.h2 { font-size: 24px; font-weight: 700; line-height: 1.25; }
-.section-title-read.h3 { font-size: 20px; font-weight: 600; line-height: 1.3; }
+.section-title-read.h1 {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
 
-.block-input.section-title.h1 { font-size: 26px; font-weight: 700; line-height: 1.2; }
-.block-input.section-title.h2 { font-size: 22px; font-weight: 700; line-height: 1.25; }
-.block-input.section-title.h3 { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.section-title-read.h2 {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.section-title-read.h3 {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.block-input.section-title.h1 {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.block-input.section-title.h2 {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.block-input.section-title.h3 {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
+}
 
 /* Subtle wrappers for leveled sections (mostly hooks; minimal spacing) */
-.section-block.section--lvl1 .section-header { margin-bottom: 6px; }
-.section-block.section--lvl2 .section-header { margin-bottom: 4px; }
-.section-block.section--lvl3 .section-header { margin-bottom: 2px; }
+.section-block.section--lvl1 .section-header {
+    margin-bottom: 6px;
+}
+
+.section-block.section--lvl2 .section-header {
+    margin-bottom: 4px;
+}
+
+.section-block.section--lvl3 .section-header {
+    margin-bottom: 2px;
+}
 
 /* Sections: Option A (Notion-clean) spacing + visuals */
 /* A) Spacing between sections */
-.section-block.section--lvl1 { margin-top: 12px; }
-.section-block.section--lvl2 { margin-top: 10px; }
-.section-block.section--lvl3 { margin-top: 8px; }
-.section-block:first-child { margin-top: 0; }
+.section-block.section--lvl1 {
+    margin-top: 12px;
+}
+
+.section-block.section--lvl2 {
+    margin-top: 10px;
+}
+
+.section-block.section--lvl3 {
+    margin-top: 8px;
+}
+
+.section-block:first-child {
+    margin-top: 0;
+}
 
 /* B) Header row styling (clean row, subtle hover) */
-.section-header{
-    display:flex;
-    align-items:center;
+.section-header {
+    display: flex;
+    align-items: center;
     gap: 8px;
     padding: 6px 8px;
     border-radius: var(--radius-5);
 }
-.section-header:hover{
-    background: rgba(127,127,127,0.10);
+
+.section-header:hover {
+    background: rgba(127, 127, 127, 0.10);
 }
-@supports (background: color-mix(in srgb, black, white)){
-  .section-header:hover{
-    background: color-mix(in srgb, var(--text) 7%, transparent);
-  }
+
+@supports (background: color-mix(in srgb, black, white)) {
+    .section-header:hover {
+        background: color-mix(in srgb, var(--text) 7%, transparent);
+    }
 }
 
 /* C) Toggle button (remove circle, draw chevron via CSS) */
-.section-toggle{
+.section-toggle {
     width: 18px;
     height: 18px;
     padding: 0;
@@ -2531,257 +3156,310 @@ main.main>section[id].collapsed .section-content {
     color: transparent;
     position: relative;
 }
-.section-toggle::before{
-    content:"";
+
+.section-toggle::before {
+    content: "";
     width: 6px;
     height: 6px;
     border-right: 2px solid var(--muted);
     border-bottom: 2px solid var(--muted);
-    transform: rotate(45deg); /* expanded = down */
+    transform: rotate(45deg);
+    /* expanded = down */
 }
-.section-toggle[aria-expanded="false"]::before{
-    transform: rotate(-45deg); /* collapsed = right */
+
+.section-toggle[aria-expanded="false"]::before {
+    transform: rotate(-45deg);
+    /* collapsed = right */
 }
-.section-toggle:hover{
+
+.section-toggle:hover {
     background: color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 /* D) Title spacing + alignment */
-.section-title-read{
+.section-title-read {
     flex: 1;
 }
-.block-input.section-title{
+
+.block-input.section-title {
     flex: 1;
     background: transparent;
 }
 
 /* E) Nested children guide line (hierarchy readability) */
-.section-children{
+.section-children {
     margin-left: 14px;
-    padding-left: 12px !important; /* override inline paddingLeft from readOnly.js */
+    padding-left: 12px !important;
+    /* override inline paddingLeft from readOnly.js */
     border-left: 1px solid var(--border);
 }
-@supports (border-left-color: color-mix(in srgb, black, white)){
-  .section-children{
-    border-left-color: color-mix(in srgb, var(--border) 70%, transparent);
-  }
+
+@supports (border-left-color: color-mix(in srgb, black, white)) {
+    .section-children {
+        border-left-color: color-mix(in srgb, var(--border) 70%, transparent);
+    }
 }
 
 
 /* --- Section accordion: Option A (Notion-clean) + polish --- */
 
 /* Breathing room between section blocks */
-#pageBlocks .section-block{ margin-top: 12px; }
-#pageBlocks > .section-block:first-child{ margin-top: 0; }
-.section-children > .section-block{ margin-top: 10px; }
+#pageBlocks .section-block {
+    margin-top: 12px;
+}
+
+#pageBlocks>.section-block:first-child {
+    margin-top: 0;
+}
+
+.section-children>.section-block {
+    margin-top: 10px;
+}
 
 /* Ensure rich text emphasis is visually reflected in read-only blocks */
-#pageBlocks strong { font-weight: 700; }
-#pageBlocks em { font-style: italic; }
+#pageBlocks strong {
+    font-weight: 700;
+}
+
+#pageBlocks em {
+    font-style: italic;
+}
 
 /* Header row: clean row w/ subtle hover + no layout shifts */
-.section-header{
-  display:flex;
-  align-items:center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: var(--radius-5);
-  margin: 0;                 /* override old margin-bottom-only style */
-  border-bottom: 1px solid transparent; /* prevents jump on hover */
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-5);
+    margin: 0;
+    /* override old margin-bottom-only style */
+    border-bottom: 1px solid transparent;
+    /* prevents jump on hover */
+    transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
 /* Slight lift on hover (tiny) */
-.section-header:hover{ transform: translateY(-0.5px); }
+.section-header:hover {
+    transform: translateY(-0.5px);
+}
 
 /* Hover background (theme-safe) */
-.section-header:hover{
-  background: rgba(127,127,127,0.10);
-  border-bottom-color: var(--border);
+.section-header:hover {
+    background: rgba(127, 127, 127, 0.10);
+    border-bottom-color: var(--border);
 }
-@supports (background: color-mix(in srgb, black, white)){
-  .section-header:hover{
-    background: color-mix(in srgb, var(--text) 7%, transparent);
-    border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent);
-  }
+
+@supports (background: color-mix(in srgb, black, white)) {
+    .section-header:hover {
+        background: color-mix(in srgb, var(--text) 7%, transparent);
+        border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent);
+    }
 }
 
 /* Expanded sections get a faint persistent tint */
 /* Respect UI pref: section highlight toggle via body[data-section-hl] */
-.section-header[data-collapsed="0"]{
-  background: rgba(127,127,127,0.08);
+.section-header[data-collapsed="0"] {
+    background: rgba(127, 127, 127, 0.08);
 }
-@supports (background: color-mix(in srgb, black, white)){
-  .section-header[data-collapsed="0"]{
-    background: color-mix(in srgb, var(--text) 6%, transparent);
-  }
+
+@supports (background: color-mix(in srgb, black, white)) {
+    .section-header[data-collapsed="0"] {
+        background: color-mix(in srgb, var(--text) 6%, transparent);
+    }
 }
 
 /* Disable persistent tint when highlight pref off */
-body[data-section-hl="0"] .section-header[data-collapsed="0"]{
-  background: transparent !important;
-}
-@supports (background: color-mix(in srgb, black, white)){
-  body[data-section-hl="0"] .section-header[data-collapsed="0"]{
+body[data-section-hl="0"] .section-header[data-collapsed="0"] {
     background: transparent !important;
-  }
+}
+
+@supports (background: color-mix(in srgb, black, white)) {
+    body[data-section-hl="0"] .section-header[data-collapsed="0"] {
+        background: transparent !important;
+    }
 }
 
 /* Toggle: remove “button chrome”, draw a chevron, animate it */
-.section-toggle{
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items:center;
-  justify-content:center;
-  cursor: pointer;
-  position: relative;
+.section-toggle {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
 
-  /* hide the ▾/▸ glyph visually (fallback remains in DOM) */
-  font-size: 0;
-  line-height: 0;
-  color: transparent;
+    /* hide the ▾/▸ glyph visually (fallback remains in DOM) */
+    font-size: 0;
+    line-height: 0;
+    color: transparent;
 }
-.section-toggle::before{
-  content:"";
-  width: 6px;
-  height: 6px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg); /* expanded = down */
-  transition: transform 120ms ease, border-color 120ms ease;
+
+.section-toggle::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg);
+    /* expanded = down */
+    transition: transform 120ms ease, border-color 120ms ease;
 }
-.section-toggle[aria-expanded="false"]::before{
-  transform: rotate(-45deg); /* collapsed = right */
+
+.section-toggle[aria-expanded="false"]::before {
+    transform: rotate(-45deg);
+    /* collapsed = right */
 }
-.section-toggle:hover{
-  background: rgba(127,127,127,0.10);
+
+.section-toggle:hover {
+    background: rgba(127, 127, 127, 0.10);
 }
-.section-toggle:hover::before{
-  border-color: var(--text);
+
+.section-toggle:hover::before {
+    border-color: var(--text);
 }
-@supports (background: color-mix(in srgb, black, white)){
-  .section-toggle:hover{
-    background: color-mix(in srgb, var(--text) 10%, transparent);
-  }
+
+@supports (background: color-mix(in srgb, black, white)) {
+    .section-toggle:hover {
+        background: color-mix(in srgb, var(--text) 10%, transparent);
+    }
 }
 
 /* Drag handle for section reorder */
-.section-drag{
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  border-radius: 6px;
-  cursor: grab;
-  font-size: 14px;
-  line-height: 18px;
-  color: var(--muted);
-  opacity: 0;
-  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+.section-drag {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 6px;
+    cursor: grab;
+    font-size: 14px;
+    line-height: 18px;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
 }
+
 .section-header:hover .section-drag,
-.section-header:focus-within .section-drag{
-  opacity: 1;
-}
-.section-drag:hover{
-  background: rgba(127,127,127,0.10);
-  color: var(--text);
-}
-@supports (background: color-mix(in srgb, black, white)){
-  .section-drag:hover{
-    background: color-mix(in srgb, var(--text) 10%, transparent);
-  }
-}
-.section-drag:active{ cursor: grabbing; }
-
-.section-block.is-dragging{
-  opacity: 0.6;
+.section-header:focus-within .section-drag {
+    opacity: 1;
 }
 
-.drag-indicator{
-  height: 2px;
-  background: rgba(255,255,255,0.35);
-  border-radius: 999px;
-  margin: 4px 0;
+.section-drag:hover {
+    background: rgba(127, 127, 127, 0.10);
+    color: var(--text);
 }
-@supports (background: color-mix(in srgb, black, white)){
-  .drag-indicator{
-    background: color-mix(in srgb, var(--text) 35%, transparent);
-  }
+
+@supports (background: color-mix(in srgb, black, white)) {
+    .section-drag:hover {
+        background: color-mix(in srgb, var(--text) 10%, transparent);
+    }
+}
+
+.section-drag:active {
+    cursor: grabbing;
+}
+
+.section-block.is-dragging {
+    opacity: 0.6;
+}
+
+.drag-indicator {
+    height: 2px;
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    margin: 4px 0;
+}
+
+@supports (background: color-mix(in srgb, black, white)) {
+    .drag-indicator {
+        background: color-mix(in srgb, var(--text) 35%, transparent);
+    }
 }
 
 /* Titles align nicely */
-.section-title-read{ flex: 1; }
-.block-input.section-title{ flex: 1; background: transparent; }
+.section-title-read {
+    flex: 1;
+}
+
+.block-input.section-title {
+    flex: 1;
+    background: transparent;
+}
 
 /* Focus ring (designed + accessible) */
 .section-toggle:focus-visible,
-.section-header:focus-within{
-  outline: 0;
-  box-shadow: 0 0 0 2px rgba(127,127,127,0.22);
+.section-header:focus-within {
+    outline: 0;
+    box-shadow: 0 0 0 2px rgba(127, 127, 127, 0.22);
 }
-@supports (box-shadow: 0 0 0 2px color-mix(in srgb, black, white)){
-  .section-toggle:focus-visible,
-  .section-header:focus-within{
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 15%, transparent);
-  }
+
+@supports (box-shadow: 0 0 0 2px color-mix(in srgb, black, white)) {
+
+    .section-toggle:focus-visible,
+    .section-header:focus-within {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 15%, transparent);
+    }
 }
 
 /* Children: hierarchy guide line (override inline paddingLeft) */
-.section-children{
-  margin-left: 14px;
-  padding-left: 12px !important;
-  margin-top: 4px;
-  padding-top: 4px;
-  border-left: 1px solid var(--border);
+.section-children {
+    margin-left: 14px;
+    padding-left: 12px !important;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-left: 1px solid var(--border);
 }
-@supports (border-left-color: color-mix(in srgb, black, white)){
-  .section-children{
-    border-left-color: color-mix(in srgb, var(--border) 55%, transparent);
-  }
+
+@supports (border-left-color: color-mix(in srgb, black, white)) {
+    .section-children {
+        border-left-color: color-mix(in srgb, var(--border) 55%, transparent);
+    }
 }
 
 /* Edit-mode: Section header controls (move/delete/add) */
-.section-controls{
-  display:flex;
-  gap:6px;
-  align-items:center;
-  margin-left: auto;
+.section-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-left: auto;
 }
-.section-controls button{
-  height: 22px;
-  min-width: 22px;
-  border-radius: 8px;
-  padding: 0 6px;
+
+.section-controls button {
+    height: 22px;
+    min-width: 22px;
+    border-radius: 8px;
+    padding: 0 6px;
 }
 
 /* Hide move/delete unless hover/focus for cleanliness */
 .section-controls .section-move-up,
 .section-controls .section-move-down,
-.section-controls .section-delete-empty{
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
+.section-controls .section-delete-empty {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
 }
+
 .section-header:hover .section-controls .section-move-up,
 .section-header:hover .section-controls .section-move-down,
 .section-header:hover .section-controls .section-delete-empty,
 .section-header:focus-within .section-controls .section-move-up,
 .section-header:focus-within .section-controls .section-move-down,
-.section-header:focus-within .section-controls .section-delete-empty{
-  opacity: 1;
-  pointer-events: auto;
+.section-header:focus-within .section-controls .section-delete-empty {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 /* Delete button visible only when JS removes hidden attribute; keep base subtle */
-.section-controls .section-delete-empty{
-  opacity: 0;
+.section-controls .section-delete-empty {
+    opacity: 0;
 }
 
 /* Connections modal primitives consolidated in components.css */
@@ -3206,382 +3884,435 @@ body[data-theme='light'] .page-header::after {
 .widgetsArea {
     margin: 0 0 var(--space-9) 0;
 }
+
 .widgetsHeader {
     display: flex;
     align-items: center;
     gap: var(--space-6);
 }
+
 .widgetsHeader h2 {
     margin: 0;
 }
+
 .widgetsHeader .widgetsHeaderActions {
     margin-left: auto;
 }
+
 .widgetGrid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: var(--space-6);
     margin-top: var(--space-6);
 }
+
 /* New clean grid for widgets editor */
-.widgetsGrid{
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  align-items: stretch;
-  margin-top: 12px;
+.widgetsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    align-items: stretch;
+    margin-top: 12px;
 }
+
 /* Card anchor reset and behavior */
-.widgetCard{
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  height: 100%;
+.widgetCard {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
 }
+
 /* Inner card visual */
-.widgetCardInner{
-  display: flex;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--panel, rgba(255,255,255,0.6));
-  min-height: 108px;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
-  height: 100%;
+.widgetCardInner {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--panel, rgba(255, 255, 255, 0.6));
+    min-height: 108px;
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    height: 100%;
 }
+
 /* Large variant: image cover on top, taller min height */
-.widgetCardInner.widgetCardLarge{
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-  min-height: 380px;
+.widgetCardInner.widgetCardLarge {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    min-height: 380px;
 }
-.widgetCardLarge .widgetCover{
-  height: 220px;
-  background: rgba(127,127,127,0.08);
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
+
+.widgetCardLarge .widgetCover {
+    height: 220px;
+    background: rgba(127, 127, 127, 0.08);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
 }
+
 /* Keep sane on very small screens */
-@media (max-width: 520px){
-  .widgetCardLarge .widgetCover{
-    height: 180px;
-  }
+@media (max-width: 520px) {
+    .widgetCardLarge .widgetCover {
+        height: 180px;
+    }
 }
-.widgetCoverImg{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+
+.widgetCoverImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
-.widgetCard:hover .widgetCardInner{
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+
+.widgetCard:hover .widgetCardInner {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
 }
-.widgetThumb{
-  width: 52px;
-  height: 52px;
-  border-radius: 999px;
-  overflow: hidden;
-  flex: 0 0 52px;
-  border: 1px solid var(--border);
-  background: rgba(127,127,127,0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-weight: 700;
+
+.widgetThumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    overflow: hidden;
+    flex: 0 0 52px;
+    border: 1px solid var(--border);
+    background: rgba(127, 127, 127, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-weight: 700;
 }
-.widgetThumbImg{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+
+.widgetThumbImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
+
 /* Body */
-.widgetCardBody{
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.widgetCardBody {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
+
 /* Add inner padding for large card body */
-.widgetCardLarge .widgetCardBody{
-  padding: 14px;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
+.widgetCardLarge .widgetCardBody {
+    padding: 14px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
 }
+
 /* Title row + actions */
-.widgetCardTitleRow{
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
+.widgetCardTitleRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
 }
-.widgetCardTitle{
-  font-weight: 700;
-  font-size: 18px;
-  line-height: 1.2;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+.widgetCardTitle {
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1.2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
 /* Meta + excerpt */
-.widgetCardMeta{
-  font-size: 13px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 0 0 auto;
+.widgetCardMeta {
+    font-size: 13px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 0 auto;
 }
-.widgetCardContext{
-  font-size: 14px;
-  color: var(--text);
-  opacity: 0.85;
-  line-height: 1.35;
-  max-height: calc(1.35em * 3);
-  overflow: hidden;
+
+.widgetCardContext {
+    font-size: 14px;
+    color: var(--text);
+    opacity: 0.85;
+    line-height: 1.35;
+    max-height: calc(1.35em * 3);
+    overflow: hidden;
 }
+
 /* In large variant, let excerpt flex and clamp lines for equal heights */
-.widgetCardLarge .widgetCardContext{
-  flex: 1 1 auto;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  max-height: none;
+.widgetCardLarge .widgetCardContext {
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    max-height: none;
 }
+
 /* Actions: small, non-invasive */
-.widgetCardActions{
-  margin-left: auto;
-  display: inline-flex;
-  gap: 6px;
-  flex: 0 0 auto;
+.widgetCardActions {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 6px;
+    flex: 0 0 auto;
 }
-.widgetAction{
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.65);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0;
+
+.widgetAction {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.65);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
 }
+
 /* Hide actions until hover/focus for cleanliness */
-.widgetCardActions{
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
+.widgetCardActions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
 }
+
 .widgetCard:hover .widgetCardActions,
-.widgetCard:focus-within .widgetCardActions{
-  opacity: 1;
-  pointer-events: auto;
-}
-/* Prefer always-visible on touch devices */
-@media (hover: none){
-  .widgetCardActions{
+.widgetCard:focus-within .widgetCardActions {
     opacity: 1;
     pointer-events: auto;
-  }
 }
+
+/* Prefer always-visible on touch devices */
+@media (hover: none) {
+    .widgetCardActions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
 /* Prevent buttons from inheriting anchor styles */
-.widgetCard button{ color: inherit; }
+.widgetCard button {
+    color: inherit;
+}
 
 /* Add row */
-.widgetAddRow{
-  display:flex;
-  gap: 10px;
-  margin-top: 14px;
+.widgetAddRow {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
 }
 
 /* Widgets layout toggle active state */
 .chip.is-active {
-  outline: 2px solid var(--border);
+    outline: 2px solid var(--border);
 }
 
 /* Widgets layout modifiers */
 /* Default grid remains as-is; use this hook if needed */
 .widgetsLayout--grid {
-  /* Intentionally left minimal; base .widgetsGrid styles apply */
+    /* Intentionally left minimal; base .widgetsGrid styles apply */
 }
 
 /* Carousel layout: horizontal scrolling row of cards */
 .widgetsLayout--carousel,
 .widgetsGrid.widgetsLayout--carousel {
-  display: flex; /* override grid */
-  gap: var(--space-3);
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: var(--space-2);
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
+    display: flex;
+    /* override grid */
+    gap: var(--space-3);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: var(--space-2);
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Each card inside the carousel */
-.widgetsLayout--carousel > .widgetCard,
-.widgetsLayout--carousel > .widget {
-  flex: 0 0 280px;
-  scroll-snap-align: start;
+.widgetsLayout--carousel>.widgetCard,
+.widgetsLayout--carousel>.widget {
+    flex: 0 0 280px;
+    scroll-snap-align: start;
 }
 
 /* Optional: hide scrollbar in carousel */
 .widgetsLayout--carousel::-webkit-scrollbar {
-  height: 0;
+    height: 0;
 }
+
 .widgetsLayout--carousel {
-  scrollbar-width: none;
+    scrollbar-width: none;
 }
-.widgetAddRow select{
-  flex: 1;
-  min-width: 0;
+
+.widgetAddRow select {
+    flex: 1;
+    min-width: 0;
 }
-.widgetAddRow button{
-  flex: 0 0 auto;
-  white-space: nowrap;
+
+.widgetAddRow button {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* Header Media */
-.headerMedia { margin: 10px 0 14px; position: relative; }
+.headerMedia {
+    margin: 10px 0 14px;
+    position: relative;
+}
+
 #surfaceHeader[style*='--section-accent'] .headerMedia .cover {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--section-accent) 22%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--section-accent) 22%, transparent);
 }
+
 .headerMedia .cover {
-  height: var(--headerMediaCoverH, 360px);
-  border-radius: 14px;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: var(--pos, center center);
-  position: relative;
-  overflow: hidden;
+    height: var(--headerMediaCoverH, 360px);
+    border-radius: 14px;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: var(--pos, center center);
+    position: relative;
+    overflow: hidden;
 }
+
 .headerMedia.headerMedia--contain .cover {
-  /* Show entire image; allow letterboxing */
-  background-size: contain;
-  background-color: var(--panel);
+    /* Show entire image; allow letterboxing */
+    background-size: contain;
+    background-color: var(--panel);
 }
-.headerMedia.headerMedia--tall { --headerMediaCoverH: 720px; }
+
+.headerMedia.headerMedia--tall {
+    --headerMediaCoverH: 720px;
+}
+
 /* Avatar sizing: expose variable + clamp for responsiveness */
-.headerMedia { --avatar-size: 280px; --avatar-size-clamped: clamp(120px, var(--avatar-size), 320px); }
+.headerMedia {
+    --avatar-size: 280px;
+    --avatar-size-clamped: clamp(120px, var(--avatar-size), 320px);
+}
+
 .headerMedia .profile {
-  width: var(--avatar-size-clamped); height: var(--avatar-size-clamped);
-  border-radius: 999px;
-  object-fit: cover;
-  position: absolute;
-  left: 16px; bottom: -48px;
-  z-index: 3;
-  /* Apply position + zoom; allow inline override */
-  object-position: var(--profile-pos, 50% 50%);
-  transform: scale(var(--profile-zoom, 1));
-  transform-origin: var(--profile-pos, 50% 50%);
+    width: var(--avatar-size-clamped);
+    height: var(--avatar-size-clamped);
+    border-radius: 999px;
+    object-fit: cover;
+    position: absolute;
+    left: 16px;
+    bottom: -48px;
+    z-index: 3;
+    /* Apply position + zoom; allow inline override */
+    object-position: var(--profile-pos, 50% 50%);
+    transform: scale(var(--profile-zoom, 1));
+    transform-origin: var(--profile-pos, 50% 50%);
 }
 
 /* Wrapper to clip zoomed image to circle and show border/shadow */
 .headerMedia .profileWrap {
-  position: absolute;
-  left: 16px; bottom: -48px;
-  width: var(--avatar-size-clamped); height: var(--avatar-size-clamped);
-  border-radius: 999px;
-  overflow: hidden;
-  border: 4px solid var(--panel);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
-  z-index: 3;
+    position: absolute;
+    left: 16px;
+    bottom: -48px;
+    width: var(--avatar-size-clamped);
+    height: var(--avatar-size-clamped);
+    border-radius: 999px;
+    overflow: hidden;
+    border: 4px solid var(--panel);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    z-index: 3;
 }
-.headerMedia .profileWrap > img.profile {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+
+.headerMedia .profileWrap>img.profile {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
 
 /* Adaptive header heights for index (dashboard) and character pages */
 article.page.page--dashboard .headerMedia .cover {
-  /* Reduce huge fixed height; adapt to viewport */
-  height: clamp(180px, 28vh, 420px);
+    /* Reduce huge fixed height; adapt to viewport */
+    height: clamp(180px, 28vh, 420px);
 }
+
 article.page.page--character .headerMedia .cover {
-  /* Character pages use a slightly shorter adaptive header */
-  height: clamp(140px, 24vh, 360px);
+    /* Character pages use a slightly shorter adaptive header */
+    height: clamp(140px, 24vh, 360px);
 }
 
 /* Add spacing when profile overlaps */
-article.page.has-profile-media > h1#pageTitleView,
-article.page.has-profile-media > #pageTitleInput {
-  /* Base 54px for 140px avatar, plus half the delta beyond 140px */
-  margin-top: calc(54px + (var(--avatar-size-clamped) - 140px) / 2);
+article.page.has-profile-media>h1#pageTitleView,
+article.page.has-profile-media>#pageTitleInput {
+    /* Base 54px for 140px avatar, plus half the delta beyond 140px */
+    margin-top: calc(54px + (var(--avatar-size-clamped) - 140px) / 2);
 }
 
 /* Section landing: subtle saved highlight on row */
 .sectionRow.justSaved {
-  outline: 2px solid rgba(120, 120, 255, 0.35);
-  outline-offset: 2px;
-  transition: outline-color 250ms ease;
+    outline: 2px solid rgba(120, 120, 255, 0.35);
+    outline-offset: 2px;
+    transition: outline-color 250ms ease;
 }
 
 /* Page tabs + Sheet UI */
 .page-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 10px 0 6px;
+    display: flex;
+    gap: 8px;
+    margin: 10px 0 6px;
 }
 
 .page-tabs .page-tab.is-active {
-  outline: 2px solid var(--border);
+    outline: 2px solid var(--border);
 }
 
 .page-sheet {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-4);
-  padding: var(--space-3);
-  background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-4);
+    padding: var(--space-3);
+    background: var(--panel);
 }
 
 .sheet-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
 }
 
 .sheet-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .sheet-val {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-3);
-  background: var(--bg);
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-3);
+    background: var(--bg);
 }
 
 .sheet-notes {
-  margin-top: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    margin-top: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .sheet-notes-input {
-  width: 100%;
-  min-height: 120px;
+    width: 100%;
+    min-height: 120px;
 }
 
 .sheet-notes-view {
-  white-space: pre-wrap;
+    white-space: pre-wrap;
 }

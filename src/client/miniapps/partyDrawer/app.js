@@ -94,41 +94,69 @@ async function renderCards(host, pinned) {
   if (!host) return;
   host.innerHTML = '<div class="meta">Loading…</div>';
   const cards = [];
-  // Fetch basics immediately (cache), fetch sheets (fresh when open)
-  for (const id of pinned) { // keep order
+  for (const id of pinned) {
     const entry = await ensureCached(id);
     let page = entry?.page || { id, title: 'Unknown', type: '' };
     let sheet = await loadSheet(id);
     if (entry) { entry.sheet = sheet; entry.ts = Date.now(); }
     const href = page.slug ? `/p/${encodeURIComponent(page.slug)}` : `/page/${encodeURIComponent(page.id)}`;
-    const badge = (page.type || '').toUpperCase();
-    const stats = [
-      ['AC', sheet.ac],
-      ['PP', sheet.passivePerception],
-      ['PI', sheet.passiveInsight],
-      ['PV', sheet.passiveInvestigation],
-    ].map(([k, v]) => `${k}: ${v ?? '—'}`).join(' \u00A0|\u00A0 ');
-    const notes = shortText(sheet.notes || '', 240);
     const avatarUrl = (page?.media?.profile?.url) ? String(page.media.profile.url) : '';
+    const headerUrl = (page?.media?.header?.url) ? String(page.media.header.url) : (avatarUrl || '');
+    // AC, passives
+    const acVal = sheet.ac ?? '—';
+    const passivePerception = sheet.passivePerception ?? '—';
+    const passiveInvestigation = sheet.passiveInvestigation ?? '—';
+    const passiveInsight = sheet.passiveInsight ?? '—';
+    // Notes (sheet.notes)
+    const escapeHtml = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const notesRaw = typeof sheet.notes === 'string' ? sheet.notes.trim() : '';
+    const notes = notesRaw ? shortText(notesRaw, 160) : '';
+    const notesHtml = notes ? escapeHtml(notes) : '';
     cards.push(`
       <div class="partyCard" data-pid="${String(page.id)}">
-        <div class="partyCardTop">
-          <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-            ${avatarUrl ? `<img class="partyAvatar" src="${avatarUrl}" alt="" />` : ''}
-            <div class="partyCardName" data-href="${href}">${page.title ? String(page.title) : 'Untitled'}</div>
+        <div class="partyCardBg" style="--bg:url('${headerUrl}');"></div>
+        <div class="partyCardInner">
+          <!-- ROW 1 -->
+          <div class="partyTopRow">
+            <div class="partyIdentity" data-href="${href}">
+              ${avatarUrl ? `<img class="partyAvatar partyAvatarLg" src="${avatarUrl}" alt="" />` : ''}
+              <div class="partyCardName">${page.title ? String(page.title) : 'Untitled'}</div>
+            </div>
+            <div class="partyAcCircle" title="Armor Class">
+              <div class="partyAcLabel">AC</div>
+              <div class="partyAcVal">${acVal}</div>
+            </div>
+            <button class="partyIconBtn partyUnpinBtn" title="Remove">×</button>
           </div>
-          <div style="display:flex; gap:6px; align-items:center;">
-            ${badge ? `<span class="chip" title="${badge}">${badge}</span>` : ''}
-            <button class="chip partyUnpinBtn" title="Remove">×</button>
+          <div class="partyCardScroll">
+            <!-- PASSIVES -->
+            <div class="partyPassives">
+              <div class="partyPassiveRow">
+                <div class="partyPassiveVal">${passivePerception}</div>
+                <div class="partyPassiveLabel">PASSIVE PERCEPTION</div>
+              </div>
+              <div class="partyPassiveRow">
+                <div class="partyPassiveVal">${passiveInvestigation}</div>
+                <div class="partyPassiveLabel">PASSIVE INVESTIGATION</div>
+              </div>
+              <div class="partyPassiveRow">
+                <div class="partyPassiveVal">${passiveInsight}</div>
+                <div class="partyPassiveLabel">PASSIVE INSIGHT</div>
+              </div>
+            </div>
+            <!-- NOTES (sheet.notes) -->
+            ${notesHtml ? `<div class="partyNote">${notesHtml}</div>` : ''}
+          </div>
+          <!-- FOOTER -->
+          <div class="partyFooter">
+            <button class="chip partyCharacterPageBtn" type="button" data-href="${href}">Character page</button>
           </div>
         </div>
-        <div class="partyStats">${stats}</div>
-        ${notes ? `<div class="partyNotesPreview">${notes.replace(/</g, '&lt;')}</div>` : ''}
       </div>
     `);
   }
   if (!pinned.length) {
-    host.innerHTML = '<div class="meta">Pin characters from Characters to see them here.</div>';
+    host.innerHTML = '<div class="meta">Pin characters from the Characters tab to see them here.</div>';
   } else {
     host.innerHTML = cards.join('');
   }
@@ -163,14 +191,14 @@ function render() {
   try {
     const wrap = mountRoot.querySelector('#partyDrawer');
     if (wrap) wrap.style.setProperty('--party-drawer-h', String(st.heightVh) + 'vh');
-  } catch {}
-  
+  } catch { }
+
   const tabBtn = mountRoot.querySelector('#partyDrawerTabBtn');
   tabBtn?.addEventListener('click', () => togglePartyDrawer());
   const clearBtn = mountRoot.querySelector('#partyClearBtn');
   clearBtn?.addEventListener('click', async () => {
     setPartyState({ pinnedPageIds: [] });
-    await saveStateNow().catch(() => {});
+    await saveStateNow().catch(() => { });
     render();
   });
   const cardsHost = mountRoot.querySelector('#partyCards');
@@ -192,10 +220,17 @@ function render() {
       if (pid) setPartyPinned(pid, false);
       return;
     }
-    const nameEl = el.closest('.partyCardName');
-    if (nameEl) {
+    const identityEl = el.closest('.partyIdentity');
+    if (identityEl) {
       e.preventDefault();
-      const href = nameEl.getAttribute('data-href');
+      const href = identityEl.getAttribute('data-href');
+      if (href) navigate(href);
+      return;
+    }
+    const charPageBtn = el.closest('.partyCharacterPageBtn');
+    if (charPageBtn) {
+      e.preventDefault();
+      const href = charPageBtn.getAttribute('data-href');
       if (href) navigate(href);
       return;
     }
@@ -215,7 +250,7 @@ function render() {
         const clamped = Math.max(min, Math.min(max, fromBottom));
         const pct = (clamped / vh) * 100;
         lastPct = pct;
-        try { wrap.style.setProperty('--party-drawer-h', String(pct) + 'vh'); } catch {}
+        try { wrap.style.setProperty('--party-drawer-h', String(pct) + 'vh'); } catch { }
       };
       const onMouseMove = (ev) => { ev.preventDefault(); onMove(ev.clientY); };
       const onTouchMove = (ev) => { if (ev.touches && ev.touches[0]) onMove(ev.touches[0].clientY); };
@@ -250,10 +285,10 @@ export const PartyDrawerApp = {
     bindHotkey();
     render();
     return () => {
-      cleanupFns.forEach(fn => { try { fn(); } catch {} });
+      cleanupFns.forEach(fn => { try { fn(); } catch { } });
       cleanupFns = [];
       mountRoot = null;
     };
   },
-  unmount() {},
+  unmount() { },
 };
