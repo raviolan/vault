@@ -58,7 +58,7 @@ export async function renderPage({ match }) {
   const page = await fetchJson(`/api/pages/${encodeURIComponent(id)}`);
 
   // Register active page context for centralized edit handling
-  try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: page.type !== 'tool', kind: 'page' }); } catch {}
+  try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: true, kind: 'page' }); } catch {}
 
   // If this page has a slug, immediately replace URL and render the slug route
   if (page && page.slug) {
@@ -82,18 +82,11 @@ export async function renderPage({ match }) {
       <div id=\"pageHeaderMedia\"></div>
       <div class=\"page-identity\" id=\"pageIdentity\">
         <div class=\"avatar-col\"></div>
-        <div class=\"name-col\">
+        <div class=\"name-col\"> 
           <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
           <div id=\"pageTags\" class=\"toolbar\"></div>
         </div>
-        <div class=\"actions-col\" role=\"toolbar\" aria-label=\"Page actions\">
-          <button id=\"btnEditPageLocal\" class=\"chip\" title=\"Edit This Page\" disabled>Edit</button>
-          <button id=\"btnDeletePageLocal\" class=\"delete-page-btn\" title=\"Delete this page\" aria-label=\"Delete this page\" hidden>
-            <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"> 
-              <path d=\"M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6\" /> 
-            </svg>
-          </button>
-        </div>
+        
       </div>
       <div id=\"pageTabs\" class=\"page-tabs\" hidden>
         <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
@@ -430,11 +423,9 @@ export async function renderPage({ match }) {
   // Tags editor
   void renderPageTags(page.id);
 
-  // Bind delete (global + local)
+  // Bind delete (global only)
   const btnDelete = document.getElementById('btnDeletePage');
-  const btnDeleteLocal = document.getElementById('btnDeletePageLocal');
   if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
-  if (btnDeleteLocal) { btnDeleteLocal.onclick = () => openDeleteModal(page); }
 
   // React to centralized edit toggles
   const applyEditState = async () => {
@@ -484,7 +475,7 @@ export async function renderPageBySlug({ match }) {
   const page = await fetchJson(`/api/pages/slug/${encodeURIComponent(slug)}`);
 
   // Expose current page id for global Edit toggle
-  try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: page.type !== 'tool', kind: 'page' }); } catch {}
+  try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: true, kind: 'page' }); } catch {}
 
   setPageBreadcrumb(page);
   setPageActionsEnabled({ canEdit: true, canDelete: true });
@@ -504,14 +495,7 @@ export async function renderPageBySlug({ match }) {
         <div class=\"name-col\">
           <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
         </div>
-        <div class=\"actions-col\" role=\"toolbar\" aria-label=\"Page actions\"> 
-          <button id=\"btnEditPageLocal\" class=\"chip\" title=\"Edit This Page\" disabled>Edit</button>
-          <button id=\"btnDeletePageLocal\" class=\"delete-page-btn\" title=\"Delete this page\" aria-label=\"Delete this page\" hidden>
-            <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">
-              <path d=\"M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6\" />
-            </svg>
-          </button>
-        </div>
+        
       </div>
       <div id=\"pageTabs\" class=\"page-tabs\" hidden>
         <button type=\"button\" class=\"chip page-tab\" data-tab=\"notes\">Notes</button>
@@ -823,11 +807,9 @@ export async function renderPageBySlug({ match }) {
     try { unmountSaveIndicator(); } catch {}
   }
 
-  // Bind delete (global + local)
+  // Bind delete (global only)
   const btnDelete = document.getElementById('btnDeletePage');
-  const btnDeleteLocal = document.getElementById('btnDeletePageLocal');
   if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
-  if (btnDeleteLocal) { btnDeleteLocal.onclick = () => openDeleteModal(page); }
 
   // React to centralized edit toggles
   const applyEditStateSlug = async () => {

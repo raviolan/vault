@@ -1,9 +1,11 @@
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
+import { setActivePage } from '../lib/activePage.js';
 import { renderSettings as renderWeatherSettings } from '../miniapps/weather/settingsView.js';
 
 export function render(container) {
   setBreadcrumb('Weather Settings');
   setPageActionsEnabled({ canEdit: false, canDelete: false });
+  try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
   if (!container) return;
   container.innerHTML = `
     <section class="page">
@@ -18,4 +20,3 @@ export function render(container) {
     if (outlet) outlet.innerHTML = '';
   };
 }
-

@@ -3,6 +3,11 @@ import { setUiMode } from './uiMode.js';
 const routes = [];
 let fallbackHandler = null;
 let currentCleanup = null; // optional cleanup returned by last route
+let __currentNavToken = null; // navigation token to guard against stale commits
+// Track an AbortController for in-flight route fetches; exposed globally
+// so fetch helpers can consume the signal by default.
+try { window.__routeAbortController = null; } catch {}
+try { window.__routeAbortSignal = null; } catch {}
 
 export function route(pattern, handler) { routes.push({ pattern, handler }); }
 
@@ -16,6 +21,15 @@ export async function renderRoute() {
   const path = window.location.pathname;
   // Defensive: clear UI mode before rendering any route; edit pages will re-enable.
   try { setUiMode(null); } catch {}
+  // Create a new navigation token and abort any in-flight route fetches
+  const myToken = Symbol('nav');
+  __currentNavToken = myToken;
+  try { window.__routeAbortController && window.__routeAbortController.abort(); } catch {}
+  try {
+    const ac = new AbortController();
+    window.__routeAbortController = ac;
+    window.__routeAbortSignal = ac.signal;
+  } catch {}
   for (const r of routes) {
     const m = path.match(r.pattern);
     if (m) {
@@ -23,9 +37,12 @@ export async function renderRoute() {
       try { if (typeof currentCleanup === 'function') currentCleanup(); } catch {}
       currentCleanup = null;
       const out = await r.handler({ path, params: m.groups || {}, match: m });
-      if (typeof out === 'function') currentCleanup = out;
-      // Notify listeners that the route has changed
-      try { window.dispatchEvent(new CustomEvent('app:route', { detail: { path } })); } catch {}
+      // Only commit if this render is still the latest navigation
+      if (__currentNavToken === myToken) {
+        if (typeof out === 'function') currentCleanup = out;
+        // Notify listeners that the route has changed
+        try { window.dispatchEvent(new CustomEvent('app:route', { detail: { path } })); } catch {}
+      }
       return;
     }
   }
@@ -34,9 +51,11 @@ export async function renderRoute() {
     try { if (typeof currentCleanup === 'function') currentCleanup(); } catch {}
     currentCleanup = null;
     const out = await fallbackHandler();
-    if (typeof out === 'function') currentCleanup = out;
-    // Notify listeners that the route has changed
-    try { window.dispatchEvent(new CustomEvent('app:route', { detail: { path } })); } catch {}
+    if (__currentNavToken === myToken) {
+      if (typeof out === 'function') currentCleanup = out;
+      // Notify listeners that the route has changed
+      try { window.dispatchEvent(new CustomEvent('app:route', { detail: { path } })); } catch {}
+    }
     return;
   }
 }

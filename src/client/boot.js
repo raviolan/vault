@@ -148,15 +148,13 @@ export async function boot() {
     const pid = ap?.id || null;
     const label = pid ? (isEditingPage(pid) ? 'Done' : 'Edit') : ((document?.body?.dataset?.mode === 'edit') ? 'Done' : 'Edit');
     const g = document.getElementById('btnEditPage');
-    const l = document.getElementById('btnEditPageLocal');
     if (g) { g.disabled = !can; g.textContent = label; }
-    if (l) { l.disabled = !can; l.textContent = label; }
   }
   // Expose to activePage.js so setActivePage can request a UI refresh
   try { window.__updateEditButtonState = updateEditButtonState; } catch {}
 
   document.addEventListener('click', (e) => {
-    const t = e.target?.closest?.('#btnEditPage, #btnEditPageLocal');
+    const t = e.target?.closest?.('#btnEditPage');
     if (!t) return;
     e.preventDefault();
     void onToggleEdit();
