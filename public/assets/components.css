@@ -524,7 +524,8 @@ h4 {
     position: fixed;
     pointer-events: none;
     z-index: 1000;
-    background: #111522;
+    background: var(--panel);
+    color: var(--text);
     border: 1px solid var(--border);
     border-radius: var(--radius-3);
     max-width: 340px;
