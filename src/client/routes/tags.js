@@ -100,12 +100,25 @@ export async function render(container, ctx = {}) {
   }
 
   function flagIcons(r) {
-    const out = [];
-    if (r.usedOnPagesCount === 1) out.push(`<span title="Used only once">⚠️</span>`);
-    if (r.flags?.duplicatesStructure) out.push(`<span title="Duplicates structure (matches a page type)">⚠️</span>`);
-    if (r.flags?.nearDuplicateGroupKey) out.push(`<span title="Possible near-duplicate (case/plural/typo)">⚠️</span>`);
-    if (r.flags?.weirdFormat) out.push(`<span title="Weird format (punctuation/repeated separators)">⚠️</span>`);
-    return out.join(' ');
+    // Compact indicator only — no hover UI
+    let count = 0;
+    if (r.usedOnPagesCount === 1) count++;
+    if (r.flags?.duplicatesStructure) count++;
+    if (r.flags?.nearDuplicateGroupKey) count++;
+    if (r.flags?.weirdFormat) count++;
+    if (!count) return '';
+    if (count === 1) return `<span class="ti-signal">⚠️</span>`;
+    return `<span class="ti-signal">⚠️×${count}</span>`;
+  }
+
+  function computeSignalsFromRow(r) {
+    const list = [];
+    if (!r) return list;
+    if (r.usedOnPagesCount === 1) list.push({ label: 'Used only once' });
+    if (r.flags?.duplicatesStructure) list.push({ label: 'Probably redundant: duplicates structure (matches a page type)' });
+    if (r.flags?.nearDuplicateGroupKey) list.push({ label: 'Possible typo / near-duplicate' });
+    if (r.flags?.weirdFormat) list.push({ label: 'Weird formatting' });
+    return list;
   }
 
   function renderMain() {
@@ -286,9 +299,10 @@ export async function render(container, ctx = {}) {
       if (detailsRow) detailsRow.innerHTML = `<div class="meta">Couldn't render details (UI bug).</div>`;
       return;
     }
+    const rowInfo = rows.find(r => r.key === key);
     if (detailCache.has(key)) {
       const cached = detailCache.get(key);
-      detailsEl.innerHTML = renderDetailContent(cached);
+      detailsEl.innerHTML = renderDetailContent(cached, rowInfo);
       bindDetailInteractions(detailsEl, key, cached);
       return;
     }
@@ -300,7 +314,7 @@ export async function render(container, ctx = {}) {
       const d = resp?.data ?? resp;
       detailCache.set(key, d);
       if (expandedTag === key) {
-        detailsEl.innerHTML = renderDetailContent(d);
+        detailsEl.innerHTML = renderDetailContent(d, rowInfo);
         bindDetailInteractions(detailsEl, key, d);
       }
     } catch (e) {
@@ -310,13 +324,20 @@ export async function render(container, ctx = {}) {
     }
   }
 
-  function renderDetailContent(d) {
+  function renderDetailContent(d, rowInfo) {
     const byType = d?.usageSummaryByType || {};
     const parts = Object.keys(byType).sort().map(t => `${byType[t]} ${t}${byType[t] === 1 ? '' : 's'}`);
     const list = Array.isArray(d?.usages) ? d.usages : [];
+    const signals = computeSignalsFromRow(rowInfo);
     return `
       <div class="card ti-detail-card">
         <div class="meta">Used on ${d.usedOnPagesCount} pages${parts.length ? ` — ${parts.join(', ')}` : ''}</div>
+        ${signals.length ? `
+          <div class="meta" style="margin-top:6px;">Signals</div>
+          <ul class="tiSignalsList" style="margin: 6px 0 8px 18px;">
+            ${signals.map(s => `<li>⚠️ ${s.label}</li>`).join('')}
+          </ul>
+        ` : ''}
         <div class="tiActions" style="display:flex; gap:8px; flex-wrap:wrap; margin: 8px 0;">
           <button class="btn tiRename">Rename…</button>
           <button class="btn tiMerge">Merge…</button>
