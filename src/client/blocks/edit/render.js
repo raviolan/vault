@@ -2,6 +2,7 @@ import { parseMaybeJson, blocksToTree } from '../tree.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
 import { bindTextInputHandlers, bindRichTextHandlers } from './handlersText.js';
 import { bindSectionTitleHandlers, bindSectionHeaderControls, insertFirstChildParagraph } from './handlersSection.js';
+import { debouncePatch } from './state.js';
 import { focusBlockInput } from './focus.js';
 import { bindAutosizeTextarea } from '../../lib/autosizeTextarea.js';
 import { insertMarkdownLink } from '../../lib/formatShortcuts.js';
@@ -685,7 +686,8 @@ function renderEditorDom({ rootEl, page }) {
       const lvl = Math.min(3, Math.max(0, Number((b.props && b.props.level) || 0)));
       const header = document.createElement('div');
       header.className = 'section-header';
-      header.dataset.collapsed = b.props?.collapsed ? '1' : '0';
+      const initiallyCollapsed = !!(b.props?.collapsed || b.props?.completed);
+      header.dataset.collapsed = initiallyCollapsed ? '1' : '0';
       const dragBtn = document.createElement('button');
       dragBtn.type = 'button';
       dragBtn.className = 'section-drag';
@@ -696,9 +698,9 @@ function renderEditorDom({ rootEl, page }) {
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'section-toggle';
-      toggle.textContent = b.props?.collapsed ? '▸' : '▾';
+      toggle.textContent = initiallyCollapsed ? '▸' : '▾';
       toggle.setAttribute('aria-label', 'Toggle');
-      toggle.setAttribute('aria-expanded', b.props?.collapsed ? 'false' : 'true');
+      toggle.setAttribute('aria-expanded', initiallyCollapsed ? 'false' : 'true');
       header.appendChild(toggle);
       const title = document.createElement('input');
       title.className = 'block-input section-title';
@@ -709,6 +711,39 @@ function renderEditorDom({ rootEl, page }) {
 
       const controls = document.createElement('div');
       controls.className = 'section-controls';
+      // Completion checkbox (H1–H3 only) at far-right of controls
+      if (lvl >= 1 && lvl <= 3) {
+        const completeWrap = document.createElement('label');
+        completeWrap.className = 'section-complete';
+        completeWrap.title = 'Mark section complete (collapses by default)';
+        const complete = document.createElement('input');
+        complete.type = 'checkbox';
+        complete.className = 'section-complete-checkbox';
+        complete.checked = !!b.props?.completed;
+        const stop = (e) => { try { e.stopPropagation(); e.stopImmediatePropagation?.(); } catch {} };
+        complete.addEventListener('pointerdown', stop, true);
+        complete.addEventListener('click', stop, true);
+        complete.addEventListener('change', (e) => {
+          const checked = !!complete.checked;
+          const next = { ...(b.props || {}), completed: checked };
+          try { (0, debouncePatch)(b.id, { props: next }); } catch {}
+          // Immediate collapse on check (DOM only; no force-expand on uncheck)
+          if (checked) {
+            try {
+              header.dataset.collapsed = '1';
+              toggle.textContent = '▸';
+              toggle.setAttribute('aria-expanded', 'false');
+              const kidsWrap = wrap.querySelector('.section-children');
+              if (kidsWrap) kidsWrap.style.display = 'none';
+            } catch {}
+          }
+        });
+        completeWrap.appendChild(complete);
+        const dot = document.createElement('span');
+        dot.className = 'section-complete-dot';
+        completeWrap.appendChild(dot);
+        controls.appendChild(completeWrap);
+      }
 
       const upBtn = document.createElement('button');
       upBtn.type = 'button';
@@ -747,7 +782,7 @@ function renderEditorDom({ rootEl, page }) {
       const kidsWrap = document.createElement('div');
       kidsWrap.className = 'section-children';
       kidsWrap.style.paddingLeft = '16px';
-      if (b.props?.collapsed) kidsWrap.style.display = 'none';
+      if (initiallyCollapsed) kidsWrap.style.display = 'none';
       wrap.appendChild(kidsWrap);
 
       bindSectionHeaderControls({ page, block: b, rootEl: wrap, titleInput: title, onAfterChange: async () => { renderStable(b.id); }, focus });

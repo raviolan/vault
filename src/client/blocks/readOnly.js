@@ -71,15 +71,17 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       wrap.setAttribute('data-block-id', n.id);
       const header = document.createElement('div');
       header.className = 'section-header';
+      // Collapsed-by-default when completed
+      const initiallyCollapsed = !!(props?.collapsed || props?.completed);
       // Expose collapsed state for CSS styling
-      header.dataset.collapsed = props.collapsed ? '1' : '0';
+      header.dataset.collapsed = initiallyCollapsed ? '1' : '0';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'section-toggle';
       btn.setAttribute('aria-label', 'Toggle');
-      btn.textContent = props.collapsed ? '▸' : '▾';
+      btn.textContent = initiallyCollapsed ? '▸' : '▾';
       // Accessible state for chevron CSS
-      btn.setAttribute('aria-expanded', props.collapsed ? 'false' : 'true');
+      btn.setAttribute('aria-expanded', initiallyCollapsed ? 'false' : 'true');
       header.appendChild(btn);
       const title = document.createElement('span');
       title.className = 'section-title-read';
@@ -88,11 +90,50 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       const ttxt = String(content.title || '');
       try { title.appendChild(buildWikiTextNodes(ttxt, n.id)); } catch { title.textContent = ttxt; }
       header.appendChild(title);
+
+      // Completion checkbox (H1–H3 only), placed far-right
+      if (lvl >= 1 && lvl <= 3) {
+        const completeWrap = document.createElement('label');
+        completeWrap.className = 'section-complete';
+        completeWrap.title = 'Mark section complete (collapses by default)';
+        const complete = document.createElement('input');
+        complete.type = 'checkbox';
+        complete.className = 'section-complete-checkbox';
+        complete.checked = !!props?.completed;
+        // Prevent header interactions (toggle/drag) when clicking checkbox
+        const stop = (e) => { try { e.stopPropagation(); e.stopImmediatePropagation?.(); } catch {} };
+        complete.addEventListener('pointerdown', stop, true);
+        complete.addEventListener('click', stop, true);
+        complete.addEventListener('change', async (e) => {
+          try {
+            const next = { ...(props || {}), completed: !!complete.checked };
+            await apiPatchBlock(n.id, { props: next });
+            // Update local props reference for subsequent interactions
+            props.completed = !!complete.checked;
+            // Apply immediate collapse when checking (DOM only; do not force expand on uncheck)
+            if (complete.checked) {
+              try {
+                header.dataset.collapsed = '1';
+                btn.textContent = '▸';
+                btn.setAttribute('aria-expanded', 'false');
+                if (kidsWrap) kidsWrap.style.display = 'none';
+              } catch {}
+            }
+          } catch (e) { console.error('set completed failed', e); }
+        });
+        completeWrap.appendChild(complete);
+        // Add subtle glyph for spacing/click area without extra text
+        const dot = document.createElement('span');
+        dot.className = 'section-complete-dot';
+        dot.textContent = '';
+        completeWrap.appendChild(dot);
+        header.appendChild(completeWrap);
+      }
       wrap.appendChild(header);
       const kidsWrap = document.createElement('div');
       kidsWrap.className = 'section-children';
       kidsWrap.style.paddingLeft = '16px';
-      if (props.collapsed) kidsWrap.style.display = 'none';
+      if (initiallyCollapsed) kidsWrap.style.display = 'none';
       for (const child of n.children) {
         kidsWrap.appendChild(makeNode(child, depth + 1));
       }
@@ -102,10 +143,11 @@ export function renderBlocksReadOnly(rootEl, blocks) {
           const next = { ...(props || {}), collapsed: !props.collapsed };
           await apiPatchBlock(n.id, { props: next });
           props.collapsed = !props.collapsed;
-          btn.textContent = props.collapsed ? '▸' : '▾';
-          btn.setAttribute('aria-expanded', props.collapsed ? 'false' : 'true');
-          header.dataset.collapsed = props.collapsed ? '1' : '0';
-          kidsWrap.style.display = props.collapsed ? 'none' : '';
+          const now = !!(props.collapsed);
+          btn.textContent = now ? '▸' : '▾';
+          btn.setAttribute('aria-expanded', now ? 'false' : 'true');
+          header.dataset.collapsed = now ? '1' : '0';
+          kidsWrap.style.display = now ? 'none' : '';
         } catch (e) { console.error('toggle failed', e); }
       });
       return wrap;

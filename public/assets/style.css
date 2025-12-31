@@ -3431,6 +3431,20 @@ body[data-section-hl="0"] .section-header[data-collapsed="0"] {
     margin-left: auto;
 }
 
+/* Section completion checkbox — subtle, right-aligned */
+.section-header > .section-complete {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.section-complete-checkbox {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
 .section-controls button {
     height: 22px;
     min-width: 22px;
