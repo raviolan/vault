@@ -7,6 +7,12 @@ export const TOOLS = [
     icon: '⚔️',
   },
   {
+    id: 'tags',
+    name: 'Tags',
+    path: '/tags',
+    icon: '🏷️',
+  },
+  {
     id: 'hp-tracker',
     name: 'HP Tracker',
     path: '/apps/hp',
