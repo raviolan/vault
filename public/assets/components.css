@@ -12,6 +12,78 @@
     /* Prevent scroll on body when open, handled by JS if needed */
 }
 
+/* --- Inline Comment Modal (ID-scoped; mirrors spell details modal) --- */
+#inlineCommentModal {
+    position: fixed;
+    inset: 0;
+    z-index: 50000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+}
+
+#inlineCommentModal[style*="display: none"] {
+    display: none !important;
+}
+
+#inlineCommentModal .modal-inner {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.25);
+    width: min(600px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#inlineCommentModal .modal-header {
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: none;
+}
+
+#inlineCommentModal .modal-header h2 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text);
+}
+
+#inlineCommentModal .modal-header button,
+#inlineCommentModal .modal-header [data-close] {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+#inlineCommentModal .modal-header button:hover,
+#inlineCommentModal .modal-header [data-close]:hover {
+    background: var(--ui-control-bg-hover, #f0f0f0);
+}
+
+#inlineCommentModal .modal-body {
+    flex: 1 1 auto;
+    padding: 18px 20px 22px;
+    overflow: auto;
+    line-height: 1.5;
+    background: none;
+    color: var(--text);
+}
+
 #open5eSpellDetailsModal[style*="display: none"] {
     /* Hide overlay when not shown */
     display: none !important;
@@ -646,6 +718,13 @@ h4 {
 /* Ensure Open5e hovercard floats above all UI */
 .o5e-hovercard {
     z-index: 99999;
+}
+
+/* Inline comment underline style */
+.inline-comment {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
 }
 
 /* Open5e spell inline label */

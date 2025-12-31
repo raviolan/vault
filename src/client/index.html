@@ -392,6 +392,28 @@
     </div>
   </div>
 
+  <!-- Inline Comment Modal (styled similar to spell details modal) -->
+  <div class="modal" id="inlineCommentModal" tabindex="-1" aria-modal="true" style="display:none;">
+    <div class="modal-inner" style="background: var(--panel); color: var(--text); max-width: 560px;">
+      <div class="modal-header">
+        <h2 class="inlineCommentTitle">Add Comment</h2>
+        <button class="btn modal-cancel" data-close>Close</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto; max-height:60vh;">
+        <div style="font-size:12px; color: var(--muted); margin-bottom:6px;">On: <span class="inlineCommentLabel"></span></div>
+        <label style="display:block;">
+          <div style="font-size:12px; opacity:.8; margin-bottom:4px;">Comment</div>
+          <textarea name="inlineCommentText" style="width:100%; min-height: 120px;"></textarea>
+        </label>
+        <div class="modal-actions" style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+          <button type="button" class="btn modal-delete" style="display:none;">Delete</button>
+          <button type="button" class="btn modal-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary modal-confirm">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/app.js"></script>
   <div id="partyDrawerRoot"></div>
 </body>

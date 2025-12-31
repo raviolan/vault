@@ -77,6 +77,18 @@ function pickViewSelectionContext() {
   return { kind: 'view', blockId, text: s, ...(editableEl ? { editableEl } : {}), ...(range ? { range } : {}) };
 }
 
+// Exported helper for keyboard-driven selection actions (inline comments, etc.)
+export function getSelectionContextForInlineActions() {
+  // Prefer textarea selection if any
+  const taCtx = pickTextareaContext(document.activeElement);
+  if (taCtx) return taCtx;
+  // Fallback to view selection (non-empty)
+  const view = pickViewSelectionContext();
+  if (view) return view;
+  // As a last resort, if right now there is no non-empty selection, return null
+  return null;
+}
+
 function renderMenu(x, y, items, ctx) {
   hideMenu();
   if (!items.length) return;
@@ -146,6 +158,18 @@ document.addEventListener('contextmenu', (e) => {
   const taCtx = pickTextareaContext(e.target);
   let ctx = taCtx;
   if (!ctx) ctx = pickViewSelectionContext();
+  // If no text selection, still allow context for existing inline comment node
+  if (!ctx) {
+    try {
+      const el = e.target?.closest?.('.inline-comment');
+      if (el) {
+        const blockEl = el.closest('[data-block-id]');
+        const blockId = blockEl?.getAttribute?.('data-block-id') || '';
+        const commentId = el.getAttribute('data-comment-id') || el.dataset?.commentId || '';
+        ctx = { kind: 'inline-comment', el, blockId, commentId, label: el.textContent || '' };
+      }
+    } catch {}
+  }
   if (!ctx) return; // let native menu show
 
   // Build items list for this context

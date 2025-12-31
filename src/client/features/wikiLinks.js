@@ -40,8 +40,9 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
   // Supported tokens:
   // - [[o5e:spell:<slug>|Label]]
   // - [[page:<uuid>|Label]]
+  // - [[cmt:<uuid>|Label]] (inline comment; comment text stored in block props.comments[uuid])
   // - [[Title]] (legacy unresolved)
-  const re = /\[\[(?:o5e:spell:([a-z0-9-]+)\|([^\]]*?)|page:([0-9a-fA-F-]{36})\|([^\]]*?)|([^\]]+))\]\]/gi;
+  const re = /\[\[(?:o5e:spell:([a-z0-9-]+)\|([^\]]*?)|page:([0-9a-fA-F-]{36})\|([^\]]*?)|cmt:([0-9a-fA-F-]{36})\|([^\]]*?)|([^\]]+))\]\]/gi;
   let lastIndex = 0;
   let m;
 
@@ -63,7 +64,7 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
   while ((m = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, m.index);
     if (before) appendFormatted(before);
-    const [full, spellSlug, spellLabel, idPart, labelPart, legacyTitle] = m;
+    const [full, spellSlug, spellLabel, idPart, labelPart, cmtId, cmtLabel, legacyTitle] = m;
     if (spellSlug) {
       const slug = (spellSlug || '').trim();
       const label = (spellLabel || '').trim() || slug;
@@ -108,6 +109,24 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
         }
       });
       frag.appendChild(a);
+    } else if (cmtId) {
+      const id = (cmtId || '').trim();
+      const label = (cmtLabel || '').trim();
+      const span = document.createElement('span');
+      span.className = 'inline-comment';
+      span.setAttribute('data-comment-id', id);
+      // Lookup comment text from current blocks' props.comments map
+      try {
+        const blocks = getCurrentPageBlocks?.() || [];
+        const bid = String(blockIdForLegacyReplace || '');
+        const blk = bid ? blocks.find(b => String(b.id) === bid) : null;
+        const props = parseMaybeJson?.(blk?.propsJson) || {};
+        const map = props?.comments || {};
+        const c = map && (map[id] || map[String(id)]) || '';
+        if (c) span.setAttribute('data-comment', String(c));
+      } catch {}
+      span.textContent = label || '';
+      frag.appendChild(span);
     } else {
       const title = (legacyTitle || '').trim();
       const token = m[0];

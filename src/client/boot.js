@@ -20,6 +20,7 @@ import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav, installNavActiveSync } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
 import { installOpen5eSpellFeature } from './features/open5eSpells.js';
+import { installInlineComments } from './features/inlineComments.js';
 import { installWikiLinksContextMenu } from './features/wikiLinksContextMenu.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
@@ -52,7 +53,9 @@ export async function boot() {
   bindModalBasics('wikilinkCreateModal');
   bindModalBasics('open5eSpellModal');
   bindModalBasics('open5eSpellDetailsModal');
+  bindModalBasics('inlineCommentModal');
   try { installOpen5eSpellFeature(); } catch {}
+  try { installInlineComments(); } catch {}
   await loadState();
   // Apply UI preferences on boot
   try { applyUiPrefsToBody(getState()); } catch {}
