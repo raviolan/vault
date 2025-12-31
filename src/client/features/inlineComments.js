@@ -11,7 +11,7 @@ let hoverTimer = null;
 function ensureHover() {
   if (hoverEl) return hoverEl;
   const el = document.createElement('div');
-  el.className = 'hovercard';
+  el.className = 'hovercard inline-comment-hover';
   el.style.display = 'none';
   document.body.appendChild(el);
   hoverEl = el;
@@ -27,14 +27,27 @@ function hideHover() {
 function positionHover(target) {
   const el = ensureHover();
   const r = target.getBoundingClientRect();
-  const pad = 8;
-  let top = r.bottom + window.scrollY + pad;
-  let left = r.left + window.scrollX;
+  const pad = 14; // extra breathing room for inline comments
+  // measure current hover height for above placement
+  el.style.display = 'block';
+  el.style.visibility = 'hidden';
+  const measuredH = el.offsetHeight || 0;
+  el.style.visibility = '';
+
   const vw = document.documentElement.clientWidth || window.innerWidth;
   const maxW = Math.min(340, Math.max(260, vw - 24));
   el.style.maxWidth = `${maxW}px`;
   const estW = Math.min(maxW, Math.max(200, (r.width || 200)));
+
+  // Default: place ABOVE
+  let top = r.top + window.scrollY - pad - measuredH;
+  let left = r.left + window.scrollX;
+  // Flip below if off-screen
+  if (top < window.scrollY + 8) top = r.bottom + window.scrollY + pad;
+  // Prevent right overflow
   if (left + estW + 12 > window.scrollX + vw) left = Math.max(12, window.scrollX + vw - estW - 12);
+
+  // Scoped absolute positioning for this variant
   el.style.position = 'absolute';
   el.style.left = `${left}px`;
   el.style.top = `${top}px`;
@@ -370,4 +383,3 @@ export function installInlineComments() {
   registerContextMenuItems();
   installShortcut();
 }
-

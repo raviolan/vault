@@ -720,6 +720,11 @@ h4 {
     z-index: 99999;
 }
 
+/* Inline comment hover variant: roomier padding */
+.hovercard.inline-comment-hover {
+    padding: var(--space-5, 14px);
+}
+
 /* Inline comment underline style */
 .inline-comment {
     text-decoration: underline;

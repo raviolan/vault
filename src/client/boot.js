@@ -19,6 +19,7 @@ import { bindModalBasics, openCreateModal, createPageFromModal } from './feature
 import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav, installNavActiveSync } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
+import { installContentLinksNewTab } from './features/contentLinksNewTab.js';
 import { installOpen5eSpellFeature } from './features/open5eSpells.js';
 import { installInlineComments } from './features/inlineComments.js';
 import { installWikiLinksContextMenu } from './features/wikiLinksContextMenu.js';
@@ -42,6 +43,8 @@ export async function boot() {
 
   installLinkInterceptor();
   setFallback(() => renderNotFound());
+  // Ensure content-area links open in new tabs, before wiki/link handlers
+  installContentLinksNewTab();
   installWikiLinkHandler();
   try { installWikiLinksContextMenu(); } catch {}
   // Keep the left nav in sync with current route
