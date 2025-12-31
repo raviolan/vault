@@ -183,3 +183,16 @@ export async function flushDebouncedPatches() {
     }
   }
 }
+
+// Convenience helper to persist a block patch immediately through the same pipeline
+// Applies optimistic update, then flushes pending work to the server and updates the store
+export async function patchBlockNow(blockId, patch) {
+  try {
+    debouncePatch(blockId, patch || {}, 0);
+    await flushDebouncedPatches();
+  } catch (e) {
+    // Ensure error does not break caller flows
+    console.error('patchBlockNow failed', e);
+    throw e;
+  }
+}

@@ -6,6 +6,7 @@ import { focusBlockInput } from './focus.js';
 import { bindAutosizeTextarea } from '../../lib/autosizeTextarea.js';
 import { insertMarkdownLink } from '../../lib/formatShortcuts.js';
 import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../../lib/sanitize.js';
+import { buildWikiTextNodes } from '../../features/wikiLinks.js';
 import { getState, updateState, saveStateNow } from '../../lib/state.js';
 import { applyUiPrefsToBody } from '../../lib/uiPrefs.js';
 
@@ -36,6 +37,31 @@ function scrollerViewportBottom(scroller) {
   const top = scrollerViewportTop(scroller);
   const height = scroller === (document.scrollingElement || document.documentElement) ? window.innerHeight : (scroller.clientHeight || (scroller.getBoundingClientRect?.().height || 0));
   return top + height;
+}
+
+// Local helper: linkify [[wikilinks]] and #hashtags inside a DOM subtree while editing.
+function linkifyWikiTokensInElement(rootEl, blockId) {
+  if (!rootEl) return;
+  try {
+    const txt = rootEl.textContent || '';
+    if (!txt || (!txt.includes('[[') && !txt.includes('#'))) return;
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+      const s = n.nodeValue || '';
+      if (!s) continue;
+      const p = n.parentElement;
+      if (!p) continue;
+      if (p.closest('a,code,pre,textarea,script,style')) continue;
+      if (!s.includes('[[') && !s.includes('#')) continue;
+      nodes.push(n);
+    }
+    for (const tn of nodes) {
+      const frag = buildWikiTextNodes(tn.nodeValue || '', blockId);
+      if (frag && tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    }
+  } catch {}
 }
 
 function captureAnchor(rootEl, scroller) {
@@ -578,10 +604,18 @@ function renderEditorDom({ rootEl, page }) {
       const html = (b.props && b.props.html) ? String(b.props.html) : null;
       if (html && html.trim()) {
         div.innerHTML = sanitizeRichHtml(html);
+        // Render committed wiki tokens as anchors so UUIDs stay hidden
+        linkifyWikiTokensInElement(div, b.id);
       } else {
         div.textContent = String(b.content?.text || '');
       }
       div.placeholder = 'Write something...';
+      // Prevent navigation when clicking links inside the editor
+      div.addEventListener('click', (e) => {
+        const a = e.target?.closest?.('a');
+        if (!a) return;
+        try { e.preventDefault(); e.stopPropagation(); } catch {}
+      }, true);
       wrap.appendChild(div);
       bindRichTextHandlers({ page, block: b, editableEl: div, orderedBlocksFlat, render: renderStable, focus });
     } else if (b.type === 'divider') {

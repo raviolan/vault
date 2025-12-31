@@ -3,6 +3,31 @@ import { buildWikiTextNodes } from '../features/wikiLinks.js';
 import { apiPatchBlock } from './api.js';
 import { sanitizeRichHtml } from '../lib/sanitize.js';
 
+// Local helper: linkify [[wikilinks]] and #hashtags inside a DOM subtree.
+function linkifyWikiTokensInElement(rootEl, blockId) {
+  if (!rootEl) return;
+  try {
+    const txt = rootEl.textContent || '';
+    if (!txt || (!txt.includes('[[') && !txt.includes('#'))) return;
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+      const s = n.nodeValue || '';
+      if (!s) continue;
+      const p = n.parentElement;
+      if (!p) continue;
+      if (p.closest('a,code,pre,textarea,script,style')) continue;
+      if (!s.includes('[[') && !s.includes('#')) continue;
+      nodes.push(n);
+    }
+    for (const tn of nodes) {
+      const frag = buildWikiTextNodes(tn.nodeValue || '', blockId);
+      if (frag && tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    }
+  } catch {}
+}
+
 export function renderBlocksReadOnly(rootEl, blocks) {
   if (!blocks || !blocks.length) {
     rootEl.innerHTML = '<p class="meta">Empty page</p>';
@@ -28,8 +53,9 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       p.setAttribute('data-block-id', n.id);
       const rich = (props && props.html) ? String(props.html) : '';
       if (rich && rich.trim()) {
-        // Render sanitized HTML when present
+        // Render sanitized HTML when present, then linkify wiki tokens within it
         p.innerHTML = sanitizeRichHtml(rich);
+        linkifyWikiTokensInElement(p, n.id);
       } else {
         const txt = String(content.text || '');
         p.appendChild(buildWikiTextNodes(txt, n.id));

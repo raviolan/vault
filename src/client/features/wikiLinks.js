@@ -77,12 +77,24 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
       const id = idPart;
       const label = (labelPart || '').trim();
       const a = document.createElement('a');
-      a.href = `/page/${encodeURIComponent(id)}`;
+      // Temporary safe href until canonical slug is loaded; avoids exposing UUID on hover
+      a.href = '#';
       a.setAttribute('data-link', '');
       a.className = 'wikilink idlink';
       a.setAttribute('data-wiki', 'id');
       a.setAttribute('data-page-id', id);
       a.textContent = label || id;
+      // Resolve canonical href asynchronously for hover/copy friendliness
+      (async () => {
+        try {
+          window.__pageMetaCache = window.__pageMetaCache || new Map();
+          const href = await canonicalHrefForPageId(id, fetchJson, window.__pageMetaCache);
+          a.href = href;
+        } catch {
+          // Fallback to legacy path if lookup fails
+          a.href = `/page/${encodeURIComponent(id)}`;
+        }
+      })().catch(() => {});
       // Canonicalize navigation to slug on click
       a.addEventListener('click', async (ev) => {
         try { ev.preventDefault(); ev.stopPropagation(); } catch {}
@@ -91,7 +103,8 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
           const href = await canonicalHrefForPageId(id, fetchJson, window.__pageMetaCache);
           navigate(href);
         } catch {
-          navigate(a.getAttribute('href'));
+          const href = a.getAttribute('href') || `/page/${encodeURIComponent(id)}`;
+          navigate(href);
         }
       });
       frag.appendChild(a);
@@ -246,21 +259,50 @@ function normalizeLabel(s) {
   } catch { return String(s || '').toLowerCase().trim(); }
 }
 
-async function linkWikilinkToExisting({ title, blockId, token, page }) {
+export async function linkWikilinkToExisting({ title, blockId, token, page }) {
   try {
     const id = page.id;
     if (blockId) {
       const blk = getCurrentPageBlocks().find(b => b.id === blockId);
       const content = parseMaybeJson(blk?.contentJson);
+      const props = parseMaybeJson(blk?.propsJson);
       const text = String(content?.text || '');
+      const upgraded = `[[page:${id}|${title}]]`;
       const idx = text.indexOf(token);
       let newText = text;
       if (idx >= 0) {
-        const upgraded = `[[page:${id}|${title}]]`;
         newText = text.slice(0, idx) + upgraded + text.slice(idx + token.length);
       }
-      await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
-      updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
+      // Also update props.html if it contains the token
+      let newHtml = null;
+      try {
+        const html = String(props?.html || '');
+        if (html && html.includes(token)) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+          let tn;
+          let replaced = false;
+          while ((tn = walker.nextNode())) {
+            if (replaced) break;
+            const s = tn.nodeValue || '';
+            const j = s.indexOf(token);
+            if (j >= 0) {
+              tn.nodeValue = s.slice(0, j) + upgraded + s.slice(j + token.length);
+              replaced = true;
+            }
+          }
+          // sanitize using existing read-only sanitizer contract indirectly by allowing readOnly to sanitize
+          newHtml = tmp.innerHTML;
+        }
+      } catch {}
+      await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText }, ...(newHtml != null ? { props: { ...(props || {}), html: newHtml } } : {}) });
+      updateCurrentBlocks(b => b.id === blockId
+        ? { ...b,
+            contentJson: JSON.stringify({ ...(content || {}), text: newText }),
+            ...(newHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: newHtml }) } : {})
+          }
+        : b);
     }
     // Re-render to reflect link resolution live
     await rerenderBlocksNow(blockId || null);
@@ -338,14 +380,42 @@ async function revertWikilinkToPlain({ blockId, token, title }) {
   try {
     const blk = getCurrentPageBlocks().find(b => b.id === blockId);
     const content = parseMaybeJson(blk?.contentJson);
+    const props = parseMaybeJson(blk?.propsJson);
     const text = String(content?.text || '');
     const idx = text.indexOf(token);
     let newText = text;
     if (idx >= 0) {
       newText = text.slice(0, idx) + title + text.slice(idx + token.length);
     }
-    await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
-    updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
+    // Also update props.html if present
+    let newHtml = null;
+    try {
+      const html = String(props?.html || '');
+      if (html && html.includes(token)) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+        let tn;
+        let replaced = false;
+        while ((tn = walker.nextNode())) {
+          if (replaced) break;
+          const s = tn.nodeValue || '';
+          const j = s.indexOf(token);
+          if (j >= 0) {
+            tn.nodeValue = s.slice(0, j) + title + s.slice(j + token.length);
+            replaced = true;
+          }
+        }
+        newHtml = tmp.innerHTML;
+      }
+    } catch {}
+    await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText }, ...(newHtml != null ? { props: { ...(props || {}), html: newHtml } } : {}) });
+    updateCurrentBlocks(b => b.id === blockId
+      ? { ...b,
+          contentJson: JSON.stringify({ ...(content || {}), text: newText }),
+          ...(newHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: newHtml }) } : {})
+        }
+      : b);
     await rerenderBlocksNow(blockId || null);
   } catch (e) {
     console.error('Failed to revert wikilink', e);
@@ -387,7 +457,11 @@ async function createPageForWikilink({ title, blockId, token, type }) {
 // Open the wikilink modal in two modes:
 // - mode 'wikilink' (default): resolving a [[Title]] token
 // - mode 'linkify': bulk linkify plain term across pages
-function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPageIds = [] }) {
+// Open the wikilink modal in two modes:
+// - mode 'wikilink' (default): resolving a [[Title]] token
+// - mode 'linkify': bulk linkify plain term across pages
+// Optionally, provide onConfirmResolved to handle confirm externally (e.g., insert into textarea)
+export function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPageIds = [], onConfirmResolved = null }) {
   const modal = document.getElementById('wikilinkCreateModal');
   if (!modal) {
     // Fallback: keep existing behavior if modal not present
@@ -426,7 +500,8 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
         resetWikilinkModal(modal);
       }
       const effectiveMode = mode || modal.dataset.mode || 'wikilink';
-      if (effectiveMode !== 'linkify') {
+      // Only revert auto-inserted token for the legacy click path with no external confirm handler
+      if (effectiveMode !== 'linkify' && !onConfirmResolved) {
         await revertWikilinkToPlain({ title, blockId, token });
       }
     };
@@ -528,6 +603,9 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
             const linked = Number(summary?.linkedOccurrences || 0);
             const upPages = Number(summary?.updatedPages || 0);
             alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
+          } else if (onConfirmResolved) {
+            // External handler path for context menu: do not rely on globals
+            await onConfirmResolved({ title, page: r });
           } else {
             await linkWikilinkToExisting({ title, blockId, token, page: r });
             await applyBulkIfRequested({ label: title, targetPageId: r.id, modal, scope });
@@ -597,6 +675,9 @@ function openWikilinkModal({ title, blockId, token, mode = 'wikilink', linkifyPa
           const linked = Number(summary?.linkedOccurrences || 0);
           const upPages = Number(summary?.updatedPages || 0);
           alert(`Linked ${linked} occurrence${linked === 1 ? '' : 's'} across ${upPages} page${upPages === 1 ? '' : 's'}`);
+        } else if (onConfirmResolved) {
+          // External handler path for context menu: do not rely on globals
+          await onConfirmResolved({ title, page: selected });
         } else {
           await linkWikilinkToExisting({ title, blockId, token, page: selected });
           await applyBulkIfRequested({ label: title, targetPageId: selected.id, modal, scope });

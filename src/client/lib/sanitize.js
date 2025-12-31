@@ -3,6 +3,10 @@
 // Everything else is unwrapped; disallowed attributes removed.
 
 const ALLOWED_TAGS = new Set(['STRONG', 'EM', 'A', 'BR']);
+const ALLOWED_ANCHOR_ATTRS = new Set([
+  'href', 'target', 'rel',
+  'data-wiki', 'data-page-id', 'data-token', 'data-src-block'
+]);
 
 function isSafeHref(href) {
   try {
@@ -98,14 +102,16 @@ export function sanitizeRichHtml(html) {
       }
 
       if (ALLOWED_TAGS.has(tag)) {
-        // Strip attributes; for <a> keep only a safe href and set rel
+        // Strip attributes; for <a> keep only a safe minimal set
         if (tag === 'A') {
           for (const attr of Array.from(el.attributes)) {
-            if (attr.name.toLowerCase() !== 'href') el.removeAttribute(attr.name);
+            const name = attr.name.toLowerCase();
+            if (!ALLOWED_ANCHOR_ATTRS.has(name)) el.removeAttribute(attr.name);
           }
           const href = el.getAttribute('href');
           if (!isSafeHref(href)) el.removeAttribute('href');
-          el.setAttribute('rel', 'noopener noreferrer');
+          // Ensure rel is present for safety if a target is used or external link
+          if (!el.getAttribute('rel')) el.setAttribute('rel', 'noopener noreferrer');
         } else {
           for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
         }

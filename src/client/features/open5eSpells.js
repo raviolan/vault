@@ -89,11 +89,11 @@ import { $, $$, escapeHtml } from '../lib/dom.js';
 import { getCurrentPageBlocks, updateCurrentBlocks } from '../lib/pageStore.js';
 import { apiPatchBlock } from '../blocks/api.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
+import { registerSelectionMenuItem } from './selectionContextMenu.js';
 
 // Single shared hovercard
 let hoverEl = null;
 let hoverTimer = null;
-let linkCtx = null; // persistent link context across modal lifecycle
 const cache = new Map(); // slug -> data
 
 function ensureHover() {
@@ -199,93 +199,7 @@ function installHoverBehavior() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideHover(); });
 }
 
-// Context menu for creating spell links
-let ctxMenu = null;
-function hideCtx() { if (ctxMenu) ctxMenu.remove(); ctxMenu = null; }
-
-function showCtx(x, y, onPick) {
-  hideCtx();
-  const m = document.createElement('div');
-  m.className = 'o5e-ctx';
-  m.style.position = 'fixed';
-  m.style.zIndex = '1001';
-  m.style.left = `${x}px`;
-  m.style.top = `${y}px`;
-  m.style.background = 'var(--panel)';
-  m.style.border = '1px solid var(--border)';
-  m.style.borderRadius = '8px';
-  m.style.boxShadow = 'var(--shadow-2, 0 8px 30px rgba(0,0,0,0.32))';
-  m.style.padding = '6px';
-  m.style.minWidth = '220px';
-  const item = document.createElement('div');
-  item.textContent = 'Search Open5e (Spell)…';
-  item.style.padding = '6px 8px';
-  item.style.cursor = 'pointer';
-  item.addEventListener('mouseenter', () => { item.style.background = 'var(--surface-2, rgba(255,255,255,0.06))'; });
-  item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
-  item.addEventListener('click', () => { try { onPick(); } finally { hideCtx(); } });
-  m.appendChild(item);
-  document.body.appendChild(m);
-  ctxMenu = m;
-  const onDoc = (ev) => { if (!m.contains(ev.target)) hideCtx(); };
-  setTimeout(() => document.addEventListener('click', onDoc, { once: true }), 0);
-}
-
-function selectionInfoFromEvent(e) {
-  const t = e.target;
-  // Edit mode: textarea
-  const ta = t?.closest?.('textarea.block-input');
-  if (ta && typeof ta.selectionStart === 'number' && typeof ta.selectionEnd === 'number') {
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    if (end > start) {
-      const raw = ta.value.slice(start, end);
-      const text = String(raw || '').trim();
-      if (text && text.length <= 60 && !/\n/.test(text)) {
-        return { kind: 'edit', textarea: ta, start, end, text };
-      }
-    }
-    return null;
-  }
-  // View mode: window selection
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const s = String(sel.toString() || '').trim();
-  if (!s || s.length > 60 || /\n/.test(s)) return null;
-  const anchor = sel.anchorNode;
-  const parentEl = anchor?.nodeType === 3 ? anchor.parentElement : anchor;
-  const blockEl = parentEl?.closest?.('[data-block-id]');
-  const blockId = blockEl?.getAttribute?.('data-block-id') || '';
-  if (!blockId) return null;
-  return { kind: 'view', blockId, text: s };
-}
-
-function installContextMenu() {
-  document.addEventListener('contextmenu', (e) => {
-    try { hideCtx(); } catch {}
-    linkCtx = null;
-    // Prefer textarea selection if present/active
-    const ta = (e.target?.closest?.('textarea.block-input') || document.activeElement);
-    if (ta && ta.matches?.('textarea.block-input')) {
-      const start = ta.selectionStart ?? 0;
-      const end = ta.selectionEnd ?? 0;
-      const selected = String((ta.value || '').slice(start, end) || '');
-      if (!selected.trim()) return; // let native menu show
-      linkCtx = { kind: 'textarea', ta, start, end, selected };
-      e.preventDefault();
-      e.stopPropagation();
-      showCtx(e.clientX, e.clientY, () => openSpellModalWithContext({ kind: 'edit', text: selected }));
-      return;
-    }
-    // View mode fallback
-    const info = selectionInfoFromEvent(e);
-    if (!info) return; // Let native menu show
-    linkCtx = { kind: 'view', blockId: info.blockId, selectedText: info.text };
-    e.preventDefault();
-    e.stopPropagation();
-    showCtx(e.clientX, e.clientY, () => openSpellModalWithContext(info));
-  });
-}
+// Selection context menu is now shared via selectionContextMenu.js
 
 function findBlocksRoot() { return document.getElementById('pageBlocks'); }
 
@@ -381,14 +295,14 @@ async function commitLink(modal) {
   const st = getModalState(modal);
   const sel = st.selection;
   if (!sel?.slug) return;
-  if (window.__DEV__) try { console.debug('[o5e] commit', linkCtx?.kind); } catch {}
+  if (window.__DEV__) try { console.debug('[o5e] commit', st?.kind); } catch {}
   try {
-    if (linkCtx?.kind === 'textarea' && linkCtx?.ta) {
+    if (st?.kind === 'edit' && st?.textarea) {
       // Insert into textarea using stored start/end and selected text
-      const ta = linkCtx.ta;
-      const start = linkCtx.start ?? 0;
-      const end = linkCtx.end ?? 0;
-      const token = `[[o5e:spell:${sel.slug}|${linkCtx.selected}]]`;
+      const ta = st.textarea;
+      const start = st.start ?? 0;
+      const end = st.end ?? 0;
+      const token = `[[o5e:spell:${sel.slug}|${st.selectedText || ''}]]`;
       const before = (ta.value || '').slice(0, start);
       const after = (ta.value || '').slice(end);
       ta.value = before + token + after;
@@ -396,11 +310,11 @@ async function commitLink(modal) {
       const pos = start + token.length;
       try { ta.setSelectionRange(pos, pos); } catch {}
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-    } else if (linkCtx?.kind === 'view' && st.blockId) {
+    } else if (st?.kind === 'view' && st.blockId) {
       const blk = getCurrentPageBlocks().find(b => String(b.id) === String(st.blockId));
       const content = JSON.parse(blk?.contentJson || '{}');
       const raw = String(content?.text || '');
-      const term = String(linkCtx?.selectedText || st.selectedText || '').trim();
+      const term = String(st.selectedText || '').trim();
       const occIdx = raw.indexOf(term);
       if (occIdx < 0) throw new Error('Selection not found in block');
       // Ensure occurs exactly once
@@ -420,7 +334,6 @@ async function commitLink(modal) {
     alert('Failed to insert link.');
   } finally {
     try { modal.style.display = 'none'; } catch {}
-    linkCtx = null;
   }
 }
 
@@ -430,7 +343,7 @@ function openSpellModalWithContext(info) {
   setModalState(modal, { kind: info.kind, textarea: info.textarea || null, start: info.start, end: info.end, blockId: info.blockId || null, selectedText: info.text || '' });
   const input = modal.querySelector('input[name="open5eSpellQuery"]');
   const allCb = modal.querySelector('input[name="open5eSpellAllSources"]');
-  const queryText = (linkCtx?.kind === 'textarea' ? linkCtx.selected : info.text) || '';
+  const queryText = info.text || '';
   if (input) input.value = queryText;
   setModalState(modal, { query: queryText, allSources: !!allCb?.checked, selection: null });
   const btn = modal.querySelector('.modal-confirm');
@@ -463,6 +376,28 @@ function wireModal() {
 export function installOpen5eSpellFeature() {
   ensureHover();
   installHoverBehavior();
-  installContextMenu();
   wireModal();
+  // Register selection menu item using shared menu
+  try {
+    registerSelectionMenuItem({
+      id: 'o5e-spell-search',
+      label: 'Search Open5e (Spell)…',
+      order: 10,
+      isVisible: (ctx) => (
+        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
+        || (ctx.kind === 'view' && String(ctx.text || '').trim())
+      ),
+      isEnabled: (ctx) => (
+        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
+        || (ctx.kind === 'view' && String(ctx.text || '').trim())
+      ),
+      onClick: (ctx) => {
+        if (ctx.kind === 'textarea') {
+          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || '') });
+        } else if (ctx.kind === 'view') {
+          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || '') });
+        }
+      }
+    });
+  } catch {}
 }

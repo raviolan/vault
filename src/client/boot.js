@@ -20,6 +20,7 @@ import { bindRightPanel } from './features/rightPanel.js';
 import { refreshNav, installNavActiveSync } from './features/nav.js';
 import { installWikiLinkHandler } from './features/wikiLinks.js';
 import { installOpen5eSpellFeature } from './features/open5eSpells.js';
+import { installWikiLinksContextMenu } from './features/wikiLinksContextMenu.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
 import { setThemeMode, syncThemeButtons } from './lib/themeSwitchers.js';
@@ -41,6 +42,7 @@ export async function boot() {
   installLinkInterceptor();
   setFallback(() => renderNotFound());
   installWikiLinkHandler();
+  try { installWikiLinksContextMenu(); } catch {}
   // Keep the left nav in sync with current route
   try { installNavActiveSync(); } catch {}
 
