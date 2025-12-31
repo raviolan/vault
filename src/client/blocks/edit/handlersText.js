@@ -268,6 +268,13 @@ export function bindRichTextHandlers({ page, block, editableEl, orderedBlocksFla
       for (const n of nodes) {
         const parent = n.parentNode;
         if (!parent) continue;
+        // Preserve explicit inline quote wrapper spans
+        try {
+          if ((n.tagName || '').toUpperCase() === 'SPAN' && n.classList && n.classList.contains('inline-quote')) {
+            // Do not unwrap or convert this span; normalize inside it only
+            continue;
+          }
+        } catch {}
         let cs = null;
         try { cs = window.getComputedStyle(n); } catch {}
         const fw = String(cs?.fontWeight || '').toLowerCase();

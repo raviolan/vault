@@ -243,6 +243,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
         typeSelectEl: byId('tbType'),
         boldBtnEl: byId('tbBold'),
         italicBtnEl: byId('tbItalic'),
+        quoteBtnEl: byId('tbQuote'),
         linkBtnEl: byId('tbLink'),
         addH1BtnEl: byId('tbAddH1'),
         addH2BtnEl: byId('tbAddH2'),
@@ -266,6 +267,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
           <span class="sep"></span>
           <button type="button" id="tbBold" title="Bold (Ctrl+B)"><b>B</b></button>
           <button type="button" id="tbItalic" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button type="button" id="tbQuote" title="Quote">Quote</button>
           <button type="button" id="tbLink" title="Link (Cmd+Opt+K)">Link</button>
           <span class="sep"></span>
           <button type="button" id="tbAddH1" class="chip">+ H1</button>
@@ -280,10 +282,11 @@ function ensureEditorToolbar(hostEl, rootEl) {
   return {
     created: true,
     toolbarEl: tb,
-    refs: {
+      refs: {
       typeSelectEl: byId('tbType'),
       boldBtnEl: byId('tbBold'),
       italicBtnEl: byId('tbItalic'),
+      quoteBtnEl: byId('tbQuote'),
       linkBtnEl: byId('tbLink'),
       addH1BtnEl: byId('tbAddH1'),
       addH2BtnEl: byId('tbAddH2'),
@@ -419,6 +422,44 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
     return isRich ? ae : null;
   };
   const triggerSave = (el) => { try { el?.dispatchEvent(new Event('input', { bubbles: true })); } catch {} };
+  const insertOrToggleInlineQuoteRich = (editable) => {
+    if (!editable || !editable.isContentEditable) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!editable.contains(range.commonAncestorContainer)) return;
+    try {
+      // Toggle off if selection lies within the same inline-quote span
+      const startEl = (range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement);
+      const endEl = (range.endContainer.nodeType === Node.ELEMENT_NODE ? range.endContainer : range.endContainer.parentElement);
+      const q1 = startEl?.closest?.('.inline-quote') || null;
+      const q2 = endEl?.closest?.('.inline-quote') || null;
+      if (q1 && q1 === q2) {
+        const target = q1;
+        const parent = target.parentNode;
+        if (parent) {
+          const frag = document.createDocumentFragment();
+          while (target.firstChild) frag.appendChild(target.firstChild);
+          parent.replaceChild(frag, target);
+        }
+        return;
+      }
+      // Wrap selection in a span.inline-quote
+      const frag = range.extractContents();
+      const span = document.createElement('span');
+      span.className = 'inline-quote';
+      span.appendChild(frag);
+      range.insertNode(span);
+      // Move caret to after the inserted span
+      try {
+        const r = document.createRange();
+        r.setStartAfter(span);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      } catch {}
+    } catch {}
+  };
 
   const btnHL = byRef('highlightToggleEl');
   if (btnHL) {
@@ -483,6 +524,25 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
     const el = ensureRichActive(); if (!el) return;
     try { document.execCommand('italic'); } catch {}
     triggerSave(el);
+  });
+  // Prevent losing selection on toolbar press
+  byRef('quoteBtnEl')?.addEventListener('mousedown', (e) => { try { e.preventDefault(); } catch {} });
+  byRef('quoteBtnEl')?.addEventListener('click', () => {
+    const richEl = ensureRichActive();
+    if (richEl) {
+      insertOrToggleInlineQuoteRich(richEl);
+      triggerSave(richEl);
+      return;
+    }
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
+      (async () => {
+        const { toggleWrapSelectionPair } = await import('../../lib/formatShortcuts.js');
+        toggleWrapSelectionPair(ae, '{{q: ', '}}');
+      })().catch(() => {});
+      return;
+    }
+    // For other cases (no eligible selection), ignore quietly
   });
   byRef('linkBtnEl')?.addEventListener('click', () => {
     const ae = document.activeElement;

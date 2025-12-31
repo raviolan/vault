@@ -95,6 +95,24 @@ export function sanitizeRichHtml(html) {
     for (const el of all) {
       const tag = el.tagName.toUpperCase();
 
+      // Allow only specific <span> wrappers: inline-quote
+      if (tag === 'SPAN') {
+        const cls = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean);
+        const isInlineQuote = cls.includes('inline-quote');
+        if (isInlineQuote) {
+          // Strip all attributes except class, and reduce class to inline-quote only
+          el.setAttribute('class', 'inline-quote');
+          for (const attr of Array.from(el.attributes)) {
+            const name = attr.name.toLowerCase();
+            if (name !== 'class') el.removeAttribute(attr.name);
+          }
+          continue;
+        }
+        // Other spans are unwrapped
+        unwrap(el);
+        continue;
+      }
+
       // Remove script/style outright
       if (tag === 'SCRIPT' || tag === 'STYLE') {
         el.remove();

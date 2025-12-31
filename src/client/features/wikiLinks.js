@@ -36,6 +36,27 @@ function resetWikilinkModal(modal) {
 // Inline rendering helpers: escape via text nodes; then add wiki links, hashtags, bold/italic.
 // Avoid formatting inside inline code spans delimited by backticks.
 export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
+  // First, split on inline quote tokens so inner content can be fully parsed
+  const frag = document.createDocumentFragment();
+  const reQ = /\{\{q:\s*([\s\S]*?)\}\}/g;
+  let lastQ = 0;
+  let mq;
+  while ((mq = reQ.exec(String(text || ''))) !== null) {
+    const before = String(text || '').slice(lastQ, mq.index);
+    if (before) frag.appendChild(buildWikiTextNodesCore(before, blockIdForLegacyReplace));
+    const inner = mq[1] || '';
+    const span = document.createElement('span');
+    span.className = 'inline-quote';
+    span.appendChild(buildWikiTextNodesCore(inner, blockIdForLegacyReplace));
+    frag.appendChild(span);
+    lastQ = reQ.lastIndex;
+  }
+  const restQ = String(text || '').slice(lastQ);
+  if (restQ) frag.appendChild(buildWikiTextNodesCore(restQ, blockIdForLegacyReplace));
+  return frag;
+}
+
+function buildWikiTextNodesCore(text, blockIdForLegacyReplace = null) {
   const frag = document.createDocumentFragment();
   // Supported tokens:
   // - [[o5e:spell:<slug>|Label]]

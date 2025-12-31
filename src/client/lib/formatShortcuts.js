@@ -53,6 +53,39 @@ export function handleFormatShortcutKeydown(e, inputEl) {
   return false;
 }
 
+// Wrap/unwrap with distinct prefix/suffix markers (e.g. {{q: ...}})
+export function toggleWrapSelectionPair(inputEl, prefix, suffix) {
+  if (!inputEl) return;
+  const tag = (inputEl.tagName || '').toUpperCase();
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+  const start = inputEl.selectionStart ?? 0;
+  const end = inputEl.selectionEnd ?? 0;
+  if (end <= start) return; // require non-empty selection
+  const val = String(inputEl.value || '');
+  const sel = val.slice(start, end);
+  const before = val.slice(0, start);
+  const after = val.slice(end);
+  const hasBefore = before.endsWith(prefix);
+  const hasAfter = after.startsWith(suffix);
+  let newVal = '';
+  let newStart = start;
+  let newEnd = end;
+  if (sel && hasBefore && hasAfter) {
+    // Unwrap
+    newVal = before.slice(0, before.length - prefix.length) + sel + after.slice(suffix.length);
+    newStart = start - prefix.length;
+    newEnd = end - prefix.length;
+  } else {
+    // Wrap
+    newVal = before + prefix + sel + suffix + after;
+    newStart = start + prefix.length;
+    newEnd = end + prefix.length;
+  }
+  inputEl.value = newVal;
+  try { inputEl.setSelectionRange(newStart, newEnd); } catch {}
+  try { inputEl.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
+}
+
 export function insertMarkdownLink(inputEl) {
   if (!inputEl) return;
   const tag = (inputEl.tagName || '').toUpperCase();

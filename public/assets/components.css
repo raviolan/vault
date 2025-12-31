@@ -732,6 +732,17 @@ h4 {
     cursor: pointer;
 }
 
+/* Inline quote plate */
+.inline-quote {
+    display: inline;
+    padding: 0.25em 0.45em;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
 /* Open5e spell inline label */
 .o5e-spell {
     display: inline-block;
