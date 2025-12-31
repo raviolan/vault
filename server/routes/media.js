@@ -78,11 +78,27 @@ export function routeMedia(req, res, ctx) {
       const ext = extForContentType(ct);
       if (!ext) { sendJson(res, 415, { error: 'unsupported media type' }); return true; }
 
-      const buf = await readBuffer(req, 10 * 1024 * 1024); // 10MB limit
+      let buf;
+      try {
+        buf = await readBuffer(req, 10 * 1024 * 1024); // 10MB limit
+      } catch (e) {
+        const s = Number(e?.status || 0);
+        if (s === 413) { sendJson(res, 413, { message: 'That image is too large for the server. Try a smaller file.' }); return true; }
+        // Generic read error
+        sendJson(res, 500, { message: 'Upload failed due to a server error.' });
+        return true;
+      }
       const dir = ensureMediaDir(ctx.DATA_DIR);
       const name = `${randomUUID()}.${ext}`.toLowerCase().replace(/[^a-z0-9.-]/g, '-');
       const full = path.join(dir, name);
-      fs.writeFileSync(full, buf);
+      try {
+        fs.writeFileSync(full, buf);
+      } catch (e) {
+        const code = String(e?.code || '').toUpperCase();
+        if (code === 'ENOSPC') { sendJson(res, 507, { message: 'The server is out of storage. Try again later.' }); return true; }
+        sendJson(res, 500, { message: 'Upload failed due to a server error.' });
+        return true;
+      }
 
       let posX = 50, posY = 50, zoom = 1;
 

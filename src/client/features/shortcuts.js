@@ -5,6 +5,7 @@
 // - Option+Q: Collapse all left sidebar sections except the current section
 // - Option+D: Bookmark current page into Favorites (de-dupe by href)
 // - Option+E: Collapse/expand all subsections on current page
+// - Option+A: Toggle collapse/expand all LEFT SIDEBAR subsections (leave top-level unchanged)
 // - Ctrl+Enter: Save and exit editing (flush debounced saves)
 
 let installed = false;
@@ -61,6 +62,22 @@ export function initGlobalShortcuts({ navigate, patchUserState, getUserState }) 
       if (isTyping) return;
       e.preventDefault();
       try { await toggleAllSubsections(); } catch (err) { console.error('toggleAllSubsections failed', err); }
+      return;
+    }
+
+    // Option+A — toggle all LEFT SIDEBAR subsections (not top-level)
+    if (e.altKey && !e.metaKey && !e.ctrlKey && (code === 'KeyA' || key === 'a')) {
+      // Ignore while typing in input/textarea/contenteditable
+      const ae = document.activeElement;
+      const isTyping = !!(ae && (
+        ae.closest?.('input, textarea, [contenteditable="true"], [contenteditable="plaintext-only"]') ||
+        (ae instanceof HTMLInputElement) ||
+        (ae instanceof HTMLTextAreaElement) ||
+        (ae instanceof HTMLElement && ae.isContentEditable)
+      ));
+      if (isTyping) return;
+      e.preventDefault();
+      toggleLeftSubsectionDetails();
       return;
     }
 
@@ -187,6 +204,26 @@ function expandAllLeftSections() {
   if (!nav) return;
   const all = nav.querySelectorAll('details[data-section], details.nav-details');
   all.forEach((d) => { d.open = true; });
+}
+
+// Toggle all nested <details> elements inside each top-level left sidebar section.
+// Top-level sections are <details.nav-details>[data-section]. Subsections are nested
+// <details.nav-details> descendants without a [data-section] attribute.
+function toggleLeftSubsectionDetails() {
+  const nav = document.querySelector('aside.left nav.nav');
+  if (!nav) return;
+  // Collect all nested details under each top-level section
+  const topLevel = Array.from(nav.querySelectorAll('details.nav-details[data-section]'));
+  const nested = [];
+  for (const top of topLevel) {
+    const kids = top.querySelectorAll('details.nav-details:not([data-section])');
+    kids.forEach(d => nested.push(d));
+  }
+  if (!nested.length) return;
+  // Determine target: if any is open, collapse all; otherwise expand all
+  const anyOpen = nested.some(d => d.open);
+  const nextOpen = !anyOpen;
+  nested.forEach(d => { d.open = nextOpen; });
 }
 
 async function addCurrentToFavorites({ patchUserState, getUserState }) {

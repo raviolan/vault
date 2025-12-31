@@ -101,8 +101,27 @@ export function renderHeaderMedia(hostEl, opts) {
     fileInputCover.onchange = async () => {
       const f = fileInputCover.files && fileInputCover.files[0];
       if (!f) return;
-      try { await onUploadCover?.(f); } catch (e) { console.error('upload cover failed', e); }
-      fileInputCover.value = '';
+      try {
+        // quick client-side checks for type/size
+        const { explainUploadError, showUploadErrorDialog } = await import('../lib/userError.js');
+        const ALLOWED = ['image/png','image/jpeg','image/webp','image/gif','image/avif'];
+        if (f.type && !ALLOWED.some(t => (f.type || '').includes(t))) {
+          showUploadErrorDialog(explainUploadError(null, { file: f }));
+          return;
+        }
+        if (Number.isFinite(f.size) && f.size > 10 * 1024 * 1024) {
+          showUploadErrorDialog(explainUploadError(null, { file: f }));
+          return;
+        }
+        await onUploadCover?.(f);
+      } catch (e) {
+        try {
+          const { explainUploadError, showUploadErrorDialog } = await import('../lib/userError.js');
+          showUploadErrorDialog(explainUploadError(e, { file: f }));
+        } catch {}
+      } finally {
+        fileInputCover.value = '';
+      }
     };
     ctl.appendChild(addOrChangeBtn);
 
@@ -233,7 +252,24 @@ export function renderHeaderMedia(hostEl, opts) {
       fileInput.onchange = async () => {
         const f = fileInput.files && fileInput.files[0];
         if (!f) return; fileInput.value = '';
-        try { await onUploadProfile?.(f); } catch (e) { console.error('upload profile failed', e); }
+        try {
+          const { explainUploadError, showUploadErrorDialog } = await import('../lib/userError.js');
+          const ALLOWED = ['image/png','image/jpeg','image/webp','image/gif','image/avif'];
+          if (f.type && !ALLOWED.some(t => (f.type || '').includes(t))) {
+            showUploadErrorDialog(explainUploadError(null, { file: f }));
+            return;
+          }
+          if (Number.isFinite(f.size) && f.size > 10 * 1024 * 1024) {
+            showUploadErrorDialog(explainUploadError(null, { file: f }));
+            return;
+          }
+          await onUploadProfile?.(f);
+        } catch (e) {
+          try {
+            const { explainUploadError, showUploadErrorDialog } = await import('../lib/userError.js');
+            showUploadErrorDialog(explainUploadError(e, { file: f }));
+          } catch {}
+        }
       };
       pCtl.appendChild(btn);
       if (profile) {

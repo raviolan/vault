@@ -57,6 +57,7 @@ export async function boot() {
   bindModalBasics('open5eSpellModal');
   bindModalBasics('open5eSpellDetailsModal');
   bindModalBasics('inlineCommentModal');
+  bindModalBasics('uploadErrorModal');
   try { installOpen5eSpellFeature(); } catch {}
   try { installInlineComments(); } catch {}
   await loadState();
