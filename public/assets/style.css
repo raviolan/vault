@@ -4392,3 +4392,22 @@ article.page.has-profile-media>#pageTitleInput {
 .sheet-notes-view {
     white-space: pre-wrap;
 }
+
+/* Paragraph with image layout */
+.para-with-image {
+    display: grid;
+    grid-template-columns: 1fr minmax(160px, var(--para-img-width, 33%));
+    gap: 12px;
+    align-items: start;
+}
+.para-with-image.img-full {
+    grid-template-columns: 1fr;
+}
+.para-with-image .para-image img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+@media (max-width: 720px) {
+    .para-with-image { grid-template-columns: 1fr; }
+}

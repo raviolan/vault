@@ -10,6 +10,8 @@ import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../../lib/sanitize
 import { buildWikiTextNodes } from '../../features/wikiLinks.js';
 import { getState, updateState, saveStateNow } from '../../lib/state.js';
 import { applyUiPrefsToBody } from '../../lib/uiPrefs.js';
+import { uploadMedia } from '../../lib/mediaUpload.js';
+import { explainUploadError, showUploadErrorDialog } from '../../lib/userError.js';
 
 // Track active block across the editor for toolbar actions
 let activeBlockId = null;
@@ -216,6 +218,17 @@ function restoreSelection(sel) {
   } catch {}
 }
 
+// Small, local helper to apply updated blocks and re-render
+function applyBlocksAndRender({ rootEl, page, blocks, preferFocusId = null, opts = {}, action = 'update' }) {
+  try {
+    setCurrentPageBlocks(Array.isArray(blocks) ? blocks : []);
+    if (!rootEl) throw new Error('Missing rootEl for stableRender');
+    stableRender(rootEl, page, getCurrentPageBlocks(), preferFocusId, opts);
+  } catch (err) {
+    console.error(`[editor] ${action} apply+render failed`, { action, preferFocusId }, err);
+  }
+}
+
 export function stableRender(rootEl, page, blocks, preferFocusId = null, opts = {}) {
   const scroller = getScrollContainer(rootEl);
   const anchor = captureAnchor(rootEl, scroller);
@@ -251,6 +264,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
         addH3BtnEl: byId('tbAddH3'),
         addBodyBtnEl: byId('tbAddBody'),
         addTableBtnEl: byId('tbAddTable'),
+        addImageBtnEl: byId('tbAddImage'),
         highlightToggleEl: byId('tbSectionHL')
       }
     };
@@ -277,6 +291,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
           <button type="button" id="tbAddH3" class="chip">+ H3</button>
           <button type="button" id="tbAddBody" class="chip">+ Body</button>
           <button type="button" id="tbAddTable" class="chip">+ Table</button>
+          <button type="button" id="tbAddImage" class="chip" title="Add image to paragraph">Image</button>
           <span class="sep"></span>
           <button type="button" id="tbSectionHL" class="chip" title="Toggle section highlight">Section HL</button>
         </div>`;
@@ -296,6 +311,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
       addH3BtnEl: byId('tbAddH3'),
       addBodyBtnEl: byId('tbAddBody'),
       addTableBtnEl: byId('tbAddTable'),
+      addImageBtnEl: byId('tbAddImage'),
       highlightToggleEl: byId('tbSectionHL')
     }
   };
@@ -389,8 +405,7 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
         const nextProps = { ...existingProps, level };
         await apiPatchBlock(cur.id, { props: nextProps });
         updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
-        const container = document.getElementById('pageBlocks');
-        stableRender(container, page, getCurrentPageBlocks(), cur.id);
+        applyBlocksAndRender({ rootEl, page, blocks: getCurrentPageBlocks(), preferFocusId: cur.id, action: 'change heading level (section)' });
         return;
       }
       if (cur.type === 'heading') {
@@ -398,8 +413,7 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
         const nextProps = { ...existingProps, level };
         await apiPatchBlock(cur.id, { props: nextProps });
         updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
-        const container = document.getElementById('pageBlocks');
-        stableRender(container, page, getCurrentPageBlocks(), cur.id);
+        applyBlocksAndRender({ rootEl, page, blocks: getCurrentPageBlocks(), preferFocusId: cur.id, action: 'change heading level (heading)' });
         return;
       }
       if (cur.type === 'paragraph') {
@@ -415,8 +429,7 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
           const created = await apiCreateBlock(page.id, { type: 'paragraph', parentId: cur.id, sort: 0, props: {}, content: { text: remainder } });
           setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
         }
-        const container = document.getElementById('pageBlocks');
-        stableRender(container, page, getCurrentPageBlocks(), cur.id);
+        applyBlocksAndRender({ rootEl, page, blocks: getCurrentPageBlocks(), preferFocusId: cur.id, action: 'convert paragraph to section' });
       }
     } catch (err) { console.error('toolbar heading change failed', err); }
   });
@@ -517,9 +530,8 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
         props: {},
         content: { text: '' }
       });
-      setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-      const container = document.getElementById('pageBlocks') || rootEl;
-      stableRender(container, page, getCurrentPageBlocks(), created.id);
+      const next = [...getCurrentPageBlocks(), created];
+      applyBlocksAndRender({ rootEl, page, blocks: next, preferFocusId: created.id, action: 'create body after active' });
     } catch (err) { console.error('toolbar create body failed', err); }
   }
 
@@ -555,9 +567,53 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
         }));
       } catch {}
       void apiReorder(page.id, moves).catch(() => {});
-      const container = document.getElementById('pageBlocks') || rootEl;
-      stableRender(container, page, getCurrentPageBlocks(), created.id);
+      applyBlocksAndRender({ rootEl, page, blocks: getCurrentPageBlocks(), preferFocusId: created.id, action: 'create table after active' });
     } catch (err) { console.error('toolbar create table failed', err); }
+  }
+
+  async function createImageForActiveParagraph() {
+    const id = activeBlockId;
+    const all = getCurrentPageBlocks();
+    const cur = id ? all.find(x => String(x.id) === String(id)) : null;
+    if (!cur || cur.type !== 'paragraph') {
+      alert('Place your cursor in a paragraph to add an image.');
+      return;
+    }
+    // Create a transient file input to trigger the picker
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    const cleanup = () => { try { document.body.removeChild(input); } catch {} };
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0] ? input.files[0] : null;
+      if (!file) { cleanup(); return; }
+      try {
+        const resp = await uploadMedia({ scope: 'block', blockId: cur.id, slot: 'image', file });
+        const url = String(resp?.url || '');
+        if (!url) throw new Error('Upload failed');
+        const defaults = { url, widthPct: 33, align: 'right' };
+        // Optimistically update local store immediately (debouncePatch also applies optimistic merge)
+        try {
+          const existing = parseMaybeJson(cur.propsJson) || {};
+          const nextProps = { ...existing, image: defaults };
+          updateCurrentBlocks(b => b.id === cur.id ? { ...b, propsJson: JSON.stringify(nextProps) } : b);
+        } catch {}
+        // Debounced server patch
+        debouncePatch(cur.id, { props: { image: defaults } });
+        applyBlocksAndRender({ rootEl, page, blocks: getCurrentPageBlocks(), preferFocusId: cur.id, action: 'add paragraph image' });
+      } catch (err) {
+        try {
+          const msg = explainUploadError(err, { file });
+          showUploadErrorDialog(msg);
+        } catch { alert('Image upload failed.'); }
+      } finally {
+        cleanup();
+      }
+    }, { once: true });
+    // Open picker
+    try { input.click(); } catch { cleanup(); }
   }
 
   byRef('boldBtnEl')?.addEventListener('click', () => {
@@ -617,6 +673,7 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
   byRef('addH3BtnEl')?.addEventListener('click', () => void createSectionAfterActiveFactory(3)());
   byRef('addBodyBtnEl')?.addEventListener('click', () => void createBodyAfterActive());
   byRef('addTableBtnEl')?.addEventListener('click', () => void createTableAfterActive());
+  byRef('addImageBtnEl')?.addEventListener('click', () => void createImageForActiveParagraph());
 }
 
 // PRIVATE: track focus to set activeBlockId and sync toolbar select
@@ -703,27 +760,134 @@ function renderEditorDom({ rootEl, page }) {
       wrap.appendChild(input);
       bindTextInputHandlers({ page, block: b, inputEl: input, orderedBlocksFlat, render: renderStable, focus });
     } else if (b.type === 'paragraph') {
-      const div = document.createElement('div');
-      div.className = 'block-input paragraph block-rich';
-      div.contentEditable = 'true';
-      div.setAttribute('data-block-id', b.id);
+      // Build the primary editable rich text area
+      const editable = document.createElement('div');
+      editable.className = 'block-input paragraph block-rich';
+      editable.contentEditable = 'true';
+      editable.setAttribute('data-block-id', b.id);
       const html = (b.props && b.props.html) ? String(b.props.html) : null;
       if (html && html.trim()) {
-        div.innerHTML = sanitizeRichHtml(html);
-        // Render committed wiki tokens as anchors so UUIDs stay hidden
-        linkifyWikiTokensInElement(div, b.id);
+        editable.innerHTML = sanitizeRichHtml(html);
+        linkifyWikiTokensInElement(editable, b.id);
       } else {
-        div.textContent = String(b.content?.text || '');
+        editable.textContent = String(b.content?.text || '');
       }
-      div.placeholder = 'Write something...';
-      // Prevent navigation when clicking links inside the editor
-      div.addEventListener('click', (e) => {
+      editable.placeholder = 'Write something...';
+      editable.addEventListener('click', (e) => {
         const a = e.target?.closest?.('a');
         if (!a) return;
         try { e.preventDefault(); e.stopPropagation(); } catch {}
       }, true);
-      wrap.appendChild(div);
-      bindRichTextHandlers({ page, block: b, editableEl: div, orderedBlocksFlat, render: renderStable, focus });
+
+      const img = (b?.props && b.props.image && b.props.image.url) ? b.props.image : null;
+      if (img && img.url) {
+        const pct = Number(img.widthPct || 33);
+        const align = (img.align === 'left' || img.align === 'right') ? img.align : 'right';
+        const cont = document.createElement('div');
+        cont.className = 'para-with-image';
+        if (align === 'left') cont.classList.add('align-left'); else cont.classList.add('align-right');
+        if (pct === 100) cont.classList.add('img-full');
+        cont.style.setProperty('--para-img-width', `${pct}%`);
+        const textWrap = document.createElement('div');
+        textWrap.className = 'para-text';
+        textWrap.appendChild(editable);
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'para-image';
+        const imageEl = document.createElement('img');
+        imageEl.src = String(img.url);
+        imageEl.alt = '';
+        imageEl.style.maxWidth = '100%';
+        imageEl.style.height = 'auto';
+        imageEl.style.display = 'block';
+        imgWrap.appendChild(imageEl);
+        if (align === 'left') {
+          // Image first, text second
+          cont.appendChild(imgWrap);
+          cont.appendChild(textWrap);
+        } else {
+          cont.appendChild(textWrap);
+          cont.appendChild(imgWrap);
+        }
+        wrap.appendChild(cont);
+      } else {
+        wrap.appendChild(editable);
+      }
+
+      bindRichTextHandlers({ page, block: b, editableEl: editable, orderedBlocksFlat, render: renderStable, focus });
+
+      // Controls row for paragraph image management (edit mode only; only when image exists)
+      const hasImage = !!(img && img.url);
+      if (hasImage) {
+        const controls = document.createElement('div');
+        controls.className = 'para-controls';
+        controls.style.display = 'flex';
+        controls.style.gap = '8px';
+        controls.style.margin = '4px 0';
+        // Size control
+        const label = document.createElement('label');
+        label.className = 'meta';
+        label.textContent = 'Size';
+        const sizeSel = document.createElement('select');
+        for (const pct of [25,33,50,66,100]) {
+          const opt = document.createElement('option');
+          opt.value = String(pct);
+          opt.textContent = `${pct}%`;
+          if (Number(img.widthPct || 33) === pct) opt.selected = true;
+          sizeSel.appendChild(opt);
+        }
+        sizeSel.addEventListener('change', (e) => {
+          const pct = Math.max(1, Math.min(100, Number(sizeSel.value||33)));
+          const next = { ...(b.props || {}), image: { ...(img||{}), widthPct: pct } };
+          debouncePatch(b.id, { props: next });
+          renderStable(b.id);
+        });
+        controls.appendChild(label);
+        controls.appendChild(sizeSel);
+
+        // Align toggle
+        const alignLeft = document.createElement('button');
+        alignLeft.type = 'button';
+        alignLeft.className = 'chip';
+        alignLeft.textContent = 'Left';
+        const alignRight = document.createElement('button');
+        alignRight.type = 'button';
+        alignRight.className = 'chip';
+        alignRight.textContent = 'Right';
+        const setAlignPressed = () => {
+          alignLeft.setAttribute('aria-pressed', (img?.align || 'right') === 'left' ? 'true' : 'false');
+          alignRight.setAttribute('aria-pressed', (img?.align || 'right') === 'right' ? 'true' : 'false');
+        };
+        setAlignPressed();
+        alignLeft.addEventListener('click', () => {
+          const next = { ...(b.props || {}), image: { ...(img||{}), align: 'left' } };
+          debouncePatch(b.id, { props: next });
+          renderStable(b.id);
+        });
+        alignRight.addEventListener('click', () => {
+          const next = { ...(b.props || {}), image: { ...(img||{}), align: 'right' } };
+          debouncePatch(b.id, { props: next });
+          renderStable(b.id);
+        });
+        controls.appendChild(alignLeft);
+        controls.appendChild(alignRight);
+
+        // Remove image
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'chip';
+        removeBtn.textContent = 'Remove image';
+        removeBtn.title = 'Remove image';
+        removeBtn.addEventListener('click', () => {
+          const next = { ...(b.props || {}), image: null };
+          debouncePatch(b.id, { props: next });
+          renderStable(b.id);
+        });
+        // Spacer to push remove to right
+        const spacer = document.createElement('div'); spacer.style.flex = '1';
+        controls.appendChild(spacer);
+        controls.appendChild(removeBtn);
+        wrap.appendChild(controls);
+      }
     } else if (b.type === 'divider') {
       const hr = document.createElement('hr');
       wrap.appendChild(hr);

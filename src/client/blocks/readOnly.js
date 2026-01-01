@@ -49,18 +49,52 @@ export function renderBlocksReadOnly(rootEl, blocks) {
       return el;
     }
     if (n.type === 'paragraph') {
-      const p = document.createElement('p');
-      p.setAttribute('data-block-id', n.id);
-      const rich = (props && props.html) ? String(props.html) : '';
-      if (rich && rich.trim()) {
-        // Render sanitized HTML when present, then linkify wiki tokens within it
-        p.innerHTML = sanitizeRichHtml(rich);
-        linkifyWikiTokensInElement(p, n.id);
+      const img = (props && props.image && props.image.url) ? props.image : null;
+      if (img && img.url) {
+        const pct = Number(img.widthPct || 33);
+        const align = (img.align === 'left' || img.align === 'right') ? img.align : 'right';
+        const cont = document.createElement('div');
+        cont.className = 'para-with-image';
+        if (align === 'left') cont.classList.add('align-left'); else cont.classList.add('align-right');
+        if (pct === 100) cont.classList.add('img-full');
+        cont.style.setProperty('--para-img-width', `${pct}%`);
+        const textWrap = document.createElement('div');
+        textWrap.className = 'para-text';
+        const rich = (props && props.html) ? String(props.html) : '';
+        if (rich && rich.trim()) {
+          textWrap.innerHTML = sanitizeRichHtml(rich);
+          linkifyWikiTokensInElement(textWrap, n.id);
+        } else {
+          const txt = String(content.text || '');
+          textWrap.appendChild(buildWikiTextNodes(txt, n.id));
+        }
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'para-image';
+        const imageEl = document.createElement('img');
+        imageEl.src = String(img.url);
+        imageEl.alt = '';
+        imageEl.style.maxWidth = '100%';
+        imageEl.style.height = 'auto';
+        imageEl.style.display = 'block';
+        imgWrap.appendChild(imageEl);
+        if (align === 'left') { cont.appendChild(imgWrap); cont.appendChild(textWrap); }
+        else { cont.appendChild(textWrap); cont.appendChild(imgWrap); }
+        cont.setAttribute('data-block-id', n.id);
+        return cont;
       } else {
-        const txt = String(content.text || '');
-        p.appendChild(buildWikiTextNodes(txt, n.id));
+        const p = document.createElement('p');
+        p.setAttribute('data-block-id', n.id);
+        const rich = (props && props.html) ? String(props.html) : '';
+        if (rich && rich.trim()) {
+          // Render sanitized HTML when present, then linkify wiki tokens within it
+          p.innerHTML = sanitizeRichHtml(rich);
+          linkifyWikiTokensInElement(p, n.id);
+        } else {
+          const txt = String(content.text || '');
+          p.appendChild(buildWikiTextNodes(txt, n.id));
+        }
+        return p;
       }
-      return p;
     }
     if (n.type === 'divider') {
       return document.createElement('hr');

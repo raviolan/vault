@@ -1,11 +1,13 @@
 // Minimal helper for uploading media via /api/media
 
-export async function uploadMedia({ scope, pageId, surfaceId, slot, file }) {
+export async function uploadMedia({ scope, pageId, surfaceId, blockId, slot, file }) {
   const params = new URLSearchParams();
   params.set('scope', scope);
   params.set('slot', slot);
   if (scope === 'page' && pageId) params.set('pageId', pageId);
   if (scope === 'surface' && surfaceId) params.set('surfaceId', surfaceId);
+  // For block-scoped uploads (paragraph images), carry blockId for future use
+  if (scope === 'block' && blockId) params.set('blockId', blockId);
   const res = await fetch(`/api/media/upload?${params.toString()}`, {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },

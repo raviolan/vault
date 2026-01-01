@@ -68,8 +68,9 @@ export function routeMedia(req, res, ctx) {
       const slot = String(searchParams.get('slot') || '');
       const pageId = searchParams.get('pageId');
       const surfaceId = searchParams.get('surfaceId');
-      if (!['page', 'surface'].includes(scope)) { sendJson(res, 400, { error: 'invalid scope' }); return true; }
-      if (!['header', 'profile'].includes(slot)) { sendJson(res, 400, { error: 'invalid slot' }); return true; }
+      const blockId = searchParams.get('blockId');
+      if (!['page', 'surface', 'block'].includes(scope)) { sendJson(res, 400, { error: 'invalid scope' }); return true; }
+      if (!['header', 'profile', 'image'].includes(slot)) { sendJson(res, 400, { error: 'invalid slot' }); return true; }
       if (scope === 'page' && !pageId) { sendJson(res, 400, { error: 'pageId required' }); return true; }
       if (scope === 'surface' && !surfaceId) { sendJson(res, 400, { error: 'surfaceId required' }); return true; }
 
@@ -156,7 +157,7 @@ export function routeMedia(req, res, ctx) {
         if (!pageId) { sendJson(res, 400, { error: 'pageId required' }); return true; }
         const patch = (slot === 'header') ? { header: { posX: x, posY: y, ...(z !== undefined ? { zoom: z } : {}) } } : { profile: { posX: x, posY: y, ...(z !== undefined ? { zoom: z } : {}) } };
         ctx.dbSetPageMedia(ctx.db, pageId, patch);
-      } else {
+      } else if (scope === 'surface') {
         if (!surfaceId) { sendJson(res, 400, { error: 'surfaceId required' }); return true; }
         const state = loadUserState(ctx.USER_DIR);
         const cur = state.surfaceMediaV1 && state.surfaceMediaV1.surfaces ? state.surfaceMediaV1 : { surfaces: {} };
@@ -170,6 +171,8 @@ export function routeMedia(req, res, ctx) {
         const next = { ...state, surfaceMediaV1: { surfaces: s } };
         const p = path.join(ctx.USER_DIR, 'state.json');
         writeJsonAtomic(p, next);
+      } else if (scope === 'block') {
+        // No DB association needed for block images; client stores URL in block props
       }
       sendJson(res, 200, { ok: true });
       return true;
