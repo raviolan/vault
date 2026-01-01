@@ -18,6 +18,7 @@ import { getState, updateState, saveStateNow } from '../lib/state.js';
 import { addPageToSection, removePageFromSection, normalizeSections } from '../lib/sections.js';
 import { canonicalPageHref } from '../lib/pageUrl.js';
 import { setActivePage } from '../lib/activePage.js';
+import { setDocumentTitle } from '../lib/documentTitle.js';
 
 // ---------- Private helpers (pure refactor; no behavior change intended)
 
@@ -436,6 +437,12 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   const sectionLabel = computeSectionLabel(page);
   renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar });
 
+  // Update browser tab title with resolved page title
+  try {
+    const resolved = (String(page?.title || '').trim()) || (String(page?.slug || '').trim()) || 'Untitled';
+    setDocumentTitle(resolved);
+  } catch {}
+
   const rerenderHeaderMedia = initHeaderMedia(outlet, page);
   const { isCharLike, renderSheet } = initCharTabsAndSheet(outlet, page);
 
@@ -552,6 +559,17 @@ export function enablePageTitleEdit(page) {
   input.value = page.title || '';
   h1.replaceWith(input);
   bindPageTitleInput(page, input);
+
+   // Live-update tab title as the user types
+   try {
+     const fallback = (String(page?.slug || '').trim()) || 'Untitled';
+     const onLive = () => {
+       const v = String(input.value || '').trim();
+       setDocumentTitle(v || fallback);
+     };
+     input.__vaultLiveTitleHandler = onLive;
+     input.addEventListener('input', onLive);
+   } catch {}
 
   // Insert Type control (edit mode only), placed near title
   try {
@@ -762,6 +780,8 @@ export function enablePageTitleEdit(page) {
 export function disablePageTitleEdit(page) {
   const input = document.getElementById('pageTitleInput');
   if (!input) return;
+  // Cleanup live title handler to avoid accumulating listeners
+  try { if (input.__vaultLiveTitleHandler) input.removeEventListener('input', input.__vaultLiveTitleHandler); } catch {}
   const h1 = document.createElement('h1');
   h1.id = 'pageTitleView';
   h1.textContent = input.value || page.title || '';
@@ -885,4 +905,3 @@ export async function saveAndExitEditing() {
   // Exit edit mode by reusing the existing button handler
   try { btnEdit.click(); } catch {}
 }
-

@@ -37,12 +37,13 @@ import { initGlobalShortcuts } from './features/shortcuts.js';
 import { installGlobalLightbox } from './features/lightbox.js';
 import { getUserState, patchUserState } from './miniapps/state.js';
 import { PartyDrawerApp } from './miniapps/partyDrawer/app.js';
+import { setDocumentTitle } from './lib/documentTitle.js';
 
 export async function boot() {
   $('#year').textContent = String(new Date().getFullYear());
 
   installLinkInterceptor();
-  setFallback(() => renderNotFound());
+  setFallback(() => { setDocumentTitle('Not Found'); return renderNotFound(); });
   // Ensure content-area links open in new tabs, before wiki/link handlers
   installContentLinksNewTab();
   installWikiLinkHandler();
@@ -217,6 +218,7 @@ export async function boot() {
   } catch {}
 
   route(/^\/$/, () => {
+    setDocumentTitle(''); // Home: DM Vault
     setBreadcrumb('Dashboard');
     setPageActionsEnabled({ canEdit: false, canDelete: false });
     const outlet = document.getElementById('outlet');
@@ -224,8 +226,9 @@ export async function boot() {
   });
   route(/^\/page\/([^\/]+)$/, (ctx) => renderPage(ctx));
   route(/^\/p\/([^\/]+)$/, (ctx) => renderPageBySlug(ctx));
-  route(/^\/search\/?$/, () => { try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {} return renderSearchResults(); });
+  route(/^\/search\/?$/, () => { setDocumentTitle('Search'); try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {} return renderSearchResults(); });
   route(/^\/tags\/?$/, () => {
+    setDocumentTitle('Tag Inspector');
     setBreadcrumb('Tags');
     setPageActionsEnabled({ canEdit: false, canDelete: false });
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
@@ -234,6 +237,7 @@ export async function boot() {
   });
   // Core tools
   route(/^\/tools\/enemy-generator\/?$/, () => {
+    setDocumentTitle('Enemy Generator');
     setBreadcrumb('Enemy Generator');
     setPageActionsEnabled({ canEdit: false, canDelete: false });
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
@@ -241,29 +245,34 @@ export async function boot() {
     EnemyGenerator.render(outlet);
   });
   route(/^\/session\/?$/, () => {
+    setDocumentTitle('Session');
     setBreadcrumb('Session');
     setPageActionsEnabled({ canEdit: false, canDelete: false });
     const outlet = document.getElementById('outlet');
     Session.render(outlet, {});
   });
   route(/^\/settings\/?$/, () => {
+    setDocumentTitle('Settings');
     const outlet = document.getElementById('outlet');
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     return SettingsRoute.render(outlet, {});
   });
   // Standalone HP Tracker content page
   route(/^\/apps\/hp\/?$/, () => {
+    setDocumentTitle('HP Tracker');
     const outlet = document.getElementById('outlet');
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     return HpRoute.render(outlet, {});
   });
   route(/^\/section\/([^\/]+)\/?$/, (ctx) => {
+    setDocumentTitle('Sections');
     const outlet = document.getElementById('outlet');
     const key = ctx.match?.[1] || '';
     return SectionRoute.render(outlet, { key });
   });
   // Dedicated Weather app settings route
   route(/^\/apps\/weather\/settings\/?$/, () => {
+    setDocumentTitle('Weather Settings');
     const outlet = document.getElementById('outlet');
     return WeatherSettingsRoute.render(outlet, {});
   });
