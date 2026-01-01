@@ -250,6 +250,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
         addH2BtnEl: byId('tbAddH2'),
         addH3BtnEl: byId('tbAddH3'),
         addBodyBtnEl: byId('tbAddBody'),
+        addTableBtnEl: byId('tbAddTable'),
         highlightToggleEl: byId('tbSectionHL')
       }
     };
@@ -275,6 +276,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
           <button type="button" id="tbAddH2" class="chip">+ H2</button>
           <button type="button" id="tbAddH3" class="chip">+ H3</button>
           <button type="button" id="tbAddBody" class="chip">+ Body</button>
+          <button type="button" id="tbAddTable" class="chip">+ Table</button>
           <span class="sep"></span>
           <button type="button" id="tbSectionHL" class="chip" title="Toggle section highlight">Section HL</button>
         </div>`;
@@ -293,6 +295,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
       addH2BtnEl: byId('tbAddH2'),
       addH3BtnEl: byId('tbAddH3'),
       addBodyBtnEl: byId('tbAddBody'),
+      addTableBtnEl: byId('tbAddTable'),
       highlightToggleEl: byId('tbSectionHL')
     }
   };
@@ -365,6 +368,8 @@ function buildOutlineIndex() {
 // PRIVATE: bind toolbar button/select actions (only once)
 function bindToolbarActions({ page, rootEl, refs, outline }) {
   const byRef = (k) => refs?.[k] || null;
+  // Dev sanity check: ensure Table button ref exists
+  try { if (!byRef('addTableBtnEl') && window.__DEV__) console.warn('Table button ref missing'); } catch {}
 
   const selType = byRef('typeSelectEl');
   selType?.addEventListener('change', async () => {
@@ -516,6 +521,42 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
     } catch (err) { console.error('toolbar create body failed', err); }
   }
 
+  async function createTableAfterActive() {
+    const id = activeBlockId;
+    const all = getCurrentPageBlocks();
+    const cur = id ? all.find(x => String(x.id) === String(id)) : null;
+    try {
+      if (cur && cur.type === 'section') {
+        const { insertFirstChildTable } = await import('./handlersSection.js');
+        await insertFirstChildTable({ page, sectionId: cur.id, rootEl });
+        return;
+      }
+      // Deterministic insert-after-active logic (exactly below cursor block)
+      const parentId = cur ? (cur.parentId ?? null) : null;
+      const siblings = all.filter(b => (b.parentId ?? null) === parentId).sort((a,b) => Number(a.sort||0) - Number(b.sort||0));
+      const idx = cur ? (siblings.findIndex(s => String(s.id) === String(cur.id)) + 1) : siblings.length;
+      const { apiCreateBlock, apiReorder } = await import('./apiBridge.js');
+      const { ensureTableProps } = await import('../tableEditor.js');
+      const props = { table: ensureTableProps({}) };
+      const created = await apiCreateBlock(page.id, { type: 'table', parentId, sort: 0, props, content: {} });
+      // Optimistically add and normalize order
+      setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+      const before = siblings.slice(0, Math.max(0, idx));
+      const after = siblings.slice(Math.max(0, idx));
+      const newOrder = [...before, created, ...after];
+      const moves = newOrder.map((n, i) => ({ id: n.id, parentId, sort: i }));
+      try {
+        setCurrentPageBlocks(getCurrentPageBlocks().map(b => {
+          const m = moves.find(mv => String(mv.id) === String(b.id));
+          return m ? { ...b, parentId: m.parentId, sort: m.sort } : b;
+        }));
+      } catch {}
+      void apiReorder(page.id, moves).catch(() => {});
+      const container = document.getElementById('pageBlocks') || rootEl;
+      stableRender(container, page, getCurrentPageBlocks(), created.id);
+    } catch (err) { console.error('toolbar create table failed', err); }
+  }
+
   byRef('boldBtnEl')?.addEventListener('click', () => {
     const el = ensureRichActive(); if (!el) return;
     try { document.execCommand('bold'); } catch {}
@@ -572,6 +613,7 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
   byRef('addH2BtnEl')?.addEventListener('click', () => void createSectionAfterActiveFactory(2)());
   byRef('addH3BtnEl')?.addEventListener('click', () => void createSectionAfterActiveFactory(3)());
   byRef('addBodyBtnEl')?.addEventListener('click', () => void createBodyAfterActive());
+  byRef('addTableBtnEl')?.addEventListener('click', () => void createTableAfterActive());
 }
 
 // PRIVATE: track focus to set activeBlockId and sync toolbar select
@@ -682,6 +724,70 @@ function renderEditorDom({ rootEl, page }) {
     } else if (b.type === 'divider') {
       const hr = document.createElement('hr');
       wrap.appendChild(hr);
+    } else if (b.type === 'table') {
+      const preview = document.createElement('div');
+      preview.className = 'table-block-preview';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip';
+      btn.textContent = 'Edit table';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'chip';
+      del.textContent = '×';
+      del.title = 'Delete table';
+      const header = document.createElement('div');
+      header.style.display = 'flex';
+      header.style.gap = '8px';
+      header.style.alignItems = 'center';
+      header.style.margin = '4px 0';
+      header.appendChild(btn);
+      const spacer = document.createElement('div');
+      spacer.style.flex = '1';
+      header.appendChild(spacer);
+      header.appendChild(del);
+      wrap.appendChild(header);
+      wrap.appendChild(preview);
+      (async () => {
+        try {
+          const { ensureTableProps, renderTablePreview, openTableEditor } = await import('../tableEditor.js');
+          const t = ensureTableProps(b.props || ({}));
+          renderTablePreview(preview, t, { blockId: b.id });
+          btn.addEventListener('click', () => {
+            openTableEditor({ page, block: b, onClose: () => { try { renderTablePreview(preview, t, { blockId: b.id }); } catch {} } });
+          });
+          // Local helper: detect empty tables (all cells empty and headers are default/empty)
+          const isTableEmpty = (table) => {
+            if (!table || !Array.isArray(table.columns) || !Array.isArray(table.rows)) return true;
+            // Cells: every cell empty/whitespace
+            const allCellsEmpty = (table.rows || []).every(r => {
+              const cells = Array.isArray(r?.cells) ? r.cells : [];
+              return cells.every(c => String(c || '').trim() === '');
+            });
+            if (!allCellsEmpty) return false;
+            // Columns: each name empty or default placeholder
+            const allColsDefault = (table.columns || []).every((col, i) => {
+              const name = String(col?.name || '').trim();
+              return name === '' || name === `Column ${i+1}`;
+            });
+            return allColsDefault;
+          };
+          const onDelete = async (e) => {
+            try { e.stopPropagation(); e.stopImmediatePropagation?.(); } catch {}
+            const table = t; // ensured props table above
+            const empty = isTableEmpty(table);
+            if (!empty) {
+              const ok = window.confirm('Delete this table? It contains content. This cannot be undone.');
+              if (!ok) return;
+            }
+            try {
+              const { deleteTableBlock } = await import('../tableEditor.js');
+              await deleteTableBlock({ page, blockId: b.id, rootEl, focus, renderStable });
+            } catch (err) { console.error('delete table failed', err); }
+          };
+          del.addEventListener('click', onDelete);
+        } catch (err) { console.error('table preview failed', err); }
+      })().catch(()=>{});
     } else if (b.type === 'section') {
       const lvl = Math.min(3, Math.max(0, Number((b.props && b.props.level) || 0)));
       const header = document.createElement('div');
@@ -822,9 +928,14 @@ export function renderBlocksEdit(rootEl, page, blocks) {
   setCurrentPageBlocks(blocks);
   try {
     const host = rootEl.parentElement;
-    const { created, refs } = ensureEditorToolbar(host, rootEl);
+    const { created, refs, toolbarEl } = ensureEditorToolbar(host, rootEl);
     const outline = buildOutlineIndex();
-    if (created) bindToolbarActions({ page, rootEl, refs, outline });
+    // Bind toolbar actions exactly once per toolbar DOM node
+    const tb = toolbarEl || host?.querySelector?.('#editorToolbar') || null;
+    if (tb && tb.dataset.boundToolbarActions !== '1') {
+      bindToolbarActions({ page, rootEl, refs, outline });
+      tb.dataset.boundToolbarActions = '1';
+    }
   } catch {}
 
   ensureFocusTracker(rootEl);

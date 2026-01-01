@@ -65,6 +65,53 @@ export function renderBlocksReadOnly(rootEl, blocks) {
     if (n.type === 'divider') {
       return document.createElement('hr');
     }
+    if (n.type === 'table') {
+      const wrap = document.createElement('div');
+      wrap.className = 'table-block-wrap';
+      wrap.style.overflowX = 'auto';
+      wrap.style.maxWidth = '100%';
+      const props = parseMaybeJson(n.propsJson) || {};
+      const table = (props && typeof props.table === 'object') ? props.table : { columns: [], rows: [], hasHeader: false };
+      const tbl = document.createElement('table');
+      tbl.className = 'table-block';
+      // Column widths
+      const cg = document.createElement('colgroup');
+      for (const col of (table.columns || [])) {
+        const c = document.createElement('col');
+        const w = String(col.width || 'auto');
+        c.className = `tb-col tb-col--${w.replace(/[^a-z0-9:]/g,'_')}`;
+        cg.appendChild(c);
+      }
+      tbl.appendChild(cg);
+      if (table.hasHeader) {
+        const thead = document.createElement('thead');
+        const tr = document.createElement('tr');
+        for (const col of (table.columns || [])) {
+          const th = document.createElement('th');
+          th.textContent = String(col.name || '');
+          tr.appendChild(th);
+        }
+        thead.appendChild(tr);
+        tbl.appendChild(thead);
+      }
+      const tbody = document.createElement('tbody');
+      for (const r of (table.rows || [])) {
+        const tr = document.createElement('tr');
+        for (let i = 0; i < (table.columns || []).length; i++) {
+          const td = document.createElement('td');
+          const s = (r.cells && r.cells[i]) ? String(r.cells[i]) : '';
+          try {
+            const nodes = buildWikiTextNodes(s, n.id);
+            if (nodes) nodes.forEach(node => td.appendChild(node)); else td.textContent = s;
+          } catch { td.textContent = s; }
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      tbl.appendChild(tbody);
+      wrap.appendChild(tbl);
+      return wrap;
+    }
     if (n.type === 'section') {
       const wrap = document.createElement('div');
       wrap.className = 'section-block';

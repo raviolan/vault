@@ -2,6 +2,7 @@ import { debouncePatch } from './state.js';
 import { apiCreateBlock, apiPatchBlock, apiDeleteBlock, apiReorder } from './apiBridge.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks } from '../../lib/pageStore.js';
 import { canUnwrapSectionTitle, opUnwrapSection } from './ops.js';
+import { ensureTableProps } from '../tableEditor.js';
 
 // Helper: insert a new empty paragraph as the FIRST child of a section.
 // Ensures it is placed at sort 0 and normalizes all sibling sorts so it becomes first.
@@ -40,6 +41,42 @@ export async function insertFirstChildParagraph({ page, sectionId, focus, render
     return created;
   } catch (err) {
     console.error('insertFirstChildParagraph failed', err);
+    throw err;
+  }
+}
+
+// Helper: insert a new table as the FIRST child of a section.
+// Mirrors insertFirstChildParagraph behavior and normalizes sibling sorts.
+export async function insertFirstChildTable({ page, sectionId, focus, renderStable, rootEl }) {
+  try {
+    const blocks = getCurrentPageBlocks();
+    const kids = blocks.filter(b => (b.parentId ?? null) === sectionId).sort((a,b) => a.sort - b.sort);
+    const created = await apiCreateBlock(page.id, {
+      type: 'table',
+      parentId: sectionId,
+      sort: 0,
+      props: { table: ensureTableProps({}) },
+      content: {}
+    });
+    setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
+    const newOrder = [created, ...kids];
+    const moves = newOrder.map((n, i) => ({ id: n.id, parentId: sectionId, sort: i }));
+    try {
+      setCurrentPageBlocks(getCurrentPageBlocks().map(b => {
+        const m = moves.find(mv => mv.id === b.id);
+        return m ? { ...b, parentId: m.parentId, sort: m.sort } : b;
+      }));
+    } catch {}
+    void apiReorder(page.id, moves).catch(() => {});
+    const container = document.getElementById('pageBlocks') || rootEl;
+    if (renderStable) renderStable(created.id);
+    else if (container) {
+      try { (await import('./render.js')).stableRender(container, page, getCurrentPageBlocks(), created.id); } catch {}
+    }
+    if (focus) try { focus(created.id); } catch {}
+    return created;
+  } catch (err) {
+    console.error('insertFirstChildTable failed', err);
     throw err;
   }
 }
