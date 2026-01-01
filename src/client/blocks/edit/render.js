@@ -216,11 +216,11 @@ function restoreSelection(sel) {
   } catch {}
 }
 
-export function stableRender(rootEl, page, blocks, preferFocusId = null) {
+export function stableRender(rootEl, page, blocks, preferFocusId = null, opts = {}) {
   const scroller = getScrollContainer(rootEl);
   const anchor = captureAnchor(rootEl, scroller);
   const sel = captureSelection();
-  renderBlocksEdit(rootEl, page, blocks);
+  renderBlocksEdit(rootEl, page, blocks, opts);
   requestAnimationFrame(() => {
     try { restoreAnchor(rootEl, scroller, anchor); } catch {}
     if (preferFocusId) {
@@ -302,7 +302,7 @@ function ensureEditorToolbar(hostEl, rootEl) {
 }
 
 // PRIVATE: outline helpers; returns helpers used by toolbar and render
-function buildOutlineIndex() {
+function buildOutlineIndex(rootParentId = null) {
   function getById(all, id) { return all.find(x => String(x.id) === String(id)); }
   function getProps(b) { return b?.props || parseMaybeJson(b?.propsJson) || {}; }
   function getLevel(b) { const p = getProps(b); return Number(p.level || 0) || 0; }
@@ -321,20 +321,20 @@ function buildOutlineIndex() {
   }
   function computeHeadingInsert(all, cur, desiredLevel) {
     if (!cur) {
-      const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
+      const roots = all.filter(b => (b.parentId ?? null) === (rootParentId ?? null)).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
       const last = roots[roots.length-1] || null;
-      return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
+      return { parentId: (rootParentId ?? null), sortBase: last ? Number(last.sort||0) : -1 };
     }
     const path = getPathToRoot(all, cur);
     const ancestors = path.filter(n => n.type === 'section');
     let parentId = null;
     if (desiredLevel === 1) {
-      parentId = null;
+      parentId = (rootParentId ?? null);
     } else {
       const want = desiredLevel - 1;
       let parentSec = ancestors.find(s => getLevel(s) === want);
       if (!parentSec) parentSec = ancestors.find(s => getLevel(s) > 0 && getLevel(s) < desiredLevel) || null;
-      parentId = parentSec ? parentSec.id : null;
+      parentId = parentSec ? parentSec.id : (rootParentId ?? null);
     }
     const directChild = firstInPathWithParent(path, parentId);
     const sortBase = directChild ? Number(directChild.sort||0) : (
@@ -347,26 +347,26 @@ function buildOutlineIndex() {
   }
   function computeBodyInsert(all, cur) {
     if (!cur) {
-      const roots = all.filter(b => (b.parentId ?? null) === null).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
+      const roots = all.filter(b => (b.parentId ?? null) === (rootParentId ?? null)).sort((a,b)=>Number(a.sort||0)-Number(b.sort||0));
       const last = roots[roots.length-1] || null;
-      return { parentId: null, sortBase: last ? Number(last.sort||0) : -1 };
+      return { parentId: (rootParentId ?? null), sortBase: last ? Number(last.sort||0) : -1 };
     }
-    if ((cur.parentId ?? null) === null) return { parentId: null, sortBase: Number(cur.sort||0) };
+    if ((cur.parentId ?? null) === (rootParentId ?? null)) return { parentId: (rootParentId ?? null), sortBase: Number(cur.sort||0) };
     if (cur.type === 'section') {
       return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
     }
     const path = getPathToRoot(all, cur);
     const nearestSection = path.find(n => n.type === 'section');
     if (nearestSection) {
-      return { parentId: nearestSection.parentId ?? null, sortBase: Number(nearestSection.sort || 0) };
+      return { parentId: nearestSection.parentId ?? (rootParentId ?? null), sortBase: Number(nearestSection.sort || 0) };
     }
-    return { parentId: cur.parentId ?? null, sortBase: Number(cur.sort || 0) };
+    return { parentId: cur.parentId ?? (rootParentId ?? null), sortBase: Number(cur.sort || 0) };
   }
   return { getById, getProps, getLevel, getParent, getPathToRoot, firstInPathWithParent, computeHeadingInsert, computeBodyInsert };
 }
 
 // PRIVATE: bind toolbar button/select actions (only once)
-function bindToolbarActions({ page, rootEl, refs, outline }) {
+function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
   const byRef = (k) => refs?.[k] || null;
   // Dev sanity check: ensure Table button ref exists
   try { if (!byRef('addTableBtnEl') && window.__DEV__) console.warn('Table button ref missing'); } catch {}
@@ -486,6 +486,7 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
       const id = activeBlockId;
       const all = getCurrentPageBlocks();
       const cur = id ? all.find(x => String(x.id) === String(id)) : null;
+      const outline = buildOutlineIndex(getRootParentId?.() || null);
       const { parentId, sortBase } = outline.computeHeadingInsert(all, cur, level);
       try {
         const { apiCreateBlock } = await import('./apiBridge.js');
@@ -506,6 +507,7 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
         await insertFirstChildParagraph({ page, sectionId: cur.id, rootEl });
         return;
       }
+      const outline = buildOutlineIndex(getRootParentId?.() || null);
       const { parentId, sortBase } = outline.computeBodyInsert(all, cur);
       const { apiCreateBlock } = await import('./apiBridge.js');
       const created = await apiCreateBlock(page.id, {
@@ -532,7 +534,8 @@ function bindToolbarActions({ page, rootEl, refs, outline }) {
         return;
       }
       // Deterministic insert-after-active logic (exactly below cursor block)
-      const parentId = cur ? (cur.parentId ?? null) : null;
+      const rootParentId = getRootParentId?.() || null;
+      const parentId = cur ? (cur.parentId ?? rootParentId) : rootParentId;
       const siblings = all.filter(b => (b.parentId ?? null) === parentId).sort((a,b) => Number(a.sort||0) - Number(b.sort||0));
       const idx = cur ? (siblings.findIndex(s => String(s.id) === String(cur.id)) + 1) : siblings.length;
       const { apiCreateBlock, apiReorder } = await import('./apiBridge.js');
@@ -924,16 +927,21 @@ function renderEditorDom({ rootEl, page }) {
 // PRIVATE: finalize step placeholder for parity
 function finalizeRender() { /* no-op; behavior unchanged */ }
 
-export function renderBlocksEdit(rootEl, page, blocks) {
+export function renderBlocksEdit(rootEl, page, blocks, opts = {}) {
   setCurrentPageBlocks(blocks);
   try {
     const host = rootEl.parentElement;
     const { created, refs, toolbarEl } = ensureEditorToolbar(host, rootEl);
-    const outline = buildOutlineIndex();
+    // Determine desired root parent for this editor; preserve previous if not provided
+    const desiredRoot = (opts && Object.prototype.hasOwnProperty.call(opts, 'rootParentId')) ? (opts.rootParentId ?? null) : (toolbarEl?.dataset?.rootParentId ?? null);
+    if (toolbarEl) toolbarEl.dataset.rootParentId = desiredRoot == null ? '' : String(desiredRoot);
     // Bind toolbar actions exactly once per toolbar DOM node
     const tb = toolbarEl || host?.querySelector?.('#editorToolbar') || null;
     if (tb && tb.dataset.boundToolbarActions !== '1') {
-      bindToolbarActions({ page, rootEl, refs, outline });
+      const getRootParentId = () => {
+        try { return (tb?.dataset?.rootParentId || '') || null; } catch { return null; }
+      };
+      bindToolbarActions({ page, rootEl, refs, getRootParentId });
       tb.dataset.boundToolbarActions = '1';
     }
   } catch {}

@@ -149,11 +149,43 @@ function initHeaderMedia(outlet, page) {
 }
 
 function initCharTabsAndSheet(outlet, page) {
-  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
+  const isNpc = (page.type === 'npc');
+  const isChar = (page.type === 'character' || page.type === 'pc');
+  const isCharLike = (isNpc || isChar);
   const tabsEl = document.getElementById('pageTabs');
   const sheetEl = document.getElementById('pageSheet');
   const blocksEl = document.getElementById('pageBlocks');
   const metaEl = outlet?.querySelector?.('p.meta') || null;
+
+  // Sentinel root id for NPC Sheet subtree
+  const NPC_SHEET_ROOT = '__npc_sheet__';
+
+  // Split helpers: partition all blocks into (content vs npcSheet) subtrees
+  function splitNpcSheetBlocks(all) {
+    const allBlocks = Array.isArray(all) ? all : [];
+    if (!allBlocks.length) return { contentBlocks: [], npcSheetBlocks: [] };
+    const children = new Map();
+    for (const b of allBlocks) {
+      const pid = (b.parentId == null ? null : String(b.parentId));
+      const arr = children.get(pid) || [];
+      arr.push(b);
+      children.set(pid, arr);
+    }
+    const roots = children.get(NPC_SHEET_ROOT) || [];
+    if (!roots.length) return { contentBlocks: allBlocks, npcSheetBlocks: [] };
+    const sheetIds = new Set();
+    const stack = roots.slice();
+    while (stack.length) {
+      const n = stack.pop();
+      if (!n || sheetIds.has(n.id)) continue;
+      sheetIds.add(n.id);
+      const kids = children.get(String(n.id)) || [];
+      for (const k of kids) stack.push(k);
+    }
+    const npcSheetBlocks = allBlocks.filter(b => sheetIds.has(b.id));
+    const contentBlocks = allBlocks.filter(b => !sheetIds.has(b.id));
+    return { contentBlocks, npcSheetBlocks };
+  }
 
   let sheetCache = null;
   let sheetLoaded = false;
@@ -169,6 +201,7 @@ function initCharTabsAndSheet(outlet, page) {
     return sheetCache;
   }
 
+  let currentTab = null;
   function setActiveTab(tab) {
     const st = getState() || {};
     const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
@@ -178,20 +211,89 @@ function initCharTabsAndSheet(outlet, page) {
       b.classList.toggle('is-active', b.dataset.tab === tab);
     }
 
-    if (tab === 'notes') {
-      if (sheetEl) sheetEl.hidden = true;
-      if (blocksEl) blocksEl.style.display = '';
-      if (metaEl) metaEl.style.display = '';
+    if (isNpc) {
+      // Before switching, merge edits from the previous tab back into page.blocks
+      try {
+        if (currentTab && currentTab !== tab) {
+          const edited = getCurrentPageBlocks();
+          const full = page.blocks || [];
+          const { contentBlocks, npcSheetBlocks } = splitNpcSheetBlocks(full);
+          if (currentTab === 'notes') {
+            // Merge edited content back, keep prior npc sheet
+            page.blocks = [...(Array.isArray(edited) ? edited : []), ...npcSheetBlocks];
+          } else if (currentTab === 'sheet') {
+            // Merge edited npc sheet back, keep prior content
+            page.blocks = [...contentBlocks, ...(Array.isArray(edited) ? edited : [])];
+          }
+        }
+      } catch {}
+      currentTab = tab;
+
+      // NPC: Sheet tab is a normal blocks editor bound to NPC sheet subtree
+      if (tab === 'notes') {
+        if (sheetEl) sheetEl.hidden = true;
+        if (blocksEl) blocksEl.style.display = '';
+        if (metaEl) metaEl.style.display = '';
+        try {
+          const all = getCurrentPageBlocks();
+          // When switching back to notes, ensure current store shows content-only blocks
+          const full = (page.blocks || []);
+          const { contentBlocks } = splitNpcSheetBlocks(full);
+          setCurrentPageBlocks(contentBlocks);
+        } catch {}
+      } else {
+        if (blocksEl) blocksEl.style.display = 'none';
+        if (sheetEl) sheetEl.hidden = false;
+        if (metaEl) metaEl.style.display = '';
+        void renderNpcSheetBlocks();
+      }
+      return;
     } else {
-      if (blocksEl) blocksEl.style.display = 'none';
-      if (sheetEl) sheetEl.hidden = false;
-      if (metaEl) metaEl.style.display = '';
-      void renderSheet();
+      // Character/PC: legacy stat sheet UI remains
+      if (tab === 'notes') {
+        if (sheetEl) sheetEl.hidden = true;
+        if (blocksEl) blocksEl.style.display = '';
+        if (metaEl) metaEl.style.display = '';
+      } else {
+        if (blocksEl) blocksEl.style.display = 'none';
+        if (sheetEl) sheetEl.hidden = false;
+        if (metaEl) metaEl.style.display = '';
+        void renderSheet();
+      }
+    }
+  }
+
+  async function renderNpcSheetBlocks() {
+    if (!sheetEl) return;
+    // Render normal block editor into the sheet host, using a custom rootParentId
+    const editing = isEditingPage(page.id);
+    const { stableRender } = await import('../blocks/edit/render.js');
+    const full = (page.blocks || []);
+    const { npcSheetBlocks } = splitNpcSheetBlocks(full);
+    // Ensure store is set to the NPC sheet subset before rendering
+    setCurrentPageBlocks(npcSheetBlocks);
+    // Find/create a stable host inside the sheet container
+    let host = sheetEl.querySelector('#npcSheetBlocksHost');
+    if (!host) {
+      sheetEl.innerHTML = `<div id="npcSheetBlocksHost"></div>`;
+      host = sheetEl.querySelector('#npcSheetBlocksHost');
+    }
+    if (editing) {
+      // Render editor into sheetEl with rootParentId sentinel
+      stableRender(host, page, getCurrentPageBlocks(), null, { rootParentId: NPC_SHEET_ROOT });
+    } else {
+      // Render read-only into sheetEl
+      try {
+        const { renderBlocksReadOnly } = await import('../blocks/readOnly.js');
+        host.innerHTML = '';
+        renderBlocksReadOnly(host, getCurrentPageBlocks());
+      } catch {}
     }
   }
 
   async function renderSheet() {
     if (!sheetEl) return;
+    if (isNpc) { return renderNpcSheetBlocks(); }
     const sheet = await loadSheet();
     const editing = isEditingPage(page.id);
 
@@ -309,6 +411,24 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
     if (now) {
       try { setUiMode('edit'); } catch {}
       enablePageTitleEdit(page);
+      // Re-select the correct block subset before rendering editor
+      try {
+        const st = getState() || {};
+        const activeTab = st.pageTabsV1?.pages?.[page.id] || 'notes';
+        if (page.type === 'npc') {
+          const NPC_SHEET_ROOT = '__npc_sheet__';
+          const all = page.blocks || [];
+          const children = new Map();
+          for (const b of all) { const pid = (b.parentId == null ? null : String(b.parentId)); const arr = children.get(pid) || []; arr.push(b); children.set(pid, arr); }
+          const roots = children.get(NPC_SHEET_ROOT) || [];
+          const sheetIds = new Set();
+          const stack = roots.slice();
+          while (stack.length) { const n = stack.pop(); if (!n || sheetIds.has(n.id)) continue; sheetIds.add(n.id); const kids = children.get(String(n.id)) || []; for (const k of kids) stack.push(k); }
+          const npcSheetBlocks = all.filter(b => sheetIds.has(b.id));
+          const contentBlocks = all.filter(b => !sheetIds.has(b.id));
+          setCurrentPageBlocks(activeTab === 'sheet' ? npcSheetBlocks : contentBlocks);
+        }
+      } catch {}
       renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
       try { mountSaveIndicator(); } catch {}
       try { rerenderHeaderMedia?.(); } catch {}
@@ -320,6 +440,24 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
       try {
         const fresh = await refreshBlocksFromServer(page.id);
         if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
+        // After refresh resets current blocks to full, re-apply correct subset for NPC pages
+        try {
+          const st = getState() || {};
+          const activeTab = st.pageTabsV1?.pages?.[page.id] || 'notes';
+          if (page.type === 'npc') {
+            const NPC_SHEET_ROOT = '__npc_sheet__';
+            const all = fresh?.blocks || [];
+            const children = new Map();
+            for (const b of all) { const pid = (b.parentId == null ? null : String(b.parentId)); const arr = children.get(pid) || []; arr.push(b); children.set(pid, arr); }
+            const roots = children.get(NPC_SHEET_ROOT) || [];
+            const sheetIds = new Set();
+            const stack = roots.slice();
+            while (stack.length) { const n = stack.pop(); if (!n || sheetIds.has(n.id)) continue; sheetIds.add(n.id); const kids = children.get(String(n.id)) || []; for (const k of kids) stack.push(k); }
+            const npcSheetBlocks = all.filter(b => sheetIds.has(b.id));
+            const contentBlocks = all.filter(b => !sheetIds.has(b.id));
+            setCurrentPageBlocks(activeTab === 'sheet' ? npcSheetBlocks : contentBlocks);
+          }
+        } catch {}
       } catch (e) { console.error('Failed to refresh blocks from server', e); }
       renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
       try { unmountSaveIndicator(); } catch {}
@@ -447,7 +585,27 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   const { isCharLike, renderSheet } = initCharTabsAndSheet(outlet, page);
 
   const blocksRoot = document.getElementById('pageBlocks');
-  setCurrentPageBlocks(page.blocks || []);
+  // Initialize current blocks respecting NPC sheet split and active tab
+  try {
+    const st = getState() || {};
+    const saved = st.pageTabsV1?.pages?.[page.id];
+    const activeTab = (page.type === 'npc') ? (saved === 'sheet' ? 'sheet' : 'notes') : 'notes';
+    if (page.type === 'npc') {
+      const NPC_SHEET_ROOT = '__npc_sheet__';
+      const all = page.blocks || [];
+      const children = new Map();
+      for (const b of all) { const pid = (b.parentId == null ? null : String(b.parentId)); const arr = children.get(pid) || []; arr.push(b); children.set(pid, arr); }
+      const roots = children.get(NPC_SHEET_ROOT) || [];
+      const sheetIds = new Set();
+      const stack = roots.slice();
+      while (stack.length) { const n = stack.pop(); if (!n || sheetIds.has(n.id)) continue; sheetIds.add(n.id); const kids = children.get(String(n.id)) || []; for (const k of kids) stack.push(k); }
+      const npcSheetBlocks = all.filter(b => sheetIds.has(b.id));
+      const contentBlocks = all.filter(b => !sheetIds.has(b.id));
+      setCurrentPageBlocks(activeTab === 'sheet' ? npcSheetBlocks : contentBlocks);
+    } else {
+      setCurrentPageBlocks(page.blocks || []);
+    }
+  } catch { setCurrentPageBlocks(page.blocks || []); }
   if (isEditingPage(page.id)) {
     setUiMode('edit');
     enablePageTitleEdit(page);
