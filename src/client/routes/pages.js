@@ -19,6 +19,7 @@ import { addPageToSection, removePageFromSection, normalizeSections } from '../l
 import { canonicalPageHref } from '../lib/pageUrl.js';
 import { setActivePage } from '../lib/activePage.js';
 import { setDocumentTitle } from '../lib/documentTitle.js';
+import { getPageSheet, patchPageSheet, setPageSheetCache } from '../lib/pageSheetStore.js';
 
 // ---------- Private helpers (pure refactor; no behavior change intended)
 
@@ -43,6 +44,7 @@ function renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar }) {
         <div class=\"name-col\"> 
           <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
           <div id=\"pageTags\" class=\"toolbar\"></div>
+          <div id=\"pageSheetHeaderFields\"></div>
         </div>
         
       </div>
@@ -64,8 +66,9 @@ function renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar }) {
       <div id=\"pageHeaderMedia\"></div>
       <div class=\"page-identity\" id=\"pageIdentity\"> 
         <div class=\"avatar-col\"></div>
-        <div class=\"name-col\">
+        <div class=\"name-col\"> 
           <h1 id=\"pageTitleView\">${escapeHtml(page.title)}</h1>
+          <div id=\"pageSheetHeaderFields\"></div>
         </div>
         
       </div>
@@ -192,13 +195,10 @@ function initCharTabsAndSheet(outlet, page) {
   let saveTimer = null;
 
   async function loadSheet() {
-    if (sheetLoaded) return sheetCache || {};
+    if (sheetLoaded && sheetCache) return sheetCache;
     sheetLoaded = true;
-    try {
-      const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`);
-      sheetCache = resp?.sheet || {};
-    } catch { sheetCache = {}; }
-    return sheetCache;
+    try { sheetCache = await getPageSheet(page.id); } catch { sheetCache = {}; }
+    return sheetCache || {};
   }
 
   let currentTab = null;
@@ -403,11 +403,8 @@ function initCharTabsAndSheet(outlet, page) {
           notes: notes ? notes.value : ''
         };
         try {
-          const resp = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, {
-            method: 'PATCH',
-            body: JSON.stringify(next),
-          });
-          sheetCache = resp?.sheet || sheetCache;
+          const sheet = await patchPageSheet(page.id, next);
+          sheetCache = sheet || sheetCache;
         } catch (e) {
           console.error('Failed to save sheet', e);
         }
@@ -428,14 +425,119 @@ function initCharTabsAndSheet(outlet, page) {
   }
 
   if (isCharLike) {
+    try {
+      const onSheetUpdate = (e) => {
+        if (String(e?.detail?.pageId || '') !== String(page.id)) return;
+        sheetCache = e.detail.sheet || sheetCache;
+        try {
+          const st = getState() || {};
+          const active = st.pageTabsV1?.pages?.[page.id] || 'notes';
+          if (active === 'sheet' && !isNpc) { void renderSheet(); }
+        } catch {}
+      };
+      window.addEventListener('vault:page-sheet-updated', onSheetUpdate);
+      // Store for cleanup
+      outlet.__onSheetUpdate = onSheetUpdate;
+    } catch {}
+    
     if (tabsEl) tabsEl.hidden = false;
     tabsEl?.querySelectorAll('.page-tab').forEach(btn => btn.onclick = () => setActiveTab(btn.dataset.tab));
     const st = getState() || {};
     const saved = st.pageTabsV1?.pages?.[page.id];
-    setActiveTab(saved === 'sheet' ? 'sheet' : 'notes');
+    let initialTab = (saved === 'sheet' ? 'sheet' : 'notes');
+    try {
+      // Support deep-link: ?tab=sheet or ?tab=notes (NPC only)
+      if (page.type === 'npc') {
+        const params = new URLSearchParams(window.location.search || '');
+        const qp = (params.get('tab') || '').toLowerCase();
+        if (qp === 'sheet' || qp === 'notes') initialTab = qp;
+      }
+    } catch {}
+    setActiveTab(initialTab);
   }
 
   return { isCharLike, renderSheet };
+}
+
+function initSheetHeaderFields(page) {
+  const host = document.getElementById('pageSheetHeaderFields');
+  if (!host) return () => {};
+  const isCharLike = (page.type === 'npc' || page.type === 'character' || page.type === 'pc');
+  if (!isCharLike) { host.innerHTML = ''; return () => {}; }
+
+  // Styling: compact row with wrap
+  try {
+    host.style.display = 'flex';
+    host.style.flexWrap = 'wrap';
+    host.style.gap = '8px';
+    host.style.marginTop = '6px';
+    host.style.alignItems = 'center';
+  } catch {}
+
+  let debounceTimer = null;
+  const saveDebounced = (patch) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => { void patchPageSheet(page.id, patch); }, 400);
+  };
+
+  async function render() {
+    const editing = isEditingPage(page.id);
+    let sheet = {};
+    try { sheet = await getPageSheet(page.id); } catch { sheet = {}; }
+
+    if (!editing) {
+      const ac = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
+      const hpMax = (sheet.hpMax ?? '') === null ? '' : String(sheet.hpMax ?? '');
+      const xp = (sheet.xpReward ?? '') === null ? '' : String(sheet.xpReward ?? '');
+      const tagline = String(sheet.tagline || '').trim();
+      const isNpc = (page.type === 'npc');
+      const chip = (label, val) => `<span class="chip" title="${label}">${label}: ${val || '—'}</span>`;
+      host.innerHTML = `
+        ${tagline ? `<div class="meta" style="opacity:0.9;">${escapeHtml(tagline)}</div>` : ''}
+        ${chip('AC', ac)}
+        ${chip('HP', hpMax)}
+        ${isNpc ? chip('XP', xp) : ''}
+      `;
+      return;
+    }
+
+    // Edit mode
+    host.innerHTML = `
+      <input id="hdrTagline" type="text" placeholder="Tagline" style="min-width:220px;" />
+      <label class="meta">AC <input id="hdrAc" type="number" inputmode="numeric" style="width:90px" /></label>
+      <label class="meta">HP <input id="hdrHpMax" type="number" inputmode="numeric" style="width:110px" /></label>
+      ${page.type === 'npc' ? `<label class="meta">XP <input id="hdrXp" type="number" inputmode="numeric" style="width:110px" /></label>` : ''}
+    `;
+    const tag = host.querySelector('#hdrTagline');
+    const ac = host.querySelector('#hdrAc');
+    const hp = host.querySelector('#hdrHpMax');
+    const xp = host.querySelector('#hdrXp');
+    if (tag) tag.value = String(sheet.tagline || '');
+    if (ac) ac.value = (sheet.ac ?? '') === null ? '' : String(sheet.ac ?? '');
+    if (hp) hp.value = (sheet.hpMax ?? '') === null ? '' : String(sheet.hpMax ?? '');
+    if (xp) xp.value = (sheet.xpReward ?? '') === null ? '' : String(sheet.xpReward ?? '');
+
+    const onInput = () => {
+      const patch = {
+        tagline: tag ? tag.value : undefined,
+        ac: ac ? ac.value : undefined,
+        hpMax: hp ? hp.value : undefined,
+        ...(xp ? { xpReward: xp.value } : {}),
+      };
+      saveDebounced(patch);
+    };
+    [tag, ac, hp, xp].filter(Boolean).forEach(el => el.addEventListener('input', onInput));
+  }
+
+  const onMode = () => void render();
+  const onUpdate = (e) => { if (String(e?.detail?.pageId || '') === String(page.id)) void render(); };
+  try { window.addEventListener('vault:modechange', onMode); } catch {}
+  try { window.addEventListener('vault:page-sheet-updated', onUpdate); } catch {}
+  void render();
+  return () => {
+    try { window.removeEventListener('vault:modechange', onMode); } catch {}
+    try { window.removeEventListener('vault:page-sheet-updated', onUpdate); } catch {}
+  };
 }
 
 function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, rerenderHeaderMedia, cheatHtml }) {
@@ -597,6 +699,7 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
     try { setUiMode(null); } catch {}
     try { unmountSaveIndicator(); } catch {}
     try { window.removeEventListener('vault:modechange', applyEditState); } catch {}
+    try { if (outlet.__onSheetUpdate) { window.removeEventListener('vault:page-sheet-updated', outlet.__onSheetUpdate); delete outlet.__onSheetUpdate; } } catch {}
     try {
       if (outlet.__editResizeHandler) {
         window.removeEventListener('resize', outlet.__editResizeHandler);
@@ -630,13 +733,21 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
 
   const rerenderHeaderMedia = initHeaderMedia(outlet, page);
   const { isCharLike, renderSheet } = initCharTabsAndSheet(outlet, page);
+  const cleanupSheetHeader = initSheetHeaderFields(page);
 
   const blocksRoot = document.getElementById('pageBlocks');
-  // Initialize current blocks respecting NPC sheet split and active tab
+  // Initialize current blocks respecting NPC sheet split and active tab (supports ?tab for NPC)
   try {
     const st = getState() || {};
     const saved = st.pageTabsV1?.pages?.[page.id];
-    const activeTab = (page.type === 'npc') ? (saved === 'sheet' ? 'sheet' : 'notes') : 'notes';
+    let activeTab = (page.type === 'npc') ? (saved === 'sheet' ? 'sheet' : 'notes') : 'notes';
+    try {
+      if (page.type === 'npc') {
+        const params = new URLSearchParams(window.location.search || '');
+        const qp = (params.get('tab') || '').toLowerCase();
+        if (qp === 'sheet' || qp === 'notes') activeTab = qp;
+      }
+    } catch {}
     if (page.type === 'npc') {
       const NPC_SHEET_ROOT = '__npc_sheet__';
       const all = page.blocks || [];
@@ -734,12 +845,13 @@ export async function renderPage({ match }) {
     return await renderPageBySlug({ match: [null, page.slug] });
   }
 
-  return await renderPageCore(page, {
+  const cleanup = await renderPageCore(page, {
     includeTagsToolbar: true,
     cheatHtml: `
         <div class="meta">Cheat Sheet — #Tags (e.g. #tavern #npc), [[Wikilinks]] (e.g. [[Bent Willow Tavern]]), Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>
       `,
   });
+  return cleanup;
 }
 
 export async function renderPageBySlug({ match }) {
@@ -749,10 +861,11 @@ export async function renderPageBySlug({ match }) {
   // Expose current page id for global Edit toggle
   try { setActivePage({ id: page.id, slug: page.slug || null, canEdit: true, kind: 'page' }); } catch {}
 
-  return await renderPageCore(page, {
+  const cleanup = await renderPageCore(page, {
     includeTagsToolbar: false,
     cheatHtml: `<div class="meta">Cheat Sheet — #Tags, [[Wikilinks]], Ctrl+Enter saves & exits, ⌥⏎ adds block, ⌥⇧⏎ adds section</div>`,
   });
+  return () => { try { cleanup?.(); } catch {}; };
 }
 
 export function enablePageTitleEdit(page) {

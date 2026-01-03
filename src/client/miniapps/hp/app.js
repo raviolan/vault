@@ -3,6 +3,8 @@ import { buildWikiTextNodes } from '../../features/wikiLinks.js';
 import { fetchJson } from '../../lib/http.js';
 import { renderBlocksReadOnly } from '../../blocks/readOnly.js';
 import { parseMaybeJson } from '../../blocks/tree.js';
+// Ensure sheet store listeners (BroadcastChannel/storage) are active in this tab
+import { getPageSheet } from '../../lib/pageSheetStore.js';
 
 const APP_ID = 'hp';
 
@@ -211,23 +213,36 @@ export const HpTrackerApp = {
         id: n.id || crypto.randomUUID(),
         kind: 'npc',
         pageId: String(n.pageId || ''),
+        pageSlug: typeof n.pageSlug === 'string' ? n.pageSlug : '',
         title: String(n.title || ''),
         ac: Number.isFinite(n.ac) ? n.ac : 0,
         hpMax: Number.isFinite(n.hpMax) ? n.hpMax : 0,
         hp: Number.isFinite(n.hp) ? n.hp : (Number.isFinite(n.hpMax) ? n.hpMax : 0),
+        xpReward: Number.isFinite(n.xpReward) ? n.xpReward : 0,
         avatarUrl: String(n.avatarUrl || ''),
+        // Damage log for pulled NPCs (same shape as enemies)
+        log: Array.isArray(n.log) ? n.log.map(l => ({ id: l.id || crypto.randomUUID(), who: l.who || '', dmg: Number(l.dmg) || 0, ts: l.ts || Date.now() })) : [],
       };
     }
 
     async function addNpcFromPage(page) {
       if (!page || !page.id) return;
       const avatarUrl = (page?.media?.profile?.url) ? String(page.media.profile.url) : '';
-      const allBlocks = Array.isArray(page.blocks) ? page.blocks : [];
-      const sheetBlocks = getNpcSheetBlocks(allBlocks);
-      const ac = extractStatFromBlocks(sheetBlocks, 'ac') ?? 0;
-      const hpMax = extractStatFromBlocks(sheetBlocks, 'hp') ?? 0;
+      let ac = 0, hpMax = 0;
+      let hasAc = false, hasHpMax = false;
+      try {
+        const sheet = await getPageSheet(page.id);
+        if (sheet && (sheet.ac ?? null) !== null) { ac = Number(sheet.ac) || 0; hasAc = true; }
+        if (sheet && (sheet.hpMax ?? null) !== null) { hpMax = Number(sheet.hpMax) || 0; hasHpMax = true; }
+      } catch {}
+      if (!hasAc || !hasHpMax) {
+        const allBlocks = Array.isArray(page.blocks) ? page.blocks : [];
+        const sheetBlocks = getNpcSheetBlocks(allBlocks);
+        if (!hasAc) ac = extractStatFromBlocks(sheetBlocks, 'ac') ?? 0;
+        if (!hasHpMax) hpMax = extractStatFromBlocks(sheetBlocks, 'hp') ?? 0;
+      }
       const hp = hpMax;
-      const entry = ensureNpcDefaults({ pageId: page.id, title: page.title || 'Untitled', ac, hpMax, hp, avatarUrl });
+      const entry = ensureNpcDefaults({ pageId: page.id, pageSlug: String(page.slug || ''), title: page.title || 'Untitled', ac, hpMax, hp, avatarUrl });
       state.npcs = (state.npcs || []).slice();
       state.npcs.push(entry);
       persist();
@@ -247,11 +262,34 @@ export const HpTrackerApp = {
       persist();
     }
 
+    // NPC log helpers
+    function addNpcLogEntry(npcId, who, dmg) {
+      const npc = (state.npcs || []).find(x => x.id === npcId);
+      if (!npc) return;
+      const amt = Math.max(0, Math.floor(Number(dmg) || 0));
+      if (!amt) return;
+      npc.log = Array.isArray(npc.log) ? npc.log.slice() : [];
+      npc.log.push({ id: crypto.randomUUID(), who: String(who || '').trim(), dmg: amt, ts: Date.now() });
+      persist();
+      renderList();
+    }
+    function removeNpcLogEntry(npcId, entryId) {
+      const npc = (state.npcs || []).find(x => x.id === npcId);
+      if (!npc) return;
+      npc.log = (Array.isArray(npc.log) ? npc.log : []).filter(l => l.id !== entryId);
+      persist();
+      renderList();
+    }
+
     function renderNpcCard(n) {
       n = ensureNpcDefaults(n);
       const card = document.createElement('div');
       card.className = 'hpEnemy hpNpcCard';
       card.dataset.id = n.id;
+      card.dataset.pageId = String(n.pageId || '');
+      // Ensure a reliable attribute for selectors
+      try { card.setAttribute('data-page-id', String(n.pageId || '')); } catch {}
+      if (n.pageSlug) card.dataset.pageSlug = String(n.pageSlug);
 
       const header = document.createElement('div');
       header.className = 'hpEnemyHeader';
@@ -280,12 +318,18 @@ export const HpTrackerApp = {
       acWrap.className = 'partyAcCircle hpCardAc';
       acWrap.title = 'Armor Class';
       acWrap.innerHTML = `<div class="partyAcLabel">AC</div><div class="partyAcVal">${String(Number.isFinite(n.ac) ? n.ac : 0)}</div>`;
+      const xpMeta = document.createElement('span');
+      xpMeta.className = 'meta hpNpcXp';
+      xpMeta.title = 'XP Reward';
+      // Prefer state-driven XP value when available
+      try { xpMeta.textContent = n.xpReward ? `XP ${Math.max(0, Math.floor(Number(n.xpReward) || 0))}` : ''; } catch { xpMeta.textContent = ''; }
       const removeBtn = document.createElement('button');
       removeBtn.className = 'chip';
       removeBtn.type = 'button';
       removeBtn.title = 'Remove';
       removeBtn.textContent = '×';
       right.appendChild(acWrap);
+      right.appendChild(xpMeta);
       // Scope AC badge text sizing to HP tracker only
       try {
         const _lab = acWrap.querySelector('.partyAcLabel');
@@ -297,6 +341,79 @@ export const HpTrackerApp = {
       header.appendChild(identity);
       header.appendChild(right);
       card.appendChild(header);
+
+      // Damage/Target/Remaining + progress + log UI (for pulled NPCs)
+      // Target is current HP (n.hp)
+      const npcTotal = sum(n.log || []);
+      const npcTarget = Math.max(0, Math.floor(Number(n.hp) || 0));
+      const npcDown = npcTarget > 0 && npcTotal >= npcTarget;
+
+      const npcStats = document.createElement('div');
+      npcStats.className = 'hpEnemyStats';
+      const npcDmgText = document.createElement('span');
+      const npcRemainText = document.createElement('span');
+      const npcRemaining = Math.max(0, npcTarget - npcTotal);
+      const npcOverkill = Math.max(0, npcTotal - npcTarget);
+      npcDmgText.textContent = `Damage ${npcTotal} / Target ${npcTarget}`;
+      npcRemainText.textContent = npcTarget > 0 ? (npcRemaining > 0 ? `Remaining ${npcRemaining}` : `Overkill +${npcOverkill}`) : 'Remaining —';
+      npcStats.appendChild(npcDmgText);
+      npcStats.appendChild(npcRemainText);
+      card.appendChild(npcStats);
+
+      const npcProg = document.createElement('progress');
+      npcProg.max = Math.max(1, npcTarget);
+      npcProg.value = Math.min(npcTotal, npcProg.max);
+      npcProg.style.width = '100%';
+      card.appendChild(npcProg);
+
+      const npcForm = document.createElement('form');
+      npcForm.className = 'hpForm';
+      const npcWhoInput = document.createElement('input');
+      npcWhoInput.type = 'text';
+      npcWhoInput.placeholder = 'who';
+      const npcDmgInput = document.createElement('input');
+      npcDmgInput.type = 'number';
+      npcDmgInput.step = '1';
+      npcDmgInput.min = '0';
+      npcDmgInput.inputMode = 'numeric';
+      npcDmgInput.placeholder = 'damage';
+      const npcAdd = document.createElement('button');
+      npcAdd.className = 'chip';
+      npcAdd.type = 'submit';
+      npcAdd.textContent = 'Add';
+      npcForm.appendChild(npcWhoInput);
+      npcForm.appendChild(npcDmgInput);
+      npcForm.appendChild(npcAdd);
+      card.appendChild(npcForm);
+      // Commit NPC damage entries on submit (persist + rerender like enemies)
+      npcForm.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        addNpcLogEntry(n.id, npcWhoInput.value, npcDmgInput.value);
+        try { npcDmgInput.value = ''; npcDmgInput.focus(); } catch {}
+      });
+
+      const npcLogEl = document.createElement('div');
+      npcLogEl.className = 'hpLog';
+      for (const entry of (n.log || [])) {
+        const row = document.createElement('div');
+        row.className = 'hpLogRow';
+        row.dataset.id = entry.id;
+        const left = document.createElement('div');
+        const who = String(entry.who || '').trim();
+        left.textContent = who ? `${who} – ${entry.dmg}` : String(entry.dmg);
+        const right = document.createElement('div');
+        const del = document.createElement('button');
+        del.className = 'chip';
+        del.title = 'Remove';
+        del.type = 'button';
+        del.textContent = '×';
+        right.appendChild(del);
+        row.appendChild(left);
+        row.appendChild(right);
+        npcLogEl.appendChild(row);
+        del.addEventListener('click', () => removeNpcLogEntry(n.id, entry.id));
+      }
+      card.appendChild(npcLogEl);
 
       // HP row (editable current HP with reset)
       const hpRow = document.createElement('div');
@@ -316,6 +433,7 @@ export const HpTrackerApp = {
       hpInp.value = String(Math.max(0, Math.floor(Number(n.hp) || 0)));
       const maxText = document.createElement('span');
       maxText.className = 'meta';
+      maxText.classList.add('hpNpcMaxText');
       maxText.textContent = `/ ${Math.max(0, Math.floor(Number(n.hpMax) || 0))}`;
       const resetBtn = document.createElement('button');
       resetBtn.className = 'chip';
@@ -341,13 +459,53 @@ export const HpTrackerApp = {
 
       // Wire up actions
       removeBtn.addEventListener('click', () => removeNpc(n.id));
-      hpInp.addEventListener('input', () => { const v = Math.max(0, Math.floor(Number(hpInp.value) || 0)); setNpcHp(n.id, v); });
+      hpInp.addEventListener('input', () => {
+        const v = Math.max(0, Math.floor(Number(hpInp.value) || 0));
+        setNpcHp(n.id, v);
+        // Update NPC log summary/progress to reflect new target (current HP)
+        const t = Math.max(0, v);
+        const total = sum(n.log || []);
+        const rem = Math.max(0, t - total);
+        const over = Math.max(0, total - t);
+        try {
+          npcDmgText.textContent = `Damage ${total} / Target ${t}`;
+          npcRemainText.textContent = t > 0 ? (rem > 0 ? `Remaining ${rem}` : `Overkill +${over}`) : 'Remaining —';
+          npcProg.max = Math.max(1, t);
+          npcProg.value = Math.min(total, npcProg.max);
+        } catch {}
+      });
       resetBtn.addEventListener('click', () => { setNpcHp(n.id, n.hpMax); hpInp.value = String(Math.max(0, Math.floor(Number(n.hpMax) || 0))); });
 
-      // Lazy-load current page to refresh AC/HPMax and render sheet
+      // Click-to-open (safe area only)
+      const isInteractive = (el) => {
+        if (!el || el === card) return false;
+        const tag = (el.tagName || '').toLowerCase();
+        if (['input','textarea','select','button','a','label','summary','details'].includes(tag)) return true;
+        if (el.hasAttribute && (el.hasAttribute('contenteditable') || el.getAttribute?.('role') === 'button')) return true;
+        // Avoid clicks inside the embedded sheet area
+        if (el.closest && (el.closest('.hpNpcBody') || el.closest('.noCardNav'))) return true;
+        return false;
+      };
+      card.addEventListener('click', (e) => {
+        // Only handle primary button clicks without modifier keys
+        if (e.button !== 0 || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        // Ignore when clicking on interactive controls
+        let cur = e.target;
+        while (cur && cur !== card) {
+          if (isInteractive(cur)) return;
+          cur = cur.parentElement;
+        }
+        const slug = String(n.pageSlug || '').trim();
+        const href = slug ? `/p/${encodeURIComponent(slug)}?tab=sheet` : `/page/${encodeURIComponent(String(n.pageId || ''))}?tab=sheet`;
+        try { window.open(href, '_blank', 'noopener'); } catch {}
+      });
+
+      // Lazy-load current page to refresh AC/HPMax/XP and render sheet
       (async () => {
         try {
           const page = await fetchJson(`/api/pages/${encodeURIComponent(n.pageId)}`);
+          // Persist slug if available and missing
+          if (!n.pageSlug && page?.slug) { n.pageSlug = String(page.slug); persist(); try { card.dataset.pageSlug = n.pageSlug; } catch {} }
           const avatarUrl = (page?.media?.profile?.url) ? String(page.media.profile.url) : '';
           if (avatarUrl && !n.avatarUrl) {
             try {
@@ -359,20 +517,29 @@ export const HpTrackerApp = {
               }
             } catch {}
           }
-          const blocks = Array.isArray(page.blocks) ? page.blocks : [];
-          const sheet = getNpcSheetBlocks(blocks);
-          // Extract AC/HP but do not overwrite current HP if user changed it
-          const ac = extractStatFromBlocks(sheet, 'ac') ?? n.ac;
-          const hpMax = extractStatFromBlocks(sheet, 'hp') ?? n.hpMax;
+          // Canonical sheet data
+          let sheetData = {};
+          try { sheetData = await getPageSheet(n.pageId); } catch { sheetData = {}; }
           const acValEl = acWrap.querySelector('.partyAcVal');
-          if (acValEl) acValEl.textContent = String(Math.max(0, Math.floor(Number(ac) || 0)));
-          if (Number.isFinite(hpMax) && hpMax !== n.hpMax) {
-            n.hpMax = Math.max(0, Math.floor(Number(hpMax) || 0));
+          if (acValEl) acValEl.textContent = String((sheetData.ac ?? '') === null ? '—' : (sheetData.ac ?? '—'));
+          // Update state with AC when available
+          if ((sheetData.ac ?? '') !== null) { const nextAc = Number(sheetData.ac) || 0; if (nextAc !== n.ac) { n.ac = nextAc; persist(); } }
+          const hpMaxVal = (sheetData.hpMax ?? '') === null ? null : Number(sheetData.hpMax);
+          if (Number.isFinite(hpMaxVal) && hpMaxVal !== n.hpMax) {
+            n.hpMax = Math.max(0, Math.floor(Number(hpMaxVal) || 0));
             maxText.textContent = `/ ${n.hpMax}`;
             persist();
           }
+          const xpVal = (sheetData.xpReward ?? '') === null ? '' : String(sheetData.xpReward ?? '');
+          // Persist xpReward to state and reflect in UI
+          const nextXp = Math.max(0, Math.floor(Number(xpVal) || 0));
+          if (Number.isFinite(nextXp) && nextXp !== n.xpReward) { n.xpReward = nextXp; persist(); }
+          try { xpMeta.textContent = nextXp ? `XP ${nextXp}` : ''; } catch {}
+          // Render NPC sheet blocks read-only as before
+          const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+          const npcSheetBlocks = getNpcSheetBlocks(blocks);
           body.innerHTML = '';
-          renderBlocksReadOnly(body, sheet);
+          renderBlocksReadOnly(body, npcSheetBlocks);
         } catch {
           body.innerHTML = '<div class="meta">Failed to load NPC sheet.</div>';
         }
@@ -620,10 +787,18 @@ export const HpTrackerApp = {
       return card;
     }
 
+    // Helper: all combatants (enemies + pulled NPCs)
+    const allCombatants = () => [
+      ...(state.enemies || []),
+      ...(state.npcs || []),
+    ];
+
     function computeTotalsByWho() {
       const map = new Map(); // key: lowercased who, value: { who,label,total }
-      for (const e of (state.enemies || [])) {
-        for (const entry of (e?.log || [])) {
+      // Aggregate logs across enemies and pulled NPCs
+      for (const c of allCombatants()) {
+        const logArr = Array.isArray(c?.log) ? c.log : [];
+        for (const entry of logArr) {
           const raw = String(entry?.who || '').trim();
           if (!raw) continue;
           const key = raw.toLowerCase();
@@ -637,7 +812,10 @@ export const HpTrackerApp = {
 
     function computeTotalXp() {
       let n = 0;
+      // Enemies XP
       for (const e of (state.enemies || [])) n += Math.max(0, Math.floor(Number(e?.xp) || 0));
+      // Pulled NPCs XP reward
+      for (const npc of (state.npcs || [])) n += Math.max(0, Math.floor(Number(npc?.xpReward) || 0));
       return n;
     }
 
@@ -745,7 +923,7 @@ export const HpTrackerApp = {
       list.innerHTML = '';
       const arr = Array.isArray(state.enemies) ? state.enemies : [];
       for (const e of arr) list.appendChild(renderEnemyCard(e));
-      // Summary card with totals by attacker across all enemies (render outside the enemy list)
+      // Summary card with totals by attacker across enemies + pulled NPCs (render outside the enemy list)
       totalsHost.innerHTML = '';
       totalsHost.appendChild(renderXpSummaryCard());
       totalsHost.appendChild(renderTotalsCard());
@@ -757,12 +935,70 @@ export const HpTrackerApp = {
     mountEl.innerHTML = '';
     mountEl.appendChild(root);
 
+    // Live sync updates from sheet edits elsewhere
+    const onSheetUpdated = (ev) => {
+      try {
+        const pageId = String(ev?.detail?.pageId || '');
+        const sheet = (ev?.detail?.sheet && typeof ev.detail.sheet === 'object') ? ev.detail.sheet : {};
+        if (!pageId) return;
+        // Temporary debug log (remove after confirm)
+        try { console.debug('[hp] sheet-updated', pageId, sheet); } catch {}
+        let changed = false;
+        const npcs = Array.isArray(state.npcs) ? state.npcs : [];
+        for (const n of npcs) {
+          if (String(n.pageId || '') !== pageId) continue;
+          // Update AC
+          const nextAc = Number(sheet.ac) || 0;
+          if (nextAc !== (Number.isFinite(n.ac) ? n.ac : 0)) { n.ac = nextAc; changed = true; }
+          // Update HP Max; if current HP equals previous max, move current HP to the new max
+          const prevHpMax = Number.isFinite(n.hpMax) ? n.hpMax : 0;
+          const nextHpMax = Math.max(0, Math.floor(Number(sheet.hpMax) || 0));
+          if (nextHpMax !== prevHpMax) {
+            n.hpMax = nextHpMax;
+            const curHp = Math.max(0, Math.floor(Number(n.hp) || 0));
+            if (curHp === prevHpMax) {
+              n.hp = nextHpMax;
+            }
+            changed = true;
+          }
+          // Update XP Reward if present (NPC only)
+          const nextXp = Math.max(0, Math.floor(Number(sheet.xpReward) || 0));
+          if (nextXp !== (Number.isFinite(n.xpReward) ? n.xpReward : 0)) { n.xpReward = nextXp; changed = true; }
+          // Patch visible DOM for this NPC card without full remount
+          try {
+            const sel = `[data-page-id="${CSS.escape(String(pageId))}"]`;
+            const cards = root.querySelectorAll(sel);
+            cards.forEach((card) => {
+              // AC badge value
+              try { const acValEl = card.querySelector('.hpCardAc .partyAcVal'); if (acValEl) acValEl.textContent = String(n.ac); } catch {}
+              // Max text
+              try { const maxText = card.querySelector('.hpNpcMaxText'); if (maxText) maxText.textContent = `/ ${n.hpMax}`; } catch {}
+              // XP meta
+              try { const xpMeta = card.querySelector('.hpNpcXp'); if (xpMeta) xpMeta.textContent = n.xpReward ? `XP ${n.xpReward}` : ''; } catch {}
+              // If hp changed due to rule above, update input and trigger input handler to refresh stats/progress
+              try {
+                const hpInp = card.querySelector('input[type="number"]');
+                const desired = String(Math.max(0, Math.floor(Number(n.hp) || 0)));
+                if (hpInp && hpInp.value !== desired) {
+                  hpInp.value = desired;
+                  hpInp.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              } catch {}
+            });
+          } catch {}
+        }
+        if (changed) { persist(); }
+      } catch {}
+    };
+    try { window.addEventListener('vault:page-sheet-updated', onSheetUpdated); } catch {}
+
     // Persist initial shape to namespace
     setAppState(APP_ID, state);
 
     return () => {
       try { addBtn.removeEventListener('click', addEnemy); } catch {}
       try { addNpcBtn.removeEventListener('click', () => void pickNpcPage()); } catch {}
+      try { window.removeEventListener('vault:page-sheet-updated', onSheetUpdated); } catch {}
       try { mountEl.innerHTML = ''; } catch {}
     };
   },

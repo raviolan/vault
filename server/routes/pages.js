@@ -93,13 +93,26 @@ export function routePages(req, res, ctx) {
       return (async () => {
         const body = JSON.parse(await readBody(req) || '{}');
         const toNumOrNull = (v) => (v === '' || v === null || v === undefined) ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
-        const next = {
-          ac: toNumOrNull(body.ac),
-          passivePerception: toNumOrNull(body.passivePerception),
-          passiveInsight: toNumOrNull(body.passiveInsight),
-          passiveInvestigation: toNumOrNull(body.passiveInvestigation),
-          notes: String(body.notes ?? '')
-        };
+        // Load existing sheet JSON to preserve unrelated keys
+        let prev = {};
+        try {
+          const row = ctx.db.prepare('SELECT sheet_json FROM page_sheets WHERE page_id=?').get(pageId);
+          prev = row?.sheet_json ? JSON.parse(row.sheet_json) : {};
+        } catch { prev = {}; }
+
+        // Build patch: only coerce known fields; leave others intact
+        const patch = {};
+        if ('ac' in body) patch.ac = toNumOrNull(body.ac);
+        if ('passivePerception' in body) patch.passivePerception = toNumOrNull(body.passivePerception);
+        if ('passiveInsight' in body) patch.passiveInsight = toNumOrNull(body.passiveInsight);
+        if ('passiveInvestigation' in body) patch.passiveInvestigation = toNumOrNull(body.passiveInvestigation);
+        if ('notes' in body) patch.notes = String(body.notes ?? '');
+        // New fields
+        if ('tagline' in body) patch.tagline = String(body.tagline ?? '');
+        if ('hpMax' in body) patch.hpMax = toNumOrNull(body.hpMax);
+        if ('xpReward' in body) patch.xpReward = toNumOrNull(body.xpReward);
+
+        const next = { ...(prev || {}), ...patch };
         const ts = Math.floor(Date.now() / 1000);
         const json = JSON.stringify(next);
         const cur = ctx.db.prepare('SELECT page_id FROM page_sheets WHERE page_id=?').get(pageId);
