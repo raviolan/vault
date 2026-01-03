@@ -919,12 +919,6 @@ h4 {
     border-radius: var(--radius-4)
 }
 
-/* Tag Inspector detail card: compact full-width card inside accordion */
-.ti-detail-card {
-    padding: var(--space-4);
-    max-width: none;
-}
-
 /* Weather card: more app-like layout */
 .weather-card {
     display: flex;

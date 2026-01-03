@@ -1,7 +1,8 @@
 // Global keyboard shortcuts for the entire app
+import { getState } from '../lib/state.js';
 //
 // Shortcuts
-// - Option+B: Toggle privacy blur overlay
+// - Option+B: Privacy overlay — show header image fullscreen (fallback to blur)
 // - Option+Q: Collapse all left sidebar sections except the current section
 // - Option+D: Bookmark current page into Favorites (de-dupe by href)
 // - Option+E: Collapse/expand all subsections on current page
@@ -21,7 +22,17 @@ export function initGlobalShortcuts({ navigate, patchUserState, getUserState }) 
     const code = String(e.code || '');
     const key = String(e.key || '').toLowerCase();
 
-    // Option+B — privacy blur overlay
+    // Escape — close privacy overlay if open
+    if (!e.altKey && !e.metaKey && !e.ctrlKey && (key === 'escape' || code === 'Escape')) {
+      const ov = document.getElementById('dmPrivacyBlur');
+      if (ov && ov.style.display !== 'none') {
+        e.preventDefault();
+        ov.style.display = 'none';
+        return;
+      }
+    }
+
+    // Option+B — privacy overlay: show header image fullscreen (fallback to blur)
     if (e.altKey && !e.metaKey && !e.ctrlKey && (code === 'KeyB' || key === 'b')) {
       e.preventDefault();
       togglePrivacyBlur();
@@ -167,20 +178,118 @@ async function toggleAllSubsections() {
 function togglePrivacyBlur() {
   const id = 'dmPrivacyBlur';
   let el = document.getElementById(id);
+
+  // Always prefer the index (dashboard) header image from state
+  const getIndexHeaderImageSrc = () => {
+    try {
+      const st = getState();
+      const surf = st?.surfaceMediaV1?.surfaces?.dashboard || null;
+      const header = surf?.header || null;
+      const path = header?.path || null;
+      if (path) return `/media/${path}`;
+    } catch {}
+    return null;
+  };
+
   if (!el) {
+    // Create overlay on first toggle
     el = document.createElement('div');
     el.id = id;
     el.style.position = 'fixed';
     el.style.inset = '0';
     el.style.zIndex = '9999';
-    el.style.backdropFilter = 'blur(10px)';
-    el.style.webkitBackdropFilter = 'blur(10px)';
-    try { el.style.background = 'color-mix(in srgb, var(--bg) 55%, transparent)'; } catch {}
     el.style.pointerEvents = 'auto';
+
+    // Try to render the index header image fullscreen; otherwise fall back to blur
+    const src = getIndexHeaderImageSrc();
+    if (src) {
+      // Fullscreen image presentation (separate from lightbox)
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      // Soft tint backdrop without blur (kept separate from lightbox styles)
+      try { el.style.background = 'color-mix(in srgb, var(--bg) 55%, transparent)'; } catch {
+        el.style.background = 'rgba(0,0,0,0.18)';
+      }
+
+      const fig = document.createElement('figure');
+      fig.style.margin = '0';
+      fig.style.maxWidth = '92vw';
+      fig.style.maxHeight = '90vh';
+
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = src;
+      img.style.display = 'block';
+      img.style.maxWidth = '92vw';
+      img.style.maxHeight = '90vh';
+      img.style.width = 'auto';
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
+      img.style.borderRadius = '10px';
+      img.style.boxShadow = '0 12px 40px rgba(0,0,0,0.6)';
+
+      fig.appendChild(img);
+      el.appendChild(fig);
+    } else {
+      // Fallback: previous blur overlay behavior
+      el.style.backdropFilter = 'blur(10px)';
+      el.style.webkitBackdropFilter = 'blur(10px)';
+      try { el.style.background = 'color-mix(in srgb, var(--bg) 55%, transparent)'; } catch {}
+    }
+
+    // Click-to-close behavior (attach once; capture to prevent lightbox/openers)
+    if (!el.dataset?.clickCloseBound) {
+      el.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); try { el.style.display = 'none'; } catch {} }, true);
+      el.dataset.clickCloseBound = '1';
+    }
+
     document.body.appendChild(el);
     return;
   }
-  if (el.hasAttribute('hidden')) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
+
+  // Toggle visibility; when showing, refresh to index header image if available
+  if (el.style.display === 'none') {
+    el.style.display = '';
+    const src = getIndexHeaderImageSrc();
+    // Clear previous content/styles we control
+    while (el.firstChild) el.removeChild(el.firstChild);
+    el.style.backdropFilter = '';
+    el.style.webkitBackdropFilter = '';
+    if (src) {
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      try { el.style.background = 'color-mix(in srgb, var(--bg) 55%, transparent)'; } catch {
+        el.style.background = 'rgba(0,0,0,0.18)';
+      }
+      const fig = document.createElement('figure');
+      fig.style.margin = '0';
+      fig.style.maxWidth = '92vw';
+      fig.style.maxHeight = '90vh';
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = src;
+      img.style.display = 'block';
+      img.style.maxWidth = '92vw';
+      img.style.maxHeight = '90vh';
+      img.style.width = 'auto';
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
+      img.style.borderRadius = '10px';
+      img.style.boxShadow = '0 12px 40px rgba(0,0,0,0.6)';
+      fig.appendChild(img);
+      el.appendChild(fig);
+    } else {
+      // No header: use blur fallback
+      el.style.display = '';
+      try { el.style.background = 'color-mix(in srgb, var(--bg) 55%, transparent)'; } catch {}
+      el.style.backdropFilter = 'blur(10px)';
+      el.style.webkitBackdropFilter = 'blur(10px)';
+    }
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 function collapseLeftSectionsExceptActive() {
