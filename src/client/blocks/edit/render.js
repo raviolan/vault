@@ -247,6 +247,13 @@ export function stableRender(rootEl, page, blocks, preferFocusId = null, opts = 
 // PRIVATE: inject toolbar if missing and return references
 function ensureEditorToolbar(hostEl, rootEl) {
   if (!hostEl) return { created: false, toolbarEl: null, refs: {} };
+  // Ensure at most one toolbar per host; remove accidental duplicates
+  const existingList = hostEl.querySelectorAll('#editorToolbar');
+  if (existingList && existingList.length > 1) {
+    for (let i = 1; i < existingList.length; i++) {
+      try { existingList[i].remove(); } catch {}
+    }
+  }
   const existing = hostEl.querySelector('#editorToolbar');
   if (existing) {
     const byId = (id) => existing.querySelector(`#${id}`);
@@ -272,6 +279,8 @@ function ensureEditorToolbar(hostEl, rootEl) {
   const tb = document.createElement('div');
   tb.id = 'editorToolbar';
   tb.className = 'editor-toolbar';
+  // Attribute to associate toolbar with a specific root container
+  try { tb.dataset.forRoot = String(rootEl?.id || ''); } catch {}
   tb.innerHTML = `
         <div class="row">
           <select id="tbType">
@@ -505,8 +514,8 @@ function bindToolbarActions({ page, rootEl, refs, getRootParentId }) {
         const { apiCreateBlock } = await import('./apiBridge.js');
         const created = await apiCreateBlock(page.id, { type: 'section', parentId, sort: Number(sortBase || 0) + 1, props: { collapsed: false, level }, content: { title: '' } });
         setCurrentPageBlocks([...getCurrentPageBlocks(), created]);
-        const container = document.getElementById('pageBlocks') || rootEl;
-        stableRender(container, page, getCurrentPageBlocks(), created.id);
+        // Re-render within the current editor root only
+        stableRender(rootEl, page, getCurrentPageBlocks(), created.id);
       } catch (err) { console.error('toolbar create section failed', err); }
     };
   }

@@ -202,6 +202,32 @@ function initCharTabsAndSheet(outlet, page) {
   }
 
   let currentTab = null;
+  // Ensure only one visible toolbar inside the active editor host (NPC only)
+  function enforceActiveEditorToolbar(tab) {
+    try {
+      if (!isNpc) return; // Do not alter Character/PC behavior
+      const all = Array.from(document.querySelectorAll('#editorToolbar'));
+      if (!all.length) return;
+      // Determine active host for current tab
+      const notesRoot = document.getElementById('pageBlocks');
+      const sheetRoot = document.getElementById('pageSheet')?.querySelector?.('#npcSheetBlocksHost') || null;
+      const notesHost = notesRoot?.closest('[data-editor-host], .page-editor, .page-body, article.page') || notesRoot?.parentElement || null;
+      const sheetHost = sheetRoot?.closest('[data-editor-host], .page-sheet, .page-body, article.page') || document.getElementById('pageSheet') || null;
+      const activeHost = (tab === 'sheet') ? (sheetHost || document.getElementById('pageSheet')) : (notesHost || notesRoot?.parentElement || null);
+      // Hide toolbars not inside the active host
+      for (const tb of all) {
+        const show = !!(activeHost && activeHost.contains(tb));
+        tb.style.display = show ? '' : 'none';
+      }
+      // If multiple toolbars exist inside the active host, keep the first and remove extras
+      if (activeHost) {
+        const inHost = all.filter(tb => activeHost.contains(tb));
+        for (let i = 1; i < inHost.length; i++) {
+          try { inHost[i].remove(); } catch {}
+        }
+      }
+    } catch {}
+  }
   function setActiveTab(tab) {
     const st = getState() || {};
     const pages = (st.pageTabsV1?.pages && typeof st.pageTabsV1.pages === 'object') ? st.pageTabsV1.pages : {};
@@ -230,10 +256,13 @@ function initCharTabsAndSheet(outlet, page) {
       currentTab = tab;
 
       // NPC: Sheet tab is a normal blocks editor bound to NPC sheet subtree
+
       if (tab === 'notes') {
         if (sheetEl) sheetEl.hidden = true;
         if (blocksEl) blocksEl.style.display = '';
         if (metaEl) metaEl.style.display = '';
+        // Show only the toolbar within the active notes editor host
+        enforceActiveEditorToolbar('notes');
         try {
           const all = getCurrentPageBlocks();
           // When switching back to notes, ensure current store shows content-only blocks
@@ -245,6 +274,8 @@ function initCharTabsAndSheet(outlet, page) {
         if (blocksEl) blocksEl.style.display = 'none';
         if (sheetEl) sheetEl.hidden = false;
         if (metaEl) metaEl.style.display = '';
+        // Show only the toolbar within the active sheet editor host
+        enforceActiveEditorToolbar('sheet');
         void renderNpcSheetBlocks();
       }
       return;
@@ -281,6 +312,8 @@ function initCharTabsAndSheet(outlet, page) {
     if (editing) {
       // Render editor into sheetEl with rootParentId sentinel
       stableRender(host, page, getCurrentPageBlocks(), null, { rootParentId: NPC_SHEET_ROOT });
+      // After rendering, enforce single visible toolbar for the sheet host
+      enforceActiveEditorToolbar('sheet');
     } else {
       // Render read-only into sheetEl
       try {
@@ -438,31 +471,38 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
       disablePageTitleEdit(page);
       try { await flushDebouncedPatches(); } catch (e) { console.error('Failed to flush debounced patches', e); }
       try {
-        const fresh = await refreshBlocksFromServer(page.id);
-        if (fresh && (fresh.updatedAt || fresh.createdAt)) { page.updatedAt = fresh.updatedAt || fresh.createdAt; }
-        // After refresh resets current blocks to full, re-apply correct subset for NPC pages
-        try {
-          const st = getState() || {};
-          const activeTab = st.pageTabsV1?.pages?.[page.id] || 'notes';
-          if (page.type === 'npc') {
-            const NPC_SHEET_ROOT = '__npc_sheet__';
-            const all = fresh?.blocks || [];
-            const children = new Map();
-            for (const b of all) { const pid = (b.parentId == null ? null : String(b.parentId)); const arr = children.get(pid) || []; arr.push(b); children.set(pid, arr); }
-            const roots = children.get(NPC_SHEET_ROOT) || [];
-            const sheetIds = new Set();
-            const stack = roots.slice();
-            while (stack.length) { const n = stack.pop(); if (!n || sheetIds.has(n.id)) continue; sheetIds.add(n.id); const kids = children.get(String(n.id)) || []; for (const k of kids) stack.push(k); }
-            const npcSheetBlocks = all.filter(b => sheetIds.has(b.id));
-            const contentBlocks = all.filter(b => !sheetIds.has(b.id));
-            setCurrentPageBlocks(activeTab === 'sheet' ? npcSheetBlocks : contentBlocks);
-          }
-        } catch {}
-      } catch (e) { console.error('Failed to refresh blocks from server', e); }
+        // Merge current edits into page.blocks for NPC pages so view reflects changes immediately
+        const st = getState() || {};
+        const activeTab = st.pageTabsV1?.pages?.[page.id] || 'notes';
+        if (page.type === 'npc') {
+          // Split existing full set
+          const NPC_SHEET_ROOT = '__npc_sheet__';
+          const all = Array.isArray(page.blocks) ? page.blocks.slice() : [];
+          const children = new Map();
+          for (const b of all) { const pid = (b.parentId == null ? null : String(b.parentId)); const arr = children.get(pid) || []; arr.push(b); children.set(pid, arr); }
+          const roots = children.get(NPC_SHEET_ROOT) || [];
+          const sheetIds = new Set();
+          const stack = roots.slice();
+          while (stack.length) { const n = stack.pop(); if (!n || sheetIds.has(n.id)) continue; sheetIds.add(n.id); const kids = children.get(String(n.id)) || []; for (const k of kids) stack.push(k); }
+          const npcSheetBlocks = all.filter(b => sheetIds.has(b.id));
+          const contentBlocks = all.filter(b => !sheetIds.has(b.id));
+          const edited = Array.isArray(getCurrentPageBlocks()) ? getCurrentPageBlocks() : [];
+          // Merge back based on active tab
+          page.blocks = (activeTab === 'sheet') ? [...contentBlocks, ...edited] : [...edited, ...npcSheetBlocks];
+          // Ensure current store subset matches view mode subset
+          const nextSubset = (activeTab === 'sheet') ? edited : edited;
+          setCurrentPageBlocks(nextSubset);
+        } else {
+          // Non-NPC: leave as-is; optionally we could refresh later
+        }
+      } catch {}
+      // Render view from the local, merged store immediately
       renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
       try { unmountSaveIndicator(); } catch {}
       try { rerenderHeaderMedia?.(); } catch {}
       try { if (isCharLike && (getState()?.pageTabsV1?.pages?.[page.id] === 'sheet')) { await renderSheet(); } } catch {}
+      // Optionally refresh in background to update timestamps without clobbering current view
+      try { refreshBlocksFromServer(page.id).then((fresh) => { if (fresh && (fresh.updatedAt || fresh.createdAt)) page.updatedAt = fresh.updatedAt || fresh.createdAt; }).catch(() => {}); } catch {}
     }
   };
 
@@ -485,6 +525,13 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
       const bodyEl = article.querySelector('#pageBlocks');
       if (tagsEl) editorWrap.appendChild(tagsEl);
       if (bodyEl) editorWrap.appendChild(bodyEl);
+      // Move any existing toolbar for #pageBlocks into the new editor host to avoid stray/duplicate toolbars
+      try {
+        const strayTb = document.querySelector('#editorToolbar[data-for-root="pageBlocks"]');
+        if (strayTb && !editorWrap.contains(strayTb)) {
+          editorWrap.insertBefore(strayTb, bodyEl || editorWrap.firstChild);
+        }
+      } catch {}
       const controls = document.createElement('div');
       controls.className = 'editor-add-controls';
       controls.innerHTML = `

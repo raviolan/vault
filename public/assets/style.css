@@ -733,6 +733,33 @@ body[data-mode='edit'] .main>#outlet>section.page.page--hp {
     gap: var(--space-2);
 }
 
+/* HP Tracker: AC badge text sizing (scoped) */
+.hpTracker .hpCardAc {
+    /* ensure centered content inside the badge */
+    display: grid;
+    align-items: center;
+    justify-items: center;
+}
+
+.hpTracker .hpCardAcLabel {
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.hpTracker .hpCardAcValue {
+    /* clamp to avoid comically large digits */
+    font-size: clamp(12px, 1.8vw, 18px);
+    line-height: 1;
+    font-weight: 900;
+}
+
+.hpTracker .hpCardAc, .hpTracker .hpCardAc * {
+    overflow: hidden;
+}
+
 .hpEnemyInputs {
     display: grid;
     grid-template-columns: 1fr 100px;
@@ -796,6 +823,15 @@ body[data-mode='edit'] .main>#outlet>section.page.page--hp {
     justify-content: space-between;
     gap: var(--space-2);
     font-size: 15px;
+}
+
+/* NPC cards within HP tracker */
+.hpNpcBody {
+    max-width: 100%;
+}
+.hpNpcBody .table-block-wrap {
+    overflow-x: auto;
+    max-width: 100%;
 }
 
 .hpLogRow .meta {

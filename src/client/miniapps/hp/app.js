@@ -1,5 +1,8 @@
 import { getAppState, setAppState } from '../../miniapps/state.js';
 import { buildWikiTextNodes } from '../../features/wikiLinks.js';
+import { fetchJson } from '../../lib/http.js';
+import { renderBlocksReadOnly } from '../../blocks/readOnly.js';
+import { parseMaybeJson } from '../../blocks/tree.js';
 
 const APP_ID = 'hp';
 
@@ -21,13 +24,14 @@ export const HpTrackerApp = {
     try { mountEl.style.overflow = 'auto'; mountEl.style.minHeight = '0'; } catch {}
 
     let state = (() => {
-      const raw = getAppState(APP_ID, { enemies: [], xpDivide: 0 });
+      const raw = getAppState(APP_ID, { enemies: [], xpDivide: 0, npcs: [] });
       if (raw && typeof raw === 'object') {
         const enemies = Array.isArray(raw.enemies) ? raw.enemies.slice() : [];
         const xpDivide = Number.isFinite(raw.xpDivide) ? raw.xpDivide : 0;
-        return { enemies, xpDivide };
+        const npcs = Array.isArray(raw.npcs) ? raw.npcs.slice() : [];
+        return { enemies, xpDivide, npcs };
       }
-      return { enemies: [], xpDivide: 0 };
+      return { enemies: [], xpDivide: 0, npcs: [] };
     })();
     const persist = debounce(() => setAppState(APP_ID, state), 250);
 
@@ -44,16 +48,338 @@ export const HpTrackerApp = {
     addBtn.className = 'chip';
     addBtn.type = 'button';
     addBtn.textContent = '+ Enemy';
+    const addNpcBtn = document.createElement('button');
+    addNpcBtn.className = 'chip';
+    addNpcBtn.type = 'button';
+    addNpcBtn.textContent = '+ NPC';
     bar.appendChild(title);
-    bar.appendChild(addBtn);
+    const btns = document.createElement('div');
+    btns.style.display = 'flex';
+    btns.style.gap = '8px';
+    btns.appendChild(addBtn);
+    btns.appendChild(addNpcBtn);
+    bar.appendChild(btns);
     root.appendChild(bar);
 
+    const npcList = document.createElement('div');
+    npcList.className = 'hpEnemyList';
+    root.appendChild(npcList);
     const list = document.createElement('div');
     list.className = 'hpEnemyList';
     root.appendChild(list);
     const totalsHost = document.createElement('div');
     totalsHost.className = 'hpTotalsHost';
     root.appendChild(totalsHost);
+
+    // ---------- NPC helpers
+    const NPC_SHEET_ROOT = '__npc_sheet__';
+
+    function getNpcSheetBlocks(all) {
+      const allBlocks = Array.isArray(all) ? all : [];
+      if (!allBlocks.length) return [];
+      const children = new Map();
+      for (const b of allBlocks) {
+        const pid = (b.parentId == null ? null : String(b.parentId));
+        const arr = children.get(pid) || [];
+        arr.push(b);
+        children.set(pid, arr);
+      }
+      const roots = children.get(NPC_SHEET_ROOT) || [];
+      if (!roots.length) return [];
+      const sheetIds = new Set();
+      const stack = roots.slice();
+      while (stack.length) {
+        const n = stack.pop();
+        if (!n || sheetIds.has(n.id)) continue;
+        sheetIds.add(n.id);
+        const kids = children.get(String(n.id)) || [];
+        for (const k of kids) stack.push(k);
+      }
+      const npcSheetBlocks = allBlocks.filter(b => sheetIds.has(b.id));
+      return npcSheetBlocks;
+    }
+
+    function extractStatFromBlocks(blocks, label) {
+      const want = String(label || '').toLowerCase();
+      const synonyms = want === 'hp' ? ['hp', 'hit points'] : (want === 'ac' ? ['ac', 'armor class'] : [want]);
+
+      // 1) Paragraph text like "HP: 27" or "AC 15"
+      for (const b of (blocks || [])) {
+        if (String(b.type) !== 'paragraph') continue;
+        const content = parseMaybeJson(b.contentJson) || {};
+        const props = parseMaybeJson(b.propsJson) || {};
+        const textRaw = (typeof props.html === 'string' && props.html.trim())
+          ? (() => { const d = document.createElement('div'); d.innerHTML = String(props.html); return d.textContent || ''; })()
+          : String(content.text || '');
+        const s = String(textRaw || '').toLowerCase();
+        if (!s) continue;
+        for (const lab of synonyms) {
+          const re = new RegExp(`\\b${lab.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*:?[\\s]*(-?\\d+)`);
+          const m = s.match(re);
+          if (m && m[1] != null) {
+            const n = parseInt(m[1], 10);
+            if (Number.isFinite(n)) return n;
+          }
+        }
+      }
+
+      // 2) Table with a header cell 'HP' / 'Hit Points' / 'AC'
+      for (const b of (blocks || [])) {
+        if (String(b.type) !== 'table') continue;
+        const props = parseMaybeJson(b.propsJson) || {};
+        const table = (props && typeof props.table === 'object') ? props.table : { columns: [], rows: [], hasHeader: false };
+        const cols = Array.isArray(table.columns) ? table.columns : [];
+        const rows = Array.isArray(table.rows) ? table.rows : [];
+        // Option A: header by column name
+        let colIdx = -1;
+        for (let i = 0; i < cols.length; i++) {
+          const nm = String(cols[i]?.name || '').trim().toLowerCase();
+          if (synonyms.includes(nm)) { colIdx = i; break; }
+        }
+        if (colIdx >= 0) {
+          for (const r of rows) {
+            const cell = (r?.cells && r.cells[colIdx]) ? String(r.cells[colIdx]) : '';
+            const n = parseInt(cell, 10);
+            if (Number.isFinite(n)) return n;
+          }
+        }
+        // Option B: two-column table with label in first col
+        if (cols.length >= 2) {
+          for (const r of rows) {
+            const a = String(r?.cells?.[0] || '').trim().toLowerCase();
+            const bval = String(r?.cells?.[1] || '').trim();
+            if (!a) continue;
+            if (synonyms.includes(a)) {
+              const n = parseInt(bval, 10);
+              if (Number.isFinite(n)) return n;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    async function pickNpcPage() {
+      // Lightweight modal similar to command palette, filtered to NPCs
+      const wrapId = 'npcPickWrap';
+      if (document.getElementById(wrapId)) document.getElementById(wrapId).remove();
+      const wrap = document.createElement('div');
+      wrap.id = wrapId;
+      wrap.style.display = '';
+      wrap.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1500;" data-role="overlay"></div>
+        <div style="position:fixed;z-index:1501;top:12%;left:50%;transform:translateX(-50%);width:680px;background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;box-shadow:0 16px 36px rgba(0,0,0,0.45);">
+          <div style="padding:8px 10px;border-bottom:1px solid #374151"><input id="npcPickInput" placeholder="Search NPCs…" style="width:100%;background:#0f172a;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px 10px;outline:none"/></div>
+          <div id="npcPickList" style="max-height:360px;overflow:auto;padding:8px 6px"></div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const overlay = wrap.querySelector('[data-role="overlay"]');
+      const input = wrap.querySelector('#npcPickInput');
+      const list = wrap.querySelector('#npcPickList');
+      let items = [];
+      let active = -1;
+      let timer;
+      function render() {
+        list.innerHTML = items.map((it, idx) => `<div class="search-item${idx===active?' active':''}" data-id="${it.id}" style="padding:8px 10px;border-radius:6px;cursor:pointer;">${it.title}</div>`).join('');
+        list.querySelectorAll('.search-item').forEach((el, idx) => {
+          el.addEventListener('mouseenter', () => { active = idx; render(); });
+          el.addEventListener('mousedown', (e) => e.preventDefault());
+          el.addEventListener('click', async () => { const id = el.getAttribute('data-id'); if (id) { cleanup(); const page = await fetchJson(`/api/pages/${encodeURIComponent(id)}`); await addNpcFromPage(page); } });
+        });
+      }
+      async function search(q) {
+        const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}`);
+        const raw = res?.results || [];
+        items = raw.filter(r => (r?.type === 'npc'));
+        active = items.length ? 0 : -1;
+        render();
+      }
+      function cleanup() { try { document.body.removeChild(wrap); } catch {} }
+      overlay.addEventListener('click', cleanup);
+      input.addEventListener('keydown', async (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); cleanup(); }
+        if (e.key === 'Enter') { e.preventDefault(); const it = items[active]; if (it) { cleanup(); const page = await fetchJson(`/api/pages/${encodeURIComponent(it.id)}`); await addNpcFromPage(page); } }
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) { active=(active+1)%items.length; render(); } }
+        if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length) { active=(active-1+items.length)%items.length; render(); } }
+      });
+      input.addEventListener('input', () => { clearTimeout(timer); const q=input.value.trim(); if (!q){items=[];active=-1;render();return;} timer=setTimeout(()=>void search(q), 150); });
+      setTimeout(() => input.focus(), 0);
+    }
+
+    function ensureNpcDefaults(n) {
+      return {
+        id: n.id || crypto.randomUUID(),
+        kind: 'npc',
+        pageId: String(n.pageId || ''),
+        title: String(n.title || ''),
+        ac: Number.isFinite(n.ac) ? n.ac : 0,
+        hpMax: Number.isFinite(n.hpMax) ? n.hpMax : 0,
+        hp: Number.isFinite(n.hp) ? n.hp : (Number.isFinite(n.hpMax) ? n.hpMax : 0),
+        avatarUrl: String(n.avatarUrl || ''),
+      };
+    }
+
+    async function addNpcFromPage(page) {
+      if (!page || !page.id) return;
+      const avatarUrl = (page?.media?.profile?.url) ? String(page.media.profile.url) : '';
+      const allBlocks = Array.isArray(page.blocks) ? page.blocks : [];
+      const sheetBlocks = getNpcSheetBlocks(allBlocks);
+      const ac = extractStatFromBlocks(sheetBlocks, 'ac') ?? 0;
+      const hpMax = extractStatFromBlocks(sheetBlocks, 'hp') ?? 0;
+      const hp = hpMax;
+      const entry = ensureNpcDefaults({ pageId: page.id, title: page.title || 'Untitled', ac, hpMax, hp, avatarUrl });
+      state.npcs = (state.npcs || []).slice();
+      state.npcs.push(entry);
+      persist();
+      renderList();
+    }
+
+    function removeNpc(id) {
+      state.npcs = (state.npcs || []).filter(x => x.id !== id);
+      persist();
+      renderList();
+    }
+
+    function setNpcHp(id, next) {
+      const n = state.npcs.find(x => x.id === id);
+      if (!n) return;
+      n.hp = Math.max(0, Math.floor(Number(next) || 0));
+      persist();
+    }
+
+    function renderNpcCard(n) {
+      n = ensureNpcDefaults(n);
+      const card = document.createElement('div');
+      card.className = 'hpEnemy hpNpcCard';
+      card.dataset.id = n.id;
+
+      const header = document.createElement('div');
+      header.className = 'hpEnemyHeader';
+      const identity = document.createElement('div');
+      identity.style.display = 'flex';
+      identity.style.alignItems = 'center';
+      identity.style.gap = '8px';
+      if (n.avatarUrl) {
+        const img = document.createElement('img');
+        img.src = n.avatarUrl;
+        img.alt = '';
+        img.style.width = '36px';
+        img.style.height = '36px';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '999px';
+        identity.appendChild(img);
+      }
+      const name = document.createElement('div');
+      name.textContent = n.title || 'Untitled';
+      identity.appendChild(name);
+      const right = document.createElement('div');
+      right.style.display = 'flex';
+      right.style.alignItems = 'center';
+      right.style.gap = '8px';
+      const acWrap = document.createElement('div');
+      acWrap.className = 'partyAcCircle hpCardAc';
+      acWrap.title = 'Armor Class';
+      acWrap.innerHTML = `<div class="partyAcLabel">AC</div><div class="partyAcVal">${String(Number.isFinite(n.ac) ? n.ac : 0)}</div>`;
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'chip';
+      removeBtn.type = 'button';
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '×';
+      right.appendChild(acWrap);
+      // Scope AC badge text sizing to HP tracker only
+      try {
+        const _lab = acWrap.querySelector('.partyAcLabel');
+        if (_lab) _lab.classList.add('hpCardAcLabel');
+        const _val = acWrap.querySelector('.partyAcVal');
+        if (_val) _val.classList.add('hpCardAcValue');
+      } catch {}
+      right.appendChild(removeBtn);
+      header.appendChild(identity);
+      header.appendChild(right);
+      card.appendChild(header);
+
+      // HP row (editable current HP with reset)
+      const hpRow = document.createElement('div');
+      hpRow.className = 'hpEnemyStats';
+      const left = document.createElement('span');
+      left.textContent = `HP`;
+      const rightHp = document.createElement('div');
+      rightHp.style.display = 'flex';
+      rightHp.style.alignItems = 'center';
+      rightHp.style.gap = '8px';
+      const hpInp = document.createElement('input');
+      hpInp.type = 'number';
+      hpInp.min = '0';
+      hpInp.step = '1';
+      hpInp.inputMode = 'numeric';
+      hpInp.style.width = '80px';
+      hpInp.value = String(Math.max(0, Math.floor(Number(n.hp) || 0)));
+      const maxText = document.createElement('span');
+      maxText.className = 'meta';
+      maxText.textContent = `/ ${Math.max(0, Math.floor(Number(n.hpMax) || 0))}`;
+      const resetBtn = document.createElement('button');
+      resetBtn.className = 'chip';
+      resetBtn.type = 'button';
+      resetBtn.textContent = 'Reset';
+      rightHp.appendChild(hpInp);
+      rightHp.appendChild(maxText);
+      rightHp.appendChild(resetBtn);
+      const statsWrap = document.createElement('div');
+      statsWrap.style.display = 'flex';
+      statsWrap.style.alignItems = 'center';
+      statsWrap.style.justifyContent = 'space-between';
+      statsWrap.style.gap = '8px';
+      statsWrap.appendChild(left);
+      statsWrap.appendChild(rightHp);
+      card.appendChild(statsWrap);
+
+      // Body: render NPC sheet blocks read-only
+      const body = document.createElement('div');
+      body.className = 'hpNpcBody';
+      body.innerHTML = '<div class="meta">Loading NPC sheet…</div>';
+      card.appendChild(body);
+
+      // Wire up actions
+      removeBtn.addEventListener('click', () => removeNpc(n.id));
+      hpInp.addEventListener('input', () => { const v = Math.max(0, Math.floor(Number(hpInp.value) || 0)); setNpcHp(n.id, v); });
+      resetBtn.addEventListener('click', () => { setNpcHp(n.id, n.hpMax); hpInp.value = String(Math.max(0, Math.floor(Number(n.hpMax) || 0))); });
+
+      // Lazy-load current page to refresh AC/HPMax and render sheet
+      (async () => {
+        try {
+          const page = await fetchJson(`/api/pages/${encodeURIComponent(n.pageId)}`);
+          const avatarUrl = (page?.media?.profile?.url) ? String(page.media.profile.url) : '';
+          if (avatarUrl && !n.avatarUrl) {
+            try {
+              const img = identity.querySelector('img');
+              if (!img) {
+                const image = document.createElement('img');
+                image.src = avatarUrl; image.alt=''; image.style.width='36px'; image.style.height='36px'; image.style.objectFit='cover'; image.style.borderRadius='999px';
+                identity.insertBefore(image, name);
+              }
+            } catch {}
+          }
+          const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+          const sheet = getNpcSheetBlocks(blocks);
+          // Extract AC/HP but do not overwrite current HP if user changed it
+          const ac = extractStatFromBlocks(sheet, 'ac') ?? n.ac;
+          const hpMax = extractStatFromBlocks(sheet, 'hp') ?? n.hpMax;
+          const acValEl = acWrap.querySelector('.partyAcVal');
+          if (acValEl) acValEl.textContent = String(Math.max(0, Math.floor(Number(ac) || 0)));
+          if (Number.isFinite(hpMax) && hpMax !== n.hpMax) {
+            n.hpMax = Math.max(0, Math.floor(Number(hpMax) || 0));
+            maxText.textContent = `/ ${n.hpMax}`;
+            persist();
+          }
+          body.innerHTML = '';
+          renderBlocksReadOnly(body, sheet);
+        } catch {
+          body.innerHTML = '<div class="meta">Failed to load NPC sheet.</div>';
+        }
+      })();
+
+      return card;
+    }
 
     function ensureEnemyDefaults(e) {
       return {
@@ -411,6 +737,11 @@ export const HpTrackerApp = {
     }
 
     function renderList() {
+      // NPCs first
+      npcList.innerHTML = '';
+      const npcs = Array.isArray(state.npcs) ? state.npcs : [];
+      for (const n of npcs) npcList.appendChild(renderNpcCard(n));
+      // Enemies below
       list.innerHTML = '';
       const arr = Array.isArray(state.enemies) ? state.enemies : [];
       for (const e of arr) list.appendChild(renderEnemyCard(e));
@@ -421,6 +752,7 @@ export const HpTrackerApp = {
     }
 
     addBtn.addEventListener('click', addEnemy);
+    addNpcBtn.addEventListener('click', () => void pickNpcPage());
     renderList();
     mountEl.innerHTML = '';
     mountEl.appendChild(root);
@@ -430,6 +762,7 @@ export const HpTrackerApp = {
 
     return () => {
       try { addBtn.removeEventListener('click', addEnemy); } catch {}
+      try { addNpcBtn.removeEventListener('click', () => void pickNpcPage()); } catch {}
       try { mountEl.innerHTML = ''; } catch {}
     };
   },
