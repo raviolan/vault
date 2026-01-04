@@ -1,6 +1,7 @@
 import { apiPatchBlock } from './apiBridge.js';
-import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
 import { parseMaybeJson } from '../tree.js';
+import { countAnnotationTokens } from '../../lib/sanitize.js';
+import { getCurrentPageBlocks, setCurrentPageBlocks, updateCurrentBlocks } from '../../lib/pageStore.js';
 
 // Track pending debounced operations so we can flush them on demand.
 // Structure: blockId -> { timer, fn, patch }
@@ -112,6 +113,25 @@ export function debouncePatch(blockId, patch, delay = 400) {
         const latestContent = parseMaybeJson(cur.contentJson);
         finalPatch.content = { ...(latestContent || {}), ...(pendingPatch.content || {}) };
       }
+
+      // Data-loss guard: if tokens drop from >0 to 0 unexpectedly, refuse to save
+      try {
+        const prevText = String(parseMaybeJson(cur.contentJson)?.text || '');
+        const nextText = (finalPatch?.content && 'text' in finalPatch.content)
+          ? String(finalPatch.content.text || '')
+          : prevText;
+        const before = countAnnotationTokens(prevText);
+        const after = countAnnotationTokens(nextText);
+        const droppedAll = (before.total > 0 && after.total === 0);
+        if (droppedAll && prevText !== nextText) {
+          // Abort this patch; keep local optimistic changes reverted to server truth
+          console.error('[guard] Refusing to save: would delete annotations', { blockId, before, after });
+          alert('Refusing to save because it would delete existing links/comments. Please reload.');
+          // Reset pending for this block without calling API
+          return;
+        }
+      } catch {}
+
       const updated = await apiPatchBlock(blockId, finalPatch);
       // Update local store with server-confirmed fields
       try {

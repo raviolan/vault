@@ -95,10 +95,12 @@ export function sanitizeRichHtml(html) {
     for (const el of all) {
       const tag = el.tagName.toUpperCase();
 
-      // Allow only specific <span> wrappers: inline-quote
+      // Allow only specific <span> wrappers: inline-quote, o5e-link, inline-comment
       if (tag === 'SPAN') {
         const cls = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean);
         const isInlineQuote = cls.includes('inline-quote');
+        const isO5e = cls.includes('o5e-link');
+        const isInlineComment = cls.includes('inline-comment');
         if (isInlineQuote) {
           // Strip all attributes except class, and reduce class to inline-quote only
           el.setAttribute('class', 'inline-quote');
@@ -106,6 +108,38 @@ export function sanitizeRichHtml(html) {
             const name = attr.name.toLowerCase();
             if (name !== 'class') el.removeAttribute(attr.name);
           }
+          continue;
+        }
+        if (isO5e) {
+          // Preserve minimal attributes for Open5e link spans
+          // Keep data-o5e-type and data-o5e-slug only; normalize class to include type modifier if present
+          const t = String((el.getAttribute('data-o5e-type') || '').toLowerCase());
+          const slug = String(el.getAttribute('data-o5e-slug') || '');
+          // Validate slug (alphanumeric + dash)
+          const safeSlug = /^[-a-z0-9]+$/.test(slug) ? slug : '';
+          // Normalize supported types
+          const allowedTypes = new Set(['spell','creature','condition','item','weapon','armor']);
+          const safeType = allowedTypes.has(t) ? t : (t ? 'spell' : '');
+          // Reduce attributes
+          el.setAttribute('class', `o5e-link${safeType ? ` o5e-${safeType}` : ''}`.trim());
+          // Remove all attrs first, then reapply minimal
+          for (const attr of Array.from(el.attributes)) { el.removeAttribute(attr.name); }
+          el.setAttribute('class', `o5e-link${safeType ? ` o5e-${safeType}` : ''}`.trim());
+          if (safeType) el.setAttribute('data-o5e-type', safeType);
+          if (safeSlug) el.setAttribute('data-o5e-slug', safeSlug);
+          continue;
+        }
+        if (isInlineComment) {
+          // Preserve minimal attributes for inline comments
+          const id = String(el.getAttribute('data-comment-id') || '');
+          // Basic UUID guard (optional, tolerate non-UUID to avoid data loss)
+          const okId = /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/.test(id) ? id : (id || '');
+          const text = el.getAttribute('data-comment');
+          for (const attr of Array.from(el.attributes)) { el.removeAttribute(attr.name); }
+          el.setAttribute('class', 'inline-comment');
+          if (okId) el.setAttribute('data-comment-id', okId);
+          // Preserve data-comment if present for hover UI (not serialized into token)
+          if (text != null) el.setAttribute('data-comment', String(text));
           continue;
         }
         // Other spans are unwrapped
@@ -149,13 +183,95 @@ export function sanitizeRichHtml(html) {
   }
 }
 
-export function plainTextFromHtmlContainer(el) {
+// Count tokens in canonical text form (used by save guard and tests)
+export function countAnnotationTokens(text) {
   try {
-    // Use innerText so it respects <br> as line breaks
-    return String(el.innerText || '')
-      .replace(/\u00A0/g, ' ')
-      .replace(/\s+$/g, ''); // trimEnd only
-  } catch {
+    const s = String(text || '');
+    const wikiId = (s.match(/\[\[page:[0-9a-fA-F-]{36}\|[^\]]*?\]\]/g) || []).length;
+    const o5e = (s.match(/\[\[o5e:([a-z]+):([a-z0-9-]+)\|[^\]]*?\]\]/gi) || []).length;
+    const cmt = (s.match(/\[\[cmt:[0-9a-fA-F-]{36}\|[^\]]*?\]\]/g) || []).length;
+    return { wikiId, o5e, cmt, total: wikiId + o5e + cmt };
+  } catch { return { wikiId: 0, o5e: 0, cmt: 0, total: 0 }; }
+}
+
+// Serialize a rich DOM back to canonical text, preserving inline tokens
+// Recognizes:
+// - <a.wikilink idlink data-page-id> => [[page:<uuid>|Label]]
+// - <a.wikilink.legacy data-token> => original token
+// - <span.o5e-link data-o5e-type data-o5e-slug> => [[o5e:type:slug|Label]]
+// - <span.inline-comment data-comment-id> => [[cmt:<uuid>|Label]]
+// - <span.inline-quote>...</span> => {{q: ...}}
+// - <br> => \n
+export function plainTextFromHtmlContainer(el) {
+  function serializeNode(n) {
+    if (!n) return '';
+    const nt = n.nodeType;
+    if (nt === Node.TEXT_NODE) {
+      return String(n.nodeValue || '');
+    }
+    if (nt === Node.ELEMENT_NODE) {
+      const tag = (n.tagName || '').toUpperCase();
+      const cl = (n.classList ? Array.from(n.classList) : []);
+      // Line break
+      if (tag === 'BR') return '\n';
+      // Wikilink (id form)
+      if (tag === 'A' && cl.includes('wikilink')) {
+        const token = n.getAttribute('data-token');
+        if (token) return String(token);
+        const mode = String(n.getAttribute('data-wiki') || '').toLowerCase();
+        if (mode === 'id') {
+          const id = n.getAttribute('data-page-id') || '';
+          const label = serializeChildren(n);
+          if (id && label != null) return `[[page:${id}|${label}]]`;
+        } else if (mode === 'title') {
+          const title = n.getAttribute('data-wiki-title') || '';
+          if (title) return `[[${title}]]`;
+        }
+        // Fallback: plain text
+        return serializeChildren(n);
+      }
+      // Open5e link span
+      if (tag === 'SPAN' && cl.includes('o5e-link')) {
+        const t = (n.getAttribute('data-o5e-type') || '').toLowerCase();
+        const slug = n.getAttribute('data-o5e-slug') || '';
+        const label = serializeChildren(n);
+        if (t && slug) return `[[o5e:${t}:${slug}|${label}]]`;
+        return label;
+      }
+      // Inline comment span
+      if (tag === 'SPAN' && cl.includes('inline-comment')) {
+        const id = n.getAttribute('data-comment-id') || '';
+        const label = serializeChildren(n);
+        if (id) return `[[cmt:${id}|${label}]]`;
+        return label;
+      }
+      // Inline quote wrapper
+      if (tag === 'SPAN' && cl.includes('inline-quote')) {
+        const inner = serializeChildren(n);
+        return `{{q: ${inner}}}`;
+      }
+      // For other allowed/unknown tags, serialize children recursively
+      return serializeChildren(n);
+    }
+    // Other nodes ignored
     return '';
+  }
+  function serializeChildren(el) {
+    let out = '';
+    const cs = el.childNodes || [];
+    for (let i = 0; i < cs.length; i++) out += serializeNode(cs[i]);
+    return out;
+  }
+  try {
+    const s = serializeChildren(el)
+      .replace(/\u00A0/g, ' ')
+      .replace(/\s+$/g, '');
+    return s;
+  } catch {
+    try {
+      return String(el.innerText || '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/\s+$/g, '');
+    } catch { return ''; }
   }
 }

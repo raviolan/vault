@@ -152,6 +152,42 @@ export function installWikiLinksContextMenu() {
                     debouncePatch(blockId, { content: { text }, props: { html } }, 0);
                     await flushDebouncedPatches();
                   }
+                  // Hydrate in-place: upgrade the just-inserted token to [[page:...|...]]
+                  // and linkify immediately so clicks navigate without refresh.
+                  try {
+                    const upgraded = page?.id ? `[[page:${page.id}|${label}]]` : null;
+                    const friendlyToken = friendly;
+                    if (upgraded) {
+                      // Replace first occurrence of the friendly token within text nodes
+                      const walker = document.createTreeWalker(editableEl, NodeFilter.SHOW_TEXT);
+                      let tn; let replaced = false;
+                      while ((tn = walker.nextNode())) {
+                        if (replaced) break;
+                        const s = tn.nodeValue || '';
+                        const j = s.indexOf(friendlyToken);
+                        if (j >= 0) {
+                          tn.nodeValue = s.slice(0, j) + upgraded + s.slice(j + friendlyToken.length);
+                          replaced = true;
+                        }
+                      }
+                      // Linkify wiki tokens inside the live editable element
+                      const walker2 = document.createTreeWalker(editableEl, NodeFilter.SHOW_TEXT);
+                      const nodes = [];
+                      let n;
+                      while ((n = walker2.nextNode())) {
+                        const str = n.nodeValue || '';
+                        const p = n.parentElement;
+                        if (!str || !p) continue;
+                        if (p.closest('a,code,pre,textarea,script,style,.inline-comment')) continue;
+                        if (!str.includes('[[') && !str.includes('#')) continue;
+                        nodes.push(n);
+                      }
+                      for (const tnode of nodes) {
+                        const frag = buildWikiTextNodes(tnode.nodeValue || '', blockId);
+                        if (frag && tnode.parentNode) tnode.parentNode.replaceChild(frag, tnode);
+                      }
+                    }
+                  } catch {}
                 } catch {}
               } else {
                 // True view mode: replace first occurrence in content.text and props.html if present

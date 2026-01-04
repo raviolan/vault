@@ -22,6 +22,7 @@ import { installWikiLinkHandler } from './features/wikiLinks.js';
 import { installContentLinksNewTab } from './features/contentLinksNewTab.js';
 import { installOpen5eSpellFeature } from './features/open5eSpells.js';
 import { installInlineComments } from './features/inlineComments.js';
+import { runAnnotationSmoke } from './features/smoke.js';
 import { installWikiLinksContextMenu } from './features/wikiLinksContextMenu.js';
 import { applyTheme, applyThemeMode } from './lib/theme.js';
 import { listThemes, getModeForThemeId } from './lib/themes.js';
@@ -62,6 +63,8 @@ export async function boot() {
   bindModalBasics('uploadErrorModal');
   try { installOpen5eSpellFeature(); } catch {}
   try { installInlineComments(); } catch {}
+  // Dev-only: regression smoke harness (opt-in via ?smoke=1)
+  try { const params = new URLSearchParams(window.location.search || ''); if (params.get('smoke') === '1') runAnnotationSmoke(); } catch {}
   await loadState();
   // Apply UI preferences on boot
   try { applyUiPrefsToBody(getState()); } catch {}

@@ -746,8 +746,14 @@ async function openOpen5eLinkModal({ type, slug }) {
       // Open page in new tab
       try { window.open(page.slug ? `/p/${encodeURIComponent(page.slug)}` : `/page/${encodeURIComponent(page.id)}`, '_blank'); } catch {}
     } catch (err) {
-      console.error('[o5e] create page failed', err);
-      alert('Failed to create page for this Open5e resource.');
+      try {
+        console.error('[o5e] create page failed', err);
+        if (window.__DEV__) {
+          console.debug('[o5e] create payload', { type: modal.dataset.o5eType || type, slug: modal.dataset.o5eSlug || slug, pageType: sel?.value || 'note' });
+        }
+      } catch {}
+      const msg = (err && err.message) ? String(err.message) : 'Unknown error';
+      alert(`Failed to create page for this Open5e resource.\n${msg}`);
     }
   };
   modal.style.display = 'block';
