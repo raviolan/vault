@@ -94,6 +94,7 @@ import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { registerSelectionMenuItem } from './selectionContextMenu.js';
 import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../lib/sanitize.js';
 import { debouncePatch, flushDebouncedPatches, patchBlockNow } from '../blocks/edit/state.js';
+import { buildWikiTextNodes } from './wikiLinks.js';
 
 // Single shared hovercard
 let hoverEl = null;
@@ -314,7 +315,7 @@ async function commitLink(modal) {
       const pos = start + token.length;
       try { ta.setSelectionRange(pos, pos); } catch {}
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-      // If this block also has rich HTML, mirror the replacement there to keep view consistent
+      // If this block also has rich HTML, mirror via normal pipeline (async; do not block UI)
       try {
         const blockId = st.blockId || ta?.dataset?.blockId || ta.closest?.('[data-block-id]')?.getAttribute?.('data-block-id') || '';
         if (blockId) {
@@ -335,8 +336,12 @@ async function commitLink(modal) {
               }
               if (replaced) {
                 const newHtml = tmp.innerHTML;
-                await apiPatchBlock(blockId, { props: { ...(props || {}), html: newHtml } });
                 updateCurrentBlocks(b => String(b.id) === String(blockId) ? { ...b, propsJson: JSON.stringify({ ...(props || {}), html: newHtml }) } : b);
+                try {
+                  debouncePatch(blockId, { props: { html: newHtml } }, 0);
+                } catch {
+                  void apiPatchBlock(blockId, { props: { ...(props || {}), html: newHtml } }).catch(() => {});
+                }
               }
             } catch {}
           }
@@ -375,12 +380,33 @@ async function commitLink(modal) {
                 }
               : b);
           } catch {}
-          if (typeof patchBlockNow === 'function') {
-            await patchBlockNow(blockId, { content: { text }, props: { html } });
-          } else {
-            debouncePatch(blockId, { content: { text }, props: { html } }, 0);
-            await flushDebouncedPatches();
-          }
+          // Trigger save pipeline asynchronously (UI should not wait)
+          try {
+            if (typeof patchBlockNow === 'function') {
+              // Fire and forget
+              void patchBlockNow(blockId, { content: { text }, props: { html } });
+            } else {
+              debouncePatch(blockId, { content: { text }, props: { html } }, 0);
+            }
+          } catch {}
+          // Immediately linkify tokens inside the live editable element for hover/preview
+          try {
+            const walker = document.createTreeWalker(editableEl, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            let n;
+            while ((n = walker.nextNode())) {
+              const s = n.nodeValue || '';
+              const p = n.parentElement;
+              if (!s || !p) continue;
+              if (p.closest('a,code,pre,textarea,script,style')) continue;
+              if (!s.includes('[[') && !s.includes('#')) continue;
+              nodes.push(n);
+            }
+            for (const tn of nodes) {
+              const frag = buildWikiTextNodes(tn.nodeValue || '', blockId);
+              if (frag && tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+            }
+          } catch {}
         } catch {}
       } else {
         const blk = getCurrentPageBlocks().find(b => String(b.id) === String(blockId));
@@ -414,9 +440,17 @@ async function commitLink(modal) {
             nextHtml = tmp.innerHTML;
           }
         } catch {}
-        await apiPatchBlock(blockId, { content: { ...(content || {}), text: nextText }, ...(nextHtml != null ? { props: { ...(props || {}), html: nextHtml } } : {}) });
+        // Optimistic update and instant re-render (read-only)
         updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: nextText }), ...(nextHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: nextHtml }) } : {}) } : b);
         rerenderReadOnlyNow();
+        // Persist without blocking UI
+        try {
+          if (typeof patchBlockNow === 'function') {
+            void patchBlockNow(blockId, { content: { text: nextText }, ...(nextHtml != null ? { props: { html: nextHtml } } : {}) });
+          } else {
+            debouncePatch(blockId, { content: { text: nextText }, ...(nextHtml != null ? { props: { html: nextHtml } } : {}) }, 0);
+          }
+        } catch {}
       }
     }
   } catch (e) {

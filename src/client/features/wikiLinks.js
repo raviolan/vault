@@ -8,6 +8,7 @@ import { refreshNav } from './nav.js';
 import { openModal, closeModal } from './modals.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { stableRender, refreshBlocksFromServer } from '../blocks/edit/index.js';
+import { debouncePatch } from '../blocks/edit/state.js';
 
 // Reset shared wikilink modal to default state each time it opens
 function resetWikilinkModal(modal) {
@@ -276,8 +277,10 @@ export async function resolveLegacyAndUpgrade(title, blockId, tokenString) {
         const upgraded = `[[page:${id}|${title}]]`;
         newText = text.slice(0, idx) + upgraded + text.slice(idx + tokenString.length);
       }
-      await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
+      // Optimistic update + async save
       updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
+      try { debouncePatch(blockId, { content: { text: newText } }, 0); } catch { void apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } }).catch(() => {}); }
+      try { await rerenderBlocksNow(blockId || null); } catch {}
     }
     await refreshNav();
     const href = slug ? `/p/${encodeURIComponent(slug)}` : `/page/${encodeURIComponent(id)}`;
@@ -336,15 +339,32 @@ export async function linkWikilinkToExisting({ title, blockId, token, page }) {
           newHtml = tmp.innerHTML;
         }
       } catch {}
-      await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText }, ...(newHtml != null ? { props: { ...(props || {}), html: newHtml } } : {}) });
+      // Optimistically update model and re-render immediately
       updateCurrentBlocks(b => b.id === blockId
         ? { ...b,
             contentJson: JSON.stringify({ ...(content || {}), text: newText }),
             ...(newHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: newHtml }) } : {})
           }
         : b);
+      try {
+        const root = document.getElementById('pageBlocks');
+        const editing = document?.body?.dataset?.mode === 'edit';
+        const pageId = document?.body?.dataset?.activePageId || null;
+        if (root && editing && pageId) {
+          const pageObj = { id: pageId };
+          stableRender(root, pageObj, getCurrentPageBlocks(), blockId || null);
+        } else {
+          renderBlocksReadOnly(root, getCurrentPageBlocks());
+        }
+      } catch {}
+      // Trigger normal save pipeline (async)
+      try {
+        debouncePatch(blockId, { content: { text: newText }, ...(newHtml != null ? { props: { html: newHtml } } : {}) }, 0);
+      } catch {
+        void apiPatchBlock(blockId, { content: { ...(content || {}), text: newText }, ...(newHtml != null ? { props: { ...(props || {}), html: newHtml } } : {}) }).catch(() => {});
+      }
     }
-    // Re-render to reflect link resolution live
+    // Background refresh to reconcile if needed
     await rerenderBlocksNow(blockId || null);
   } catch (e) {
     console.error('Failed to link wikilink to existing page', e);
@@ -406,13 +426,28 @@ async function rerenderBlocksNow(preferFocusId = null) {
     const pageId = document?.body?.dataset?.activePageId;
     const editing = document?.body?.dataset?.mode === 'edit';
     if (!pageId) { rerenderReadOnly(); return; }
-    await refreshBlocksFromServer(pageId);
+    // Immediate local render first (do not wait on server)
     if (editing) {
       const page = { id: pageId };
       stableRender(root, page, getCurrentPageBlocks(), preferFocusId || null);
     } else {
       renderBlocksReadOnly(root, getCurrentPageBlocks());
     }
+    // Background refresh to reconcile state; render again when done
+    try {
+      refreshBlocksFromServer(pageId)
+        .then(() => {
+          try {
+            if (editing) {
+              const page = { id: pageId };
+              stableRender(root, page, getCurrentPageBlocks(), preferFocusId || null);
+            } else {
+              renderBlocksReadOnly(root, getCurrentPageBlocks());
+            }
+          } catch {}
+        })
+        .catch(() => {});
+    } catch {}
   } catch {}
 }
 
@@ -449,14 +484,17 @@ async function revertWikilinkToPlain({ blockId, token, title }) {
         newHtml = tmp.innerHTML;
       }
     } catch {}
-    await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText }, ...(newHtml != null ? { props: { ...(props || {}), html: newHtml } } : {}) });
+    // Optimistic model update
     updateCurrentBlocks(b => b.id === blockId
       ? { ...b,
           contentJson: JSON.stringify({ ...(content || {}), text: newText }),
           ...(newHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: newHtml }) } : {})
         }
       : b);
-    await rerenderBlocksNow(blockId || null);
+    try { await rerenderBlocksNow(blockId || null); } catch {}
+    // Async save through normal pipeline
+    try { debouncePatch(blockId, { content: { text: newText }, ...(newHtml != null ? { props: { html: newHtml } } : {}) }, 0); }
+    catch { void apiPatchBlock(blockId, { content: { ...(content || {}), text: newText }, ...(newHtml != null ? { props: { ...(props || {}), html: newHtml } } : {}) }).catch(() => {}); }
   } catch (e) {
     console.error('Failed to revert wikilink', e);
     alert('Failed to revert wikilink: ' + (e?.message || e));
@@ -467,7 +505,7 @@ async function createPageForWikilink({ title, blockId, token, type }) {
   try {
     const page = await fetchJson('/api/pages', { method: 'POST', body: JSON.stringify({ title, type }) });
     const id = page.id;
-    if (blockId) {
+  if (blockId) {
       // Keep user-friendly token in editor: [[Title]] (no id)
       const blk = getCurrentPageBlocks().find(b => b.id === blockId);
       const content = parseMaybeJson(blk?.contentJson);
@@ -478,8 +516,9 @@ async function createPageForWikilink({ title, blockId, token, type }) {
         const friendly = `[[${title}]]`;
         newText = text.slice(0, idx) + friendly + text.slice(idx + token.length);
       }
-      await apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } });
       updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: newText }) } : b);
+      try { debouncePatch(blockId, { content: { text: newText } }, 0); } catch { void apiPatchBlock(blockId, { content: { ...(content || {}), text: newText } }).catch(() => {}); }
+      try { await rerenderBlocksNow(blockId || null); } catch {}
     }
     // Optionally apply bulk resolution if requested via modal controls
     try {
