@@ -112,9 +112,39 @@ async function insertCommentInTextarea({ ta, start, end, label, text }) {
   const pos = start + token.length;
   try { ta.setSelectionRange(pos, pos); } catch {}
   ta.dispatchEvent(new Event('input', { bubbles: true }));
-  // Persist comment text on props
+  // Persist comment text on props and mirror token into props.html when present
   const blockId = ta?.dataset?.blockId || ta.closest?.('[data-block-id]')?.getAttribute?.('data-block-id') || '';
-  if (blockId) await upsertCommentProps(blockId, id, text);
+  if (blockId) {
+    try {
+      const blk = getBlockById(blockId);
+      const props = parsePropsJson(blk?.propsJson);
+      const comments = { ...(props?.comments || {}), [id]: String(text || '') };
+      let nextHtml = null;
+      const orig = String(label || '').trim();
+      try {
+        const html = String(props?.html || '');
+        if (html && orig && html.includes(orig)) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+          let tn; let replaced = false;
+          while ((tn = walker.nextNode())) {
+            if (replaced) break;
+            const s = tn.nodeValue || '';
+            const j = s.indexOf(orig);
+            if (j >= 0) { tn.nodeValue = s.slice(0, j) + token + s.slice(j + orig.length); replaced = true; }
+          }
+          if (replaced) nextHtml = tmp.innerHTML;
+        }
+      } catch {}
+      await apiPatchBlock(blockId, { props: { ...(props || {}), comments, ...(nextHtml != null ? { html: nextHtml } : {}) } });
+      // Optimistically update local store
+      localMergeBlock(blockId, { props: { ...(props || {}), comments, ...(nextHtml != null ? { html: nextHtml } : {}) } });
+    } catch {
+      // Fallback to simple comment text upsert
+      await upsertCommentProps(blockId, id, text);
+    }
+  }
 }
 
 async function insertCommentInView({ blockId, term, label, text }) {

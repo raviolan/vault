@@ -82,7 +82,9 @@ document.addEventListener('click', function(e) {
   if (!slug) return;
   e.preventDefault();
   e.stopPropagation();
-  openSpellDetails(slug);
+  // Open Open5e site in a new tab; fall back to details modal if blocked
+  try { window.open(`https://open5e.com/spells/${encodeURIComponent(slug)}/`, '_blank', 'noopener'); } catch {}
+  try { setTimeout(() => openSpellDetails(slug), 0); } catch {}
 });
 import { fetchJson } from '../lib/http.js';
 import { $, $$, escapeHtml } from '../lib/dom.js';
@@ -90,6 +92,8 @@ import { getCurrentPageBlocks, updateCurrentBlocks } from '../lib/pageStore.js';
 import { apiPatchBlock } from '../blocks/api.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { registerSelectionMenuItem } from './selectionContextMenu.js';
+import { sanitizeRichHtml, plainTextFromHtmlContainer } from '../lib/sanitize.js';
+import { debouncePatch, flushDebouncedPatches, patchBlockNow } from '../blocks/edit/state.js';
 
 // Single shared hovercard
 let hoverEl = null;
@@ -310,24 +314,110 @@ async function commitLink(modal) {
       const pos = start + token.length;
       try { ta.setSelectionRange(pos, pos); } catch {}
       ta.dispatchEvent(new Event('input', { bubbles: true }));
+      // If this block also has rich HTML, mirror the replacement there to keep view consistent
+      try {
+        const blockId = st.blockId || ta?.dataset?.blockId || ta.closest?.('[data-block-id]')?.getAttribute?.('data-block-id') || '';
+        if (blockId) {
+          const blk = getCurrentPageBlocks().find(b => String(b.id) === String(blockId));
+          const props = blk ? JSON.parse(blk.propsJson || '{}') : {};
+          const orig = String(st.selectedText || '').trim();
+          if (props && typeof props.html === 'string' && props.html && orig) {
+            try {
+              const tmp = document.createElement('div');
+              tmp.innerHTML = String(props.html);
+              const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+              let tn; let replaced = false;
+              while ((tn = walker.nextNode())) {
+                if (replaced) break;
+                const s = tn.nodeValue || '';
+                const j = s.indexOf(orig);
+                if (j >= 0) { tn.nodeValue = s.slice(0, j) + token + s.slice(j + orig.length); replaced = true; }
+              }
+              if (replaced) {
+                const newHtml = tmp.innerHTML;
+                await apiPatchBlock(blockId, { props: { ...(props || {}), html: newHtml } });
+                updateCurrentBlocks(b => String(b.id) === String(blockId) ? { ...b, propsJson: JSON.stringify({ ...(props || {}), html: newHtml }) } : b);
+              }
+            } catch {}
+          }
+        }
+      } catch {}
     } else if (st?.kind === 'view' && st.blockId) {
-      const blk = getCurrentPageBlocks().find(b => String(b.id) === String(st.blockId));
-      const content = JSON.parse(blk?.contentJson || '{}');
-      const raw = String(content?.text || '');
-      const term = String(st.selectedText || '').trim();
-      const occIdx = raw.indexOf(term);
-      if (occIdx < 0) throw new Error('Selection not found in block');
-      // Ensure occurs exactly once
-      if (raw.indexOf(term, occIdx + term.length) !== -1) {
-        alert('Term appears multiple times in this block. Edit to place precisely.');
-        return;
+      const blockId = st.blockId;
+      // Rich selection inside editor: replace DOM selection and persist html+text
+      if (st.editableEl && st.range) {
+        try {
+          const editableEl = st.editableEl;
+          const range = st.range;
+          const label = String(st.selectedText || sel.item?.name || sel.slug || '').trim();
+          const token = `[[o5e:spell:${sel.slug}|${label}]]`;
+          range.deleteContents();
+          range.insertNode(document.createTextNode(token));
+          try {
+            const selObj = window.getSelection();
+            selObj?.removeAllRanges();
+            const endRange = document.createRange();
+            endRange.selectNodeContents(editableEl);
+            endRange.collapse(false);
+            selObj?.addRange(endRange);
+          } catch {}
+          const html = sanitizeRichHtml(editableEl.innerHTML);
+          const text = plainTextFromHtmlContainer(editableEl);
+          try {
+            const blocks = getCurrentPageBlocks();
+            const blk = blocks.find(b => String(b.id) === String(blockId));
+            const content = blk ? JSON.parse(blk.contentJson || '{}') : {};
+            const props = blk ? JSON.parse(blk.propsJson || '{}') : {};
+            updateCurrentBlocks(b => String(b.id) === String(blockId)
+              ? { ...b,
+                  contentJson: JSON.stringify({ ...(content || {}), text }),
+                  propsJson: JSON.stringify({ ...(props || {}), html })
+                }
+              : b);
+          } catch {}
+          if (typeof patchBlockNow === 'function') {
+            await patchBlockNow(blockId, { content: { text }, props: { html } });
+          } else {
+            debouncePatch(blockId, { content: { text }, props: { html } }, 0);
+            await flushDebouncedPatches();
+          }
+        } catch {}
+      } else {
+        const blk = getCurrentPageBlocks().find(b => String(b.id) === String(blockId));
+        const content = JSON.parse(blk?.contentJson || '{}');
+        const props = JSON.parse(blk?.propsJson || '{}');
+        const raw = String(content?.text || '');
+        const term = String(st.selectedText || '').trim();
+        const occIdx = raw.indexOf(term);
+        if (occIdx < 0) throw new Error('Selection not found in block');
+        if (raw.indexOf(term, occIdx + term.length) !== -1) {
+          alert('Term appears multiple times in this block. Edit to place precisely.');
+          return;
+        }
+        const label = term || String(sel.item?.name || sel.slug);
+        const token = `[[o5e:spell:${sel.slug}|${label}]]`;
+        const nextText = raw.slice(0, occIdx) + token + raw.slice(occIdx + term.length);
+        let nextHtml = null;
+        try {
+          const html = String(props?.html || '');
+          if (html && term && html.includes(term)) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+            let tn; let replaced = false;
+            while ((tn = walker.nextNode())) {
+              if (replaced) break;
+              const s = tn.nodeValue || '';
+              const j = s.indexOf(term);
+              if (j >= 0) { tn.nodeValue = s.slice(0, j) + token + s.slice(j + term.length); replaced = true; }
+            }
+            nextHtml = tmp.innerHTML;
+          }
+        } catch {}
+        await apiPatchBlock(blockId, { content: { ...(content || {}), text: nextText }, ...(nextHtml != null ? { props: { ...(props || {}), html: nextHtml } } : {}) });
+        updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: nextText }), ...(nextHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: nextHtml }) } : {}) } : b);
+        rerenderReadOnlyNow();
       }
-      const label = term || String(sel.item?.name || sel.slug);
-      const token = `[[o5e:spell:${sel.slug}|${label}]]`;
-      const nextText = raw.slice(0, occIdx) + token + raw.slice(occIdx + term.length);
-      await apiPatchBlock(st.blockId, { content: { ...(content || {}), text: nextText } });
-      updateCurrentBlocks(b => b.id === st.blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: nextText }) } : b);
-      rerenderReadOnlyNow();
     }
   } catch (e) {
     console.error('[o5e] link commit failed', e);
@@ -340,7 +430,7 @@ async function commitLink(modal) {
 function openSpellModalWithContext(info) {
   const modal = getSpellModal();
   if (!modal) return;
-  setModalState(modal, { kind: info.kind, textarea: info.textarea || null, start: info.start, end: info.end, blockId: info.blockId || null, selectedText: info.text || '' });
+  setModalState(modal, { kind: info.kind, textarea: info.textarea || null, start: info.start, end: info.end, blockId: info.blockId || null, selectedText: info.text || '', editableEl: info.editableEl || null, range: info.range || null });
   const input = modal.querySelector('input[name="open5eSpellQuery"]');
   const allCb = modal.querySelector('input[name="open5eSpellAllSources"]');
   const queryText = info.text || '';
@@ -393,9 +483,9 @@ export function installOpen5eSpellFeature() {
       ),
       onClick: (ctx) => {
         if (ctx.kind === 'textarea') {
-          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || '') });
+          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || ''), blockId: ctx.blockId || (ctx.ta?.dataset?.blockId || '') });
         } else if (ctx.kind === 'view') {
-          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || '') });
+          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || ''), editableEl: ctx.editableEl || null, range: ctx.range || null });
         }
       }
     });
