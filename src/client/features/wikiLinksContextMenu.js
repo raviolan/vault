@@ -1,5 +1,5 @@
 import { registerSelectionMenuItem } from './selectionContextMenu.js';
-import { openWikilinkModal, linkWikilinkToExisting } from './wikiLinks.js';
+import { openWikilinkModal, linkWikilinkToExisting, buildWikiTextNodes } from './wikiLinks.js';
 import { updateCurrentBlocks, getCurrentPageBlocks } from '../lib/pageStore.js';
 import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { debouncePatch, flushDebouncedPatches, patchBlockNow } from '../blocks/edit/state.js';
@@ -70,24 +70,25 @@ export function installWikiLinksContextMenu() {
             mode: 'wikilink',
             onConfirmResolved: async ({ title, page }) => {
               const label = String(title || originallySelected);
-              const friendly = `[[${label}]]`;
-              // Insert into textarea and update local store
-              insertIntoTextarea(ta, start, end, friendly);
+              const newPageId = String(page?.id || '').trim();
+              const current = String(ta.value || '');
+              const next = applyInternalLinkAtRange(current, { start, end }, newPageId, label);
+              ta.value = next;
+              try { ta.focus(); } catch {}
+              try { ta.setSelectionRange(Math.min(next.length, end + 1), Math.min(next.length, end + 1)); } catch {}
+              try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
               try {
                 if (blockId) {
-                  updateCurrentBlocks(b => String(b.id) === String(blockId) ? { ...b, contentJson: JSON.stringify({ ...(JSON.parse(b.contentJson || '{}') || {}), text: ta.value }) } : b);
-                  // Persist immediately via editor pipeline
+                  updateCurrentBlocks(b => String(b.id) === String(blockId) ? { ...b, contentJson: JSON.stringify({ ...(JSON.parse(b.contentJson || '{}') || {}), text: next }) } : b);
                   if (typeof patchBlockNow === 'function') {
-                    await patchBlockNow(blockId, { content: { text: ta.value } });
+                    await patchBlockNow(blockId, { content: { text: next } });
                   } else {
-                    debouncePatch(blockId, { content: { text: ta.value } }, 0);
+                    debouncePatch(blockId, { content: { text: next } }, 0);
                     await flushDebouncedPatches();
                   }
                 }
               } catch {}
-              // Link resolution to existing page id mapping
-              await linkWikilinkToExisting({ title: label, blockId, token: friendly, page });
-              if (window.__DEV__) try { console.debug('[wikilinks] resolved from context menu', { blockId, token: friendly, page: page?.id || page }); } catch {}
+              if (window.__DEV__) try { console.debug('[wikilinks] resolved from context menu (textarea)', { blockId, newPageId, label }); } catch {}
             }
           });
         }, 0);
@@ -111,9 +112,19 @@ export function installWikiLinksContextMenu() {
                 try {
                   const editableEl = ctx.editableEl;
                   const range = ctx.range;
-                  // Replace current selection with the friendly token text
+                  // Expand selection if it's inside an existing idlink to avoid nesting
+                  try {
+                    const startHost = range.startContainer?.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+                    const endHost = range.endContainer?.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer;
+                    const anchorAtStart = startHost?.closest?.('a.wikilink.idlink');
+                    const anchorAtEnd = endHost?.closest?.('a.wikilink.idlink');
+                    const enclosing = anchorAtStart || anchorAtEnd;
+                    if (enclosing) range.selectNode(enclosing);
+                  } catch {}
+                  // Replace selection with canonical token directly
+                  const upgraded = page?.id ? `[[page:${page.id}|${label}]]` : friendly;
                   range.deleteContents();
-                  range.insertNode(document.createTextNode(friendly));
+                  range.insertNode(document.createTextNode(upgraded));
                   // Move caret to end of inserted text
                   try {
                     const sel = window.getSelection();
@@ -152,42 +163,24 @@ export function installWikiLinksContextMenu() {
                     debouncePatch(blockId, { content: { text }, props: { html } }, 0);
                     await flushDebouncedPatches();
                   }
-                  // Hydrate in-place: upgrade the just-inserted token to [[page:...|...]]
-                  // and linkify immediately so clicks navigate without refresh.
+                  // Linkify immediately so clicks navigate without refresh.
                   try {
-                    const upgraded = page?.id ? `[[page:${page.id}|${label}]]` : null;
-                    const friendlyToken = friendly;
-                    if (upgraded) {
-                      // Replace first occurrence of the friendly token within text nodes
-                      const walker = document.createTreeWalker(editableEl, NodeFilter.SHOW_TEXT);
-                      let tn; let replaced = false;
-                      while ((tn = walker.nextNode())) {
-                        if (replaced) break;
-                        const s = tn.nodeValue || '';
-                        const j = s.indexOf(friendlyToken);
-                        if (j >= 0) {
-                          tn.nodeValue = s.slice(0, j) + upgraded + s.slice(j + friendlyToken.length);
-                          replaced = true;
-                        }
-                      }
-                      // Linkify wiki tokens inside the live editable element
-                      const walker2 = document.createTreeWalker(editableEl, NodeFilter.SHOW_TEXT);
-                      const nodes = [];
-                      let n;
-                      while ((n = walker2.nextNode())) {
-                        const str = n.nodeValue || '';
-                        const p = n.parentElement;
-                        if (!str || !p) continue;
-                        if (p.closest('a,code,pre,textarea,script,style,.inline-comment')) continue;
-                        if (!str.includes('[[') && !str.includes('#')) continue;
-                        nodes.push(n);
-                      }
-                      for (const tnode of nodes) {
-                        const frag = buildWikiTextNodes(tnode.nodeValue || '', blockId);
-                        if (frag && tnode.parentNode) tnode.parentNode.replaceChild(frag, tnode);
-                      }
+                    const walker2 = document.createTreeWalker(editableEl, NodeFilter.SHOW_TEXT);
+                    const nodes = [];
+                    let n;
+                    while ((n = walker2.nextNode())) {
+                      const str = n.nodeValue || '';
+                      const p = n.parentElement;
+                      if (!str || !p) continue;
+                      if (p.closest('a,code,pre,textarea,script,style,.inline-comment')) continue;
+                      if (!str.includes('[[') && !str.includes('#')) continue;
+                      nodes.push(n);
                     }
-                  } catch {}
+                    for (const tnode of nodes) {
+                      const frag = buildWikiTextNodes(tnode.nodeValue || '', blockId);
+                      if (frag && tnode.parentNode) tnode.parentNode.replaceChild(frag, tnode);
+                    }
+                  } catch (e) { try { console.warn('[wikilinks] immediate relinkify failed', e); } catch {} }
                 } catch {}
               } else {
                 // True view mode: replace first occurrence in content.text and props.html if present
@@ -197,9 +190,8 @@ export function installWikiLinksContextMenu() {
                   const content = blk ? JSON.parse(blk.contentJson || '{}') : {};
                   const props = blk ? JSON.parse(blk.propsJson || '{}') : {};
                   const text = String(content?.text || '');
-                  const idx = text.indexOf(originallySelected);
-                  let newText = text;
-                  if (idx >= 0) newText = text.slice(0, idx) + friendly + text.slice(idx + originallySelected.length);
+                  const startIdx = text.indexOf(originallySelected);
+                  const newText = applyInternalLinkAtRange(text, { start: startIdx, end: startIdx >= 0 ? startIdx + originallySelected.length : startIdx }, String(page?.id || ''), label);
                   let newHtml = null;
                   if (props && typeof props.html === 'string' && props.html) {
                     try {
@@ -214,7 +206,8 @@ export function installWikiLinksContextMenu() {
                         const s = tn.nodeValue || '';
                         const j = s.indexOf(originallySelected);
                         if (j >= 0) {
-                          tn.nodeValue = s.slice(0, j) + friendly + s.slice(j + originallySelected.length);
+                          const upgraded = page?.id ? `[[page:${page.id}|${label}]]` : friendly;
+                          tn.nodeValue = s.slice(0, j) + upgraded + s.slice(j + originallySelected.length);
                           replaced = true;
                         }
                       }
@@ -237,13 +230,56 @@ export function installWikiLinksContextMenu() {
                   }
                 } catch {}
               }
-              // Link resolution to existing page id mapping
-              await linkWikilinkToExisting({ title: label, blockId, token: friendly, page });
-              if (window.__DEV__) try { console.debug('[wikilinks] resolved from context menu', { blockId, token: friendly, page: page?.id || page }); } catch {}
+              if (window.__DEV__) try { console.debug('[wikilinks] resolved from context menu (view)', { blockId, page: page?.id || page }); } catch {}
             }
           });
         }, 0);
       }
     }
   });
+}
+
+// --- Minimal helpers to make internal link apply idempotent in textarea/plain-text flows ---
+function findEnclosingWikiLink(text, start, end) {
+  const s = String(text || '');
+  const st = Math.max(0, Number.isFinite(start) ? start : 0);
+  const en = Math.max(st, Number.isFinite(end) ? end : st);
+  const left = s.lastIndexOf('[[', st);
+  if (left === -1) return null;
+  const right = s.indexOf(']]', en - 1);
+  if (right === -1) return null;
+  if (s.indexOf(']]', left) !== right) return null;
+  const inner = s.slice(left + 2, right);
+  if (/\n/.test(inner)) return null;
+  const mId = inner.match(/^page:([0-9a-fA-F-]{36})\|([\s\S]*)$/);
+  const mTitle = (!mId && inner.match(/^[^\]|][\s\S]*$/)) ? [null, null, inner] : null;
+  const kind = mId ? 'page' : (mTitle ? 'title' : null);
+  if (!kind) return null;
+  return { start: left, end: right + 2, kind, pageId: mId ? mId[1] : null, label: (mId ? mId[2] : (mTitle ? mTitle[2] : '')) };
+}
+
+function stripNestedFromLabel(label) {
+  const s = String(label || '');
+  let out = s;
+  const re1 = /^\s*\[\[page:([0-9a-fA-F-]{36})\|([^\]]*?)\]\]\s*$/;
+  const re2 = /^\s*\[\[([^\]]*?)\]\]\s*$/;
+  let m;
+  if ((m = out.match(re1))) out = m[2] || '';
+  else if ((m = out.match(re2))) out = m[1] || '';
+  return out;
+}
+
+export function applyInternalLinkAtRange(text, range, newPageId, newLabel) {
+  const s = String(text || '');
+  const start = Math.max(0, Number(range?.start ?? 0));
+  const end = Math.max(start, Number(range?.end ?? start));
+  const enc = findEnclosingWikiLink(s, start, end);
+  const label = stripNestedFromLabel(newLabel || (enc ? enc.label : s.slice(start, end)));
+  const replacement = newPageId ? `[[page:${newPageId}|${label}]]` : `[[${label}]]`;
+  if (enc) {
+    const curr = s.slice(enc.start, enc.end);
+    if (curr === replacement) return s;
+    return s.slice(0, enc.start) + replacement + s.slice(enc.end);
+  }
+  return s.slice(0, start) + replacement + s.slice(end);
 }

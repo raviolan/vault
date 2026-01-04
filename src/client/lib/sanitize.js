@@ -5,7 +5,9 @@
 const ALLOWED_TAGS = new Set(['STRONG', 'EM', 'A', 'BR']);
 const ALLOWED_ANCHOR_ATTRS = new Set([
   'href', 'target', 'rel',
-  'data-wiki', 'data-page-id', 'data-token', 'data-src-block'
+  'data-wiki', 'data-page-id', 'data-token', 'data-src-block',
+  // Preserve title metadata for unresolved wikilinks
+  'data-wiki-title'
 ]);
 
 function isSafeHref(href) {
@@ -214,20 +216,25 @@ export function plainTextFromHtmlContainer(el) {
       const cl = (n.classList ? Array.from(n.classList) : []);
       // Line break
       if (tag === 'BR') return '\n';
-      // Wikilink (id form)
-      if (tag === 'A' && cl.includes('wikilink')) {
+      // Wikilink anchors: recognize by data attributes (class may be stripped by sanitizer)
+      if (tag === 'A') {
+        // Legacy token preserved
         const token = n.getAttribute('data-token');
         if (token) return String(token);
         const mode = String(n.getAttribute('data-wiki') || '').toLowerCase();
-        if (mode === 'id') {
+        const hasId = !!(n.getAttribute('data-page-id') || '');
+        if (hasId || mode === 'id') {
           const id = n.getAttribute('data-page-id') || '';
           const label = serializeChildren(n);
           if (id && label != null) return `[[page:${id}|${label}]]`;
         } else if (mode === 'title') {
-          const title = n.getAttribute('data-wiki-title') || '';
+          // data-wiki-title may be stripped; fall back to visible label
+          const t = n.getAttribute('data-wiki-title');
+          const label = (t && t.trim()) ? t : serializeChildren(n);
+          const title = String(label || '').trim();
           if (title) return `[[${title}]]`;
         }
-        // Fallback: plain text
+        // Not a recognized wikilink: serialize children
         return serializeChildren(n);
       }
       // Open5e link span
@@ -263,7 +270,7 @@ export function plainTextFromHtmlContainer(el) {
     return out;
   }
   try {
-    const s = serializeChildren(el)
+    const s = normalizeNestedWikiTokens(serializeChildren(el))
       .replace(/\u00A0/g, ' ')
       .replace(/\s+$/g, '');
     return s;
@@ -274,4 +281,15 @@ export function plainTextFromHtmlContainer(el) {
         .replace(/\s+$/g, '');
     } catch { return ''; }
   }
+}
+
+// Minimal normalization shared: collapse nested identical [[page:ID|[[page:ID|LABEL]]]]
+function normalizeNestedWikiTokens(s) {
+  try {
+    let out = String(s || '');
+    const re = /\[\[page:([0-9a-fA-F-]{36})\|\s*\[\[page:\1\|([^\]]*?)\]\]\s*\]\]/g;
+    let prev;
+    do { prev = out; out = out.replace(re, '[[page:$1|$2]]'); } while (out !== prev);
+    return out;
+  } catch { return String(s || ''); }
 }

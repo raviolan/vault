@@ -57,7 +57,19 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
   return frag;
 }
 
+function normalizeNestedWikiTokens(s) {
+  try {
+    let out = String(s || '');
+    // Collapse nested identical page-id tokens: [[page:X|[[page:X|LABEL]]]] => [[page:X|LABEL]]
+    const re = /\[\[page:([0-9a-fA-F-]{36})\|\s*\[\[page:\1\|([^\]]*?)\]\]\s*\]\]/g;
+    let prev;
+    do { prev = out; out = out.replace(re, '[[page:$1|$2]]'); } while (out !== prev);
+    return out;
+  } catch { return String(s || ''); }
+}
+
 function buildWikiTextNodesCore(text, blockIdForLegacyReplace = null) {
+  text = normalizeNestedWikiTokens(text);
   const frag = document.createDocumentFragment();
   // Supported tokens:
   // - [[o5e:<type>:<slug>|Label]] (type: spell, creature, condition, item, weapon, armor)
@@ -311,7 +323,17 @@ export async function linkWikilinkToExisting({ title, blockId, token, page }) {
       const content = parseMaybeJson(blk?.contentJson);
       const props = parseMaybeJson(blk?.propsJson);
       const text = String(content?.text || '');
-      const upgraded = `[[page:${id}|${title}]]`;
+      const sanitizedLabel = stripNestedFromLabel(title);
+      // If token already looks like an id-token, avoid wrapping again; just normalize its label
+      let upgraded = `[[page:${id}|${sanitizedLabel}]]`;
+      try {
+        const m = String(token || '').match(/^\s*\[\[page:([0-9a-fA-F-]{36})\|([\s\S]*?)\]\]\s*$/);
+        if (m) {
+          const existingId = m[1];
+          const _existingLabel = m[2] || '';
+          upgraded = `[[page:${existingId}|${sanitizedLabel}]]`;
+        }
+      } catch {}
       const idx = text.indexOf(token);
       let newText = text;
       if (idx >= 0) {
@@ -371,6 +393,18 @@ export async function linkWikilinkToExisting({ title, blockId, token, page }) {
     console.error('Failed to link wikilink to existing page', e);
     alert('Failed to link: ' + (e?.message || e));
   }
+}
+
+// Ensure we never embed tokens in labels (prevents [[page:id|[[page:id|Label]]]])
+function stripNestedFromLabel(label) {
+  const s = String(label || '');
+  let out = s;
+  const re1 = /^\s*\[\[page:([0-9a-fA-F-]{36})\|([^\]]*?)\]\]\s*$/;
+  const re2 = /^\s*\[\[([^\]]*?)\]\]\s*$/;
+  let m;
+  if ((m = out.match(re1))) out = m[2] || '';
+  else if ((m = out.match(re2))) out = m[1] || '';
+  return out;
 }
 
 export function installWikiLinkHandler() {

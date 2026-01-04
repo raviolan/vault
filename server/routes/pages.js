@@ -111,6 +111,13 @@ export function routePages(req, res, ctx) {
         if ('tagline' in body) patch.tagline = String(body.tagline ?? '');
         if ('hpMax' in body) patch.hpMax = toNumOrNull(body.hpMax);
         if ('xpReward' in body) patch.xpReward = toNumOrNull(body.xpReward);
+        // Persist Open5e metadata if provided (objects as-is)
+        if (body && typeof body.open5eSource === 'object' && body.open5eSource) {
+          patch.open5eSource = body.open5eSource;
+        }
+        if (body && typeof body.open5eSnapshotV1 === 'object' && body.open5eSnapshotV1) {
+          patch.open5eSnapshotV1 = body.open5eSnapshotV1;
+        }
 
         const next = { ...(prev || {}), ...patch };
         const ts = Math.floor(Date.now() / 1000);

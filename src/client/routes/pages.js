@@ -20,7 +20,158 @@ import { canonicalPageHref } from '../lib/pageUrl.js';
 import { setActivePage } from '../lib/activePage.js';
 import { setDocumentTitle } from '../lib/documentTitle.js';
 import { getPageSheet, patchPageSheet, setPageSheetCache } from '../lib/pageSheetStore.js';
-import { getOpen5eResource, normalizeO5eType } from '../features/open5eCore.js';
+import { getOpen5eResource, normalizeO5eType, buildApiPath } from '../features/open5eCore.js';
+
+// ---- Open5e full-details renderer (generic, robust, small)
+// Renders remaining JSON fields in a readable layout.
+// Usage: const html = renderOpen5eFullDetails(json, { omitKeys: new Set(['name','ac',...]) })
+function renderOpen5eFullDetails(json, { omitKeys } = {}) {
+  const data = (json && typeof json === 'object') ? json : {};
+  const skip = omitKeys instanceof Set ? omitKeys : new Set(Array.isArray(omitKeys) ? omitKeys : []);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const prewrap = (s) => `<div style="white-space:pre-wrap;">${esc(s)}</div>`;
+
+  // Normalize commonly duplicated meta keys we always omit from generic pass; shown elsewhere
+  const alwaysOmit = new Set([
+    'slug', 'document__title', 'document__license_url', 'document__url', 'document__license', 'document__slug',
+    'url', 'created_at', 'modified_at'
+  ]);
+
+  // Known human-readable sections to prioritize if present
+  const prioritizedKeys = [
+    // Creatures
+    'desc','description','special_abilities','actions','reactions','legendary_actions','languages','senses',
+    'damage_resistances','damage_immunities','condition_immunities','damage_vulnerabilities','skills','saving_throws',
+    'challenge_rating','xp','alignment','type','subtype','environment','source',
+    // Spells
+    'higher_level','range','components','material','ritual','duration','concentration','school','classes','level_int',
+    // Items/Weapons/Armor
+    'rarity','requires_attunement','category','properties','damage','cost','weight','armor_class','stealth_disadvantage'
+  ];
+
+  const out = [];
+  const seen = new Set();
+
+  // Helper renderers
+  const isArrayOfStrings = (arr) => Array.isArray(arr) && arr.every(v => typeof v === 'string');
+  const isArrayOfObjects = (arr) => Array.isArray(arr) && arr.length && arr.every(v => v && typeof v === 'object' && !Array.isArray(v));
+  const keysOf = (obj) => Object.keys(obj || {});
+
+  const renderTableFromArrayObjects = (arr) => {
+    // Collect stable, consistent keys across items
+    const allKeys = Array.from(arr.reduce((set, it) => {
+      keysOf(it).forEach(k => set.add(k));
+      return set;
+    }, new Set()));
+    // Prefer a compact subset when common name/desc exist
+    const preferred = allKeys.includes('name') && allKeys.includes('desc') ? ['name','desc'] : allKeys;
+    const hdr = preferred.map(k => `<th style="text-align:left; padding:4px 6px;">${esc(k)}</th>`).join('');
+    const rows = arr.map(it => `<tr>${preferred.map(k => `<td style=\"padding:4px 6px; vertical-align:top;\">${renderAny(it[k])}</td>`).join('')}</tr>`).join('');
+    return `<table class="meta" style="border-collapse:collapse; width:100%;">`+
+      `<thead><tr>${hdr}</tr></thead>`+
+      `<tbody>${rows}</tbody>`+
+    `</table>`;
+  };
+
+  const renderDl = (obj) => {
+    const parts = [];
+    for (const k of keysOf(obj)) {
+      parts.push(`<dt style="font-weight:600;">${esc(k)}</dt><dd style="margin:0 0 6px 0;">${renderAny(obj[k])}</dd>`);
+    }
+    return `<dl class="meta" style="display:grid; grid-template-columns:minmax(120px, 200px) 1fr; gap:6px 12px; align-items:start;">${parts.join('')}</dl>`;
+  };
+
+  function renderNamedEntries(arr, title) {
+    if (!Array.isArray(arr) || !arr.length) return '';
+    const long = arr.length > 4;
+    const inner = arr.map(it => {
+      const nm = it?.name ? `<div style="font-weight:600; margin:4px 0 2px;">${esc(it.name)}</div>` : '';
+      const ds = it?.desc ? prewrap(it.desc) : '';
+      // Render any extra fields besides name/desc in a compact dl
+      const rest = Object.assign({}, it);
+      try { delete rest.name; delete rest.desc; } catch {}
+      const extraKeys = keysOf(rest);
+      const extra = extraKeys.length ? `<div style="margin:4px 0 6px;">${renderDl(rest)}</div>` : '';
+      return `<div class="card" style="padding:6px; margin:4px 0;">${nm}${ds}${extra}</div>`;
+    }).join('');
+    const body = `<div>${inner}</div>`;
+    if (!long) return body;
+    return `<details><summary>${esc(title || 'Details')} (${arr.length})</summary>${body}</details>`;
+  }
+
+  function renderAny(v) {
+    if (v == null) return '';
+    if (typeof v === 'string') return prewrap(v);
+    if (typeof v === 'number' || typeof v === 'boolean') return `<span>${esc(String(v))}</span>`;
+    if (Array.isArray(v)) {
+      if (!v.length) return '';
+      if (isArrayOfStrings(v)) {
+        const body = `<ul style="margin:4px 0 6px 18px;">${v.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+        return v.length > 8 ? `<details><summary>List (${v.length})</summary>${body}</details>` : body;
+      }
+      if (isArrayOfObjects(v)) {
+        // If consistent keys and not too wide, render as table; else cards inside details for long lists
+        const keysSet = new Set(); v.forEach(o => keysOf(o).forEach(k => keysSet.add(k)));
+        const keysArr = Array.from(keysSet);
+        const consistent = v.every(o => keysOf(o).length === keysArr.length && keysOf(o).every(k => keysSet.has(k)));
+        const table = consistent && keysArr.length <= 6;
+        const body = table ? renderTableFromArrayObjects(v) : `<div>${v.map(o => `<div class=\"card\" style=\"padding:6px; margin:4px 0;\">${renderDl(o)}</div>`).join('')}</div>`;
+        return v.length > 4 ? `<details><summary>Items (${v.length})</summary>${body}</details>` : body;
+      }
+      // Mixed array: stringify conservatively
+      const body = `<pre style="white-space:pre-wrap;">${esc(JSON.stringify(v, null, 2))}</pre>`;
+      return v.length > 4 ? `<details><summary>Values (${v.length})</summary>${body}</details>` : body;
+    }
+    if (typeof v === 'object') {
+      const keys = keysOf(v);
+      if (!keys.length) return '';
+      const body = renderDl(v);
+      return keys.length > 8 ? `<details><summary>Object (${keys.length} keys)</summary>${body}</details>` : body;
+    }
+    return `<span>${esc(String(v))}</span>`;
+  }
+
+  // 1) Prioritized sections (named arrays, readable strings)
+  const addIfPresent = (key, labelOverride = null) => {
+    if (seen.has(key)) return;
+    const v = data[key];
+    if (v == null) return;
+    if (skip.has(key) || alwaysOmit.has(key)) return;
+    seen.add(key);
+    if (key === 'special_abilities' || key === 'actions' || key === 'reactions' || key === 'legendary_actions') {
+      out.push(`<h4 style="margin:10px 0 6px;">${esc(labelOverride || key.replace(/_/g,' '))}</h4>`);
+      out.push(renderNamedEntries(Array.isArray(v) ? v : [], labelOverride || key));
+      return;
+    }
+    if (typeof v === 'string') {
+      out.push(`<h4 style="margin:10px 0 6px;">${esc(labelOverride || key.replace(/_/g,' '))}</h4>`);
+      out.push(prewrap(v));
+      return;
+    }
+    out.push(`<h4 style="margin:10px 0 6px;">${esc(labelOverride || key.replace(/_/g,' '))}</h4>`);
+    out.push(renderAny(v));
+  };
+
+  for (const k of prioritizedKeys) addIfPresent(k, null);
+
+  // 2) Generic pass over remaining keys in alpha order
+  const restKeys = Object.keys(data || {})
+    .filter(k => !seen.has(k) && !skip.has(k) && !alwaysOmit.has(k))
+    .sort((a,b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  if (restKeys.length) {
+    out.push(`<details style="margin-top:8px;"><summary>More fields (${restKeys.length})</summary>`);
+    for (const k of restKeys) {
+      const v = data[k];
+      if (v == null) continue;
+      out.push(`<h5 style="margin:8px 0 4px;">${esc(k.replace(/_/g,' '))}</h5>`);
+      out.push(renderAny(v));
+    }
+    out.push(`</details>`);
+  }
+
+  return out.join('');
+}
 
 // ---------- Private helpers (pure refactor; no behavior change intended)
 
@@ -543,6 +694,13 @@ function initSheetHeaderFields(page) {
 
 function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, rerenderHeaderMedia, cheatHtml }) {
   const applyEditState = async () => {
+    // Safety guard: never apply edit lifecycle on API-managed pages
+    try {
+      if (document.body?.dataset?.apiManaged === '1') {
+        if (window.__DEV__) try { console.debug('[pages] applyEditState: skipped for API-managed page', { pageId: page.id }); } catch {}
+        return;
+      }
+    } catch {}
     const now = isEditingPage(page.id);
     if (now) {
       try { setUiMode('edit'); } catch {}
@@ -565,6 +723,7 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
           setCurrentPageBlocks(activeTab === 'sheet' ? npcSheetBlocks : contentBlocks);
         }
       } catch {}
+      if (window.__DEV__) try { console.debug('[pages] renderBlocksEdit()', { pageId: page.id, apiManaged: document.body?.dataset?.apiManaged === '1' }); } catch {}
       renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
       try { mountSaveIndicator(); } catch {}
       try { rerenderHeaderMedia?.(); } catch {}
@@ -600,6 +759,7 @@ function initEditLifecycle({ outlet, page, blocksRoot, isCharLike, renderSheet, 
         }
       } catch {}
       // Render view from the local, merged store immediately
+      if (window.__DEV__) try { console.debug('[pages] renderBlocksReadOnly()', { pageId: page.id, apiManaged: document.body?.dataset?.apiManaged === '1' }); } catch {}
       renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
       try { unmountSaveIndicator(); } catch {}
       try { rerenderHeaderMedia?.(); } catch {}
@@ -740,15 +900,18 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
 
   // Detect API-managed Open5e page (read-only) and render derived view
   let isApiManaged = false;
+  let src = null;
+  let t = null;
   try {
     const sheet = await getPageSheet(page.id);
-    const src = sheet?.open5eSource || null;
+    src = sheet?.open5eSource || null;
     if (src && src.readonly && src.type && src.slug) {
       isApiManaged = true;
       // mark for global edit toggle guard
       try { document.body.dataset.apiManaged = '1'; } catch {}
+      if (window.__DEV__) try { console.debug('[pages] API-managed detected', { pageId: page.id, src }); } catch {}
       // Render derived content for supported types
-      const t = normalizeO5eType(src.type);
+      t = normalizeO5eType(src.type);
       if (t === 'creature') {
         const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
         // Persist snapshot for offline/consistency (best-effort)
@@ -769,7 +932,7 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           const ac = data.armor_class != null ? data.armor_class : data.ac;
           const hp = data.hit_points != null ? data.hit_points : data.hp;
           const speed = typeof data.speed === 'string' ? data.speed : (data.speed_json || data.speed_jsonb || '');
-          parts.push(`<div class="hovercard" style="padding:10px;">`);
+          parts.push(`<div class="card o5e-derived" style="padding:10px;">`);
           parts.push(`<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`);
           const meta = [size, type, alignment].filter(Boolean).join(' • ');
           parts.push(`<div class="meta" style="margin-bottom:8px;">${esc(meta)}${cr? (meta? ' • ' : '') + `CR ${esc(cr)}` : ''}</div>`);
@@ -788,7 +951,30 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           const desc = (data.desc || data.description || '').trim();
           if (desc) parts.push(`<div style="white-space:pre-wrap;">${esc(desc)}</div>`);
           parts.push(`</div>`);
+
+          // Full details section under statblock
+          try {
+            const omit = new Set(['name','size','type','alignment','cr','challenge_rating','armor_class','ac','hit_points','hp','speed','speed_json','speed_jsonb','strength','dexterity','constitution','intelligence','wisdom','charisma']);
+            const detailsInner = renderOpen5eFullDetails(data, { omitKeys: omit });
+            const apiHref = (src && src.apiUrl) ? src.apiUrl : buildApiPath(t, src.slug);
+            parts.push(`<div class="card o5e-derived" style="padding:10px; margin-top:10px;">`);
+            parts.push(`<div class="meta" style="font-weight:700; margin:0 0 8px;">Full Open5e details</div>`);
+            const docTitle = data['document__title'] || null;
+            const docUrl = data['document__url'] || null;
+            const docSlug = data['document__slug'] || null;
+            const srcStr = data['source'] || null;
+            if (srcStr || docTitle || docSlug || docUrl) {
+              const docLine = docUrl ? `<a href="${esc(docUrl)}" target="_blank" rel="noopener">${esc(docTitle || docSlug || 'Document')}</a>` : (docTitle || docSlug ? esc(docTitle || docSlug) : '');
+              parts.push(`<div class="meta" style="margin:0 0 8px;">${srcStr ? `Source: ${esc(srcStr)}${docLine ? ' • ' : ''}` : ''}${docLine ? `Document: ${docLine}` : ''}</div>`);
+            }
+            parts.push(detailsInner || `<div class="meta">No additional fields.</div>`);
+            parts.push(`<div class="meta" style="margin-top:8px;"><a href="${esc(apiHref)}" target="_blank" rel="noopener">Open JSON endpoint</a></div>`);
+            try { parts.push(`<details style="margin-top:6px;"><summary>Raw JSON (pretty)</summary><pre style="white-space:pre-wrap; overflow:auto;">${esc(JSON.stringify(data, null, 2))}</pre></details>`); } catch {}
+            parts.push(`</div>`);
+          } catch {}
+
           host.innerHTML = parts.join('');
+          if (window.__DEV__) try { console.debug('[pages] wrote derived HTML for creature', { pageId: page.id, length: host.innerHTML.length }); } catch {}
         }
       } else if (t === 'spell') {
         const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
@@ -801,7 +987,7 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           const level = (data.level_int != null ? data.level_int : data.level) ?? '';
           const school = data.school || '';
           const sub = `${level === 0 ? 'Cantrip' : (level !== '' ? `Level ${level}` : '')}${school ? ` • ${school}` : ''}`.trim();
-          parts.push(`<div class="hovercard" style="padding:10px;">`);
+          parts.push(`<div class="card o5e-derived" style="padding:10px;">`);
           parts.push(`<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`);
           if (sub) parts.push(`<div class="meta" style="margin-bottom:8px;">${esc(sub)}</div>`);
           const rows = [];
@@ -815,7 +1001,22 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           const higher = data.higher_level ? String(data.higher_level).trim() : '';
           if (higher) parts.push(`<div style="white-space:pre-wrap; margin-top:8px;"><strong>At Higher Levels:</strong> ${esc(higher)}</div>`);
           parts.push(`</div>`);
+
+          // Full details under statblock
+          try {
+            const omit = new Set(['name','school','level','level_int','casting_time','castingTime','range','duration','concentration','components','material','desc','description','higher_level']);
+            const detailsInner = renderOpen5eFullDetails(data, { omitKeys: omit });
+            const apiHref = (src && src.apiUrl) ? src.apiUrl : buildApiPath(t, src.slug);
+            parts.push(`<div class="card o5e-derived" style="padding:10px; margin-top:10px;">`);
+            parts.push(`<div class="meta" style="font-weight:700; margin:0 0 8px;">Full Open5e details</div>`);
+            parts.push(detailsInner || `<div class="meta">No additional fields.</div>`);
+            parts.push(`<div class="meta" style="margin-top:8px;"><a href="${esc(apiHref)}" target="_blank" rel="noopener">Open JSON endpoint</a></div>`);
+            try { parts.push(`<details style="margin-top:6px;"><summary>Raw JSON (pretty)</summary><pre style="white-space:pre-wrap; overflow:auto;">${esc(JSON.stringify(data, null, 2))}</pre></details>`); } catch {}
+            parts.push(`</div>`);
+          } catch {}
+
           host.innerHTML = parts.join('');
+          if (window.__DEV__) try { console.debug('[pages] wrote derived HTML for spell', { pageId: page.id, length: host.innerHTML.length }); } catch {}
         }
       } else if (t === 'condition') {
         const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
@@ -823,9 +1024,27 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
         const host = blocksRoot;
         if (host) {
           const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+          const parts = [];
           const name = data.name || page.title || '';
           const desc = (data.desc || data.description || '').trim();
-          host.innerHTML = `<div class="hovercard" style="padding:10px;"><div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>${desc ? `<div style=\"white-space:pre-wrap;\">${esc(desc)}</div>` : ''}</div>`;
+          parts.push(`<div class="card o5e-derived" style="padding:10px;">`);
+          parts.push(`<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`);
+          if (desc) parts.push(`<div style="white-space:pre-wrap;">${esc(desc)}</div>`);
+          parts.push(`</div>`);
+
+          try {
+            const omit = new Set(['name','desc','description']);
+            const detailsInner = renderOpen5eFullDetails(data, { omitKeys: omit });
+            const apiHref = (src && src.apiUrl) ? src.apiUrl : buildApiPath(t, src.slug);
+            parts.push(`<div class="card o5e-derived" style="padding:10px; margin-top:10px;">`);
+            parts.push(`<div class="meta" style="font-weight:700; margin:0 0 8px;">Full Open5e details</div>`);
+            parts.push(detailsInner || `<div class="meta">No additional fields.</div>`);
+            parts.push(`<div class="meta" style="margin-top:8px;"><a href="${esc(apiHref)}" target="_blank" rel="noopener">Open JSON endpoint</a></div>`);
+            try { parts.push(`<details style="margin-top:6px;"><summary>Raw JSON (pretty)</summary><pre style="white-space:pre-wrap; overflow:auto;">${esc(JSON.stringify(data, null, 2))}</pre></details>`); } catch {}
+            parts.push(`</div>`);
+          } catch {}
+
+          host.innerHTML = parts.join('');
         }
       } else if (t === 'item' || t === 'weapon' || t === 'armor') {
         const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
@@ -838,17 +1057,42 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           const rarity = data.rarity || '';
           const meta = [cat, rarity].filter(Boolean).join(' • ');
           const desc = (data.desc || data.description || '').trim();
-          const parts = [`<div class="hovercard" style="padding:10px;">`, `<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`];
+          const parts = [`<div class="card o5e-derived" style="padding:10px;">`, `<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`];
           if (meta) parts.push(`<div class="meta" style="margin-bottom:8px;">${esc(meta)}</div>`);
           if (desc) parts.push(`<div style="white-space:pre-wrap;">${esc(desc)}</div>`);
           parts.push(`</div>`);
+
+          try {
+            const omit = new Set(['name','type','category','rarity','desc','description']);
+            const detailsInner = renderOpen5eFullDetails(data, { omitKeys: omit });
+            const apiHref = (src && src.apiUrl) ? src.apiUrl : buildApiPath(t, src.slug);
+            parts.push(`<div class="card o5e-derived" style="padding:10px; margin-top:10px;">`);
+            parts.push(`<div class="meta" style="font-weight:700; margin:0 0 8px;">Full Open5e details</div>`);
+            parts.push(detailsInner || `<div class="meta">No additional fields.</div>`);
+            parts.push(`<div class="meta" style="margin-top:8px;"><a href="${esc(apiHref)}" target="_blank" rel="noopener">Open JSON endpoint</a></div>`);
+            try { parts.push(`<details style="margin-top:6px;"><summary>Raw JSON (pretty)</summary><pre style="white-space:pre-wrap; overflow:auto;">${esc(JSON.stringify(data, null, 2))}</pre></details>`); } catch {}
+            parts.push(`</div>`);
+          } catch {}
+
           host.innerHTML = parts.join('');
         }
       }
     } else {
       try { delete document.body.dataset.apiManaged; } catch {}
     }
-  } catch {}
+  } catch (err) {
+    // If API-managed, surface a visible error instead of a blank page
+    if (isApiManaged && blocksRoot) {
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const apiHref = (src && src.apiUrl) ? src.apiUrl : (src && src.slug && (t || src.type) ? buildApiPath(normalizeO5eType(t || src.type), src.slug) : '#');
+      blocksRoot.innerHTML = `
+        <div class="card o5e-derived" style="padding:10px;">
+          <div style="font-size:16px; font-weight:700; color:#a33;">Failed to load Open5e data</div>
+          <div class="meta" style="margin:6px 0 8px; white-space:pre-wrap;">${esc(err && err.message ? err.message : String(err || 'Unknown error'))}</div>
+          <div><a href="${esc(apiHref)}" target="_blank" rel="noopener">Open JSON endpoint</a></div>
+        </div>`;
+    }
+  }
   // Initialize current blocks respecting NPC sheet split and active tab (supports ?tab for NPC)
   try {
     const st = getState() || {};
@@ -881,11 +1125,13 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
     // Read-only derived view; do not mount editor or save indicators
     try { unmountSaveIndicator(); } catch {}
   } else if (isEditingPage(page.id)) {
+    if (window.__DEV__) try { console.debug('[pages] renderBlocksEdit() initial', { pageId: page.id, apiManaged: document.body?.dataset?.apiManaged === '1' }); } catch {}
     setUiMode('edit');
     enablePageTitleEdit(page);
     renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());
     try { mountSaveIndicator(); } catch {}
   } else {
+    if (window.__DEV__) try { console.debug('[pages] renderBlocksReadOnly() initial', { pageId: page.id, apiManaged: document.body?.dataset?.apiManaged === '1' }); } catch {}
     setUiMode(null);
     renderBlocksReadOnly(blocksRoot, getCurrentPageBlocks());
     try { unmountSaveIndicator(); } catch {}
@@ -896,19 +1142,26 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   const btnDelete = document.getElementById('btnDeletePage');
   if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
 
-  const { cleanupEditLifecycle } = initEditLifecycle({
-    outlet,
-    page,
-    blocksRoot,
-    isCharLike,
-    renderSheet,
-    rerenderHeaderMedia,
-    cheatHtml,
-  });
+  // Do not mount edit lifecycle for API-managed pages to avoid wiping derived content
+  let cleanupEditLifecycle = () => {};
+  if (!isApiManaged) {
+    ({ cleanupEditLifecycle } = initEditLifecycle({
+      outlet,
+      page,
+      blocksRoot,
+      isCharLike,
+      renderSheet,
+      rerenderHeaderMedia,
+      cheatHtml,
+    }));
+  }
 
   initBacklinks(page);
 
   return () => {
+    // Ensure API-managed flag does not leak to other pages
+    try { delete document.body.dataset.apiManaged; } catch {}
+    try { cleanupSheetHeader?.(); } catch {}
     cleanupEditLifecycle();
   };
 }

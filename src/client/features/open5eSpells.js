@@ -445,7 +445,7 @@ async function commitLink(modal) {
       const ta = st.textarea;
       const start = st.start ?? 0;
       const end = st.end ?? 0;
-      const t = normalizeO5eType(st.resourceType || st.type || 'spell');
+      const t = normalizeO5eType(st.type || st.resourceType || 'spell');
       const token = `[[o5e:${t}:${sel.slug}|${st.selectedText || ''}]]`;
       const before = (ta.value || '').slice(0, start);
       const after = (ta.value || '').slice(end);
@@ -494,7 +494,7 @@ async function commitLink(modal) {
           const editableEl = st.editableEl;
           const range = st.range;
           const label = String(st.selectedText || sel.item?.name || sel.slug || '').trim();
-          const t = normalizeO5eType(st.resourceType || st.type || 'spell');
+          const t = normalizeO5eType(st.type || st.resourceType || 'spell');
           const token = `[[o5e:${t}:${sel.slug}|${label}]]`;
           range.deleteContents();
           range.insertNode(document.createTextNode(token));
@@ -555,7 +555,7 @@ async function commitLink(modal) {
           if (!blockEl || !st.range) throw new Error('Missing selection range');
           const range = st.range;
           const label = String(st.selectedText || sel.item?.name || sel.slug || '').trim();
-          const t = normalizeO5eType(st.resourceType || st.type || 'spell');
+          const t = normalizeO5eType(st.type || st.resourceType || 'spell');
           const token = `[[o5e:${t}:${sel.slug}|${label}]]`;
           // Mutate a temporary copy to compute next html/text safely
           const tmp = document.createElement('div');
@@ -646,13 +646,13 @@ function wireModal() {
     void doSearch(modal);
   });
   typeSel?.addEventListener('change', () => {
-    const t = typeSel.value;
-    setModalState(modal, { type: normalizeO5eType(t), selection: null });
+    const t = normalizeO5eType(typeSel.value);
+    setModalState(modal, { type: t, resourceType: t, selection: null });
     try {
       const h2 = modal.querySelector('h2');
       const labels = { spell: 'Spell', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
-      if (h2) h2.textContent = `Link ${labels[normalizeO5eType(t)] || 'Open5e'}`;
-      if (input) input.placeholder = `Search ${labels[normalizeO5eType(t)] || 'Open5e'}…`;
+      if (h2) h2.textContent = `Link ${labels[t] || 'Open5e'}`;
+      if (input) input.placeholder = `Search ${labels[t] || 'Open5e'}…`;
     } catch {}
     void doSearch(modal);
   });
@@ -742,7 +742,24 @@ async function openOpen5eLinkModal({ type, slug }) {
       const apiUrl = buildApiPath(t, s);
       const docSlug = (data && (data.document__slug || data.document__slug_name || data.document__slug_field)) || null;
       const sheetPatch = { open5eSource: { type: t, slug: s, apiUrl, ...(docSlug ? { documentSlug: String(docSlug) } : {}), createdFrom: 'open5e', readonly: true } };
-      try { await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, { method: 'PATCH', body: JSON.stringify(sheetPatch) }); } catch {}
+      // Strictly require sheet PATCH to succeed
+      const patchRes = await fetch(`/api/pages/${encodeURIComponent(page.id)}/sheet`, { method: 'PATCH', body: JSON.stringify(sheetPatch), headers: { 'Content-Type': 'application/json' } });
+      if (!patchRes.ok) {
+        let bodyText = '';
+        try { bodyText = await patchRes.text(); } catch {}
+        throw new Error(`PATCH /api/pages/${page.id}/sheet failed: ${patchRes.status} ${patchRes.statusText}${bodyText ? `\n${bodyText}` : ''}`);
+      }
+      // Verify sheet contains open5eSource to avoid blank API pages
+      let sheetCheck = null;
+      try {
+        const r = await fetch(`/api/pages/${encodeURIComponent(page.id)}/sheet`, { method: 'GET' });
+        const j = await r.json();
+        sheetCheck = j?.sheet || null;
+      } catch {}
+      const src = sheetCheck?.open5eSource || null;
+      if (!src || !src.type || !src.slug || !src.readonly) {
+        throw new Error('open5eSource missing from sheet after PATCH; refusing to open a blank API page.');
+      }
       // Open page in new tab
       try { window.open(page.slug ? `/p/${encodeURIComponent(page.slug)}` : `/page/${encodeURIComponent(page.id)}`, '_blank'); } catch {}
     } catch (err) {
@@ -753,7 +770,7 @@ async function openOpen5eLinkModal({ type, slug }) {
         }
       } catch {}
       const msg = (err && err.message) ? String(err.message) : 'Unknown error';
-      alert(`Failed to create page for this Open5e resource.\n${msg}`);
+      alert(`Failed to create API-backed page.\n${msg}`);
     }
   };
   modal.style.display = 'block';
@@ -828,7 +845,7 @@ async function linkAllOccurrences(modal) {
   if (!sel?.slug) return;
   const term = String(st.selectedText || '').trim();
   if (!term) return;
-  const t = normalizeO5eType(st.resourceType || st.type || 'spell');
+  const t = normalizeO5eType(st.type || st.resourceType || 'spell');
   const token = `[[o5e:${t}:${sel.slug}|${term}]]`;
   // Compute total occurrences across page
   const blocks = getCurrentPageBlocks();
