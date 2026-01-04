@@ -255,7 +255,7 @@ function installHoverBehavior() {
         }
         let html = '';
         if (type === 'spell') html = renderSpellHover(data || {});
-        else if (type === 'creature') html = renderCreatureHover(data || {});
+        else if (type === 'monster') html = renderCreatureHover(data || {});
         else if (type === 'condition') html = renderConditionHover(data || {});
         else if (type === 'item' || type === 'weapon' || type === 'armor') html = renderItemHover(data || {});
         else html = `<div style=\"font-size:12px;\">Unsupported Open5e type.</div>`;
@@ -330,7 +330,7 @@ async function doSearch(modal) {
         row.style.cursor = 'pointer';
         const name = String(it.name || '');
         let meta = '';
-        if (__t === 'creature') {
+        if (__t === 'monster') {
           const cr = it.cr || it.challenge_rating;
           const tp = it.type;
           meta = [tp, (cr != null ? `CR ${cr}` : '')].filter(Boolean).join(' • ');
@@ -427,7 +427,7 @@ function selectResult(modal, sel) {
     const t = normalizeO5eType(getModalState(modal).type || 'spell');
     let html = '';
     if (t === 'spell') html = renderSpellHover(it || {});
-    else if (t === 'creature') html = renderCreatureHover(it || {});
+    else if (t === 'monster') html = renderCreatureHover(it || {});
     else if (t === 'condition') html = renderConditionHover(it || {});
     else if (t === 'item' || t === 'weapon' || t === 'armor') html = renderItemHover(it || {});
     prev.innerHTML = html || '';
@@ -617,7 +617,7 @@ function openSpellModalWithContext(info, resourceType = 'spell') {
   // Update modal title dynamically
   try {
     const h2 = modal.querySelector('h2');
-    const labels = { spell: 'Spell', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
+    const labels = { spell: 'Spell', monster: 'Monster', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
     h2.textContent = `Link ${labels[initType] || 'Open5e'}`;
     if (typeSel) typeSel.value = initType;
     if (input) input.placeholder = `Search ${labels[initType] || 'Open5e'}…`;
@@ -650,7 +650,7 @@ function wireModal() {
     setModalState(modal, { type: t, resourceType: t, selection: null });
     try {
       const h2 = modal.querySelector('h2');
-      const labels = { spell: 'Spell', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
+      const labels = { spell: 'Spell', monster: 'Monster', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
       if (h2) h2.textContent = `Link ${labels[t] || 'Open5e'}`;
       if (input) input.placeholder = `Search ${labels[t] || 'Open5e'}…`;
     } catch {}
@@ -691,7 +691,7 @@ async function openOpen5eLinkModal({ type, slug }) {
         const level = (data.level_int != null ? data.level_int : data.level) ?? '';
         const school = data.school || '';
         if (level !== '' || school) sub.push(`${level === 0 ? 'Cantrip' : (level !== '' ? `Level ${level}` : '')}${school ? ` • ${school}` : ''}`);
-      } else if (type === 'creature') {
+      } else if (type === 'monster') {
         const cr = data.cr || data.challenge_rating || '';
         const tp = data.type || '';
         if (tp) sub.push(tp);

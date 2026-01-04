@@ -71,7 +71,8 @@ export async function fetchOpen5e(type, slug) {
 
 export function normalizeO5eType(t) {
   const s = String(t || '').toLowerCase();
-  if (s === 'monster') return 'creature';
+  if (s === 'monster' || s === 'monsters') return 'monster';
+  if (s === 'creature' || s === 'creatures') return 'monster';
   if (s === 'magicitem') return 'item';
   return s;
 }

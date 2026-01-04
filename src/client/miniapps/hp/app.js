@@ -201,7 +201,7 @@ export const HpTrackerApp = {
           try {
             const sheet = await getPageSheet(it.id);
             const src = sheet?.open5eSource || null;
-            if (src && normalizeO5eType(src.type) === 'creature') { enriched.push(it); }
+            if (src && normalizeO5eType(src.type) === 'monster') { enriched.push(it); }
           } catch {}
         }
         items = enriched;
@@ -245,9 +245,9 @@ export const HpTrackerApp = {
       try {
         const sheet = await getPageSheet(page.id);
         const src = sheet?.open5eSource || null;
-        if (src && normalizeO5eType(src.type) === 'creature' && src.slug) {
+        if (src && normalizeO5eType(src.type) === 'monster' && src.slug) {
           try {
-            const data = await getOpen5eResource('creature', src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
+            const data = await getOpen5eResource('monster', src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
             if (data) {
               const acVal = (data.armor_class != null ? data.armor_class : data.ac);
               const hpVal = (data.hit_points != null ? data.hit_points : data.hp);

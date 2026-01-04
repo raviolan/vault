@@ -918,7 +918,7 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
       if (window.__DEV__) try { console.debug('[pages] API-managed detected', { pageId: page.id, src }); } catch {}
       // Render derived content for supported types
       t = normalizeO5eType(src.type);
-      if (t === 'creature') {
+      if (t === 'monster') {
         const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
         // Persist snapshot for offline/consistency (best-effort)
         try {
@@ -980,7 +980,7 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           } catch {}
 
           host.innerHTML = parts.join('');
-          if (window.__DEV__) try { console.debug('[pages] wrote derived HTML for creature', { pageId: page.id, length: host.innerHTML.length }); } catch {}
+          if (window.__DEV__) try { console.debug('[pages] wrote derived HTML for monster', { pageId: page.id, length: host.innerHTML.length }); } catch {}
         }
       } else if (t === 'spell') {
         const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });

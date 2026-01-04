@@ -120,7 +120,7 @@ export function sanitizeRichHtml(html) {
           // Validate slug (alphanumeric + dash)
           const safeSlug = /^[-a-z0-9]+$/.test(slug) ? slug : '';
           // Normalize supported types
-          const allowedTypes = new Set(['spell','creature','condition','item','weapon','armor']);
+          const allowedTypes = new Set(['spell','monster','creature','condition','item','weapon','armor']);
           const safeType = allowedTypes.has(t) ? t : (t ? 'spell' : '');
           // Reduce attributes
           el.setAttribute('class', `o5e-link${safeType ? ` o5e-${safeType}` : ''}`.trim());

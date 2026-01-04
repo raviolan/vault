@@ -59,16 +59,18 @@ export async function routeOpen5e(req, res, ctx) {
       const s = (url.searchParams.get('slug') || '').toLowerCase();
       if (!t || !s) { sendJson(res, 200, { pages: [] }); return true; }
       // LIKE-based search on JSON text to avoid requiring JSON1
-      const likeType = `%"open5eSource"%"type":"${t.replace(/"/g, '"')}"%`;
+      // Back-compat: support alias between "monster" and "creature"
+      const types = (t === 'monster' || t === 'creature') ? ['monster','creature'] : [t];
+      const likeTypes = types.map(tt => `%"open5eSource"%"type":"${tt.replace(/"/g, '"')}"%`);
       const likeSlug = `%"open5eSource"%"slug":"${s.replace(/"/g, '"')}"%`;
       const rows = ctx.db.prepare(
         `SELECT p.id, p.title, p.slug, p.type
            FROM pages p
            JOIN page_sheets ps ON ps.page_id = p.id
-          WHERE ps.sheet_json LIKE ? ESCAPE '\\'
-            AND ps.sheet_json LIKE ? ESCAPE '\\'
+          WHERE (${Array.from({length: likeTypes.length}).map(() => "ps.sheet_json LIKE ? ESCAPE '\\\\'").join(' OR ')})
+            AND ps.sheet_json LIKE ? ESCAPE '\\\\'
           LIMIT 5`
-      ).all(likeType, likeSlug);
+      ).all(...likeTypes, likeSlug);
       sendJson(res, 200, { pages: rows });
       return true;
     }
