@@ -18,6 +18,7 @@
  */
 
 import { escapeHtml, $ } from '../lib/dom.js';
+import { mountSubsectionPicker } from '../features/subsectionPicker.js';
 import { fetchJson } from '../lib/http.js';
 import { canonicalPageHref } from '../lib/pageUrl.js';
 import { getPageSheet } from '../lib/pageSheetStore.js';
@@ -332,6 +333,7 @@ export async function render(container) {
         .cl-expand-actions { display:flex; gap:8px; flex-wrap:wrap; }
       </style>
       <h1>Cleanup</h1>
+      <div id="cleanupSubsectionPickerRow" class="meta" style="margin:6px 0;"></div>
       <div class="tool-tabs cl-header" style="margin: 6px 0;">
         <button class="chip" id="clRun">Run scan</button>
         <button class="chip" id="clRefresh">Refresh</button>
@@ -348,6 +350,15 @@ export async function render(container) {
       <div id="clBody"></div>
     </section>
   `;
+
+  // Mount Tools category picker into the reserved row
+  try {
+    const row = document.getElementById('cleanupSubsectionPickerRow');
+    if (row) {
+      row.innerHTML = '';
+      mountSubsectionPicker({ hostEl: row, sectionKey: 'tools', itemId: 'cleanup', labelText: 'Category' });
+    }
+  } catch {}
 
   const btnRun = $('#clRun');
   const btnRefresh = $('#clRefresh');

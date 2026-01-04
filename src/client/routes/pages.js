@@ -12,6 +12,7 @@ import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndica
 import { renderHeaderMedia } from '../features/headerMedia.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { sectionForType, sectionKeyForType } from '../features/nav.js';
+import { mountSubsectionPicker } from '../features/subsectionPicker.js';
 import { getNavGroupsForSection, setGroupForPage, addGroup } from '../features/navGroups.js';
 import { flushDebouncedPatches } from '../blocks/edit/state.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
@@ -886,6 +887,11 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   const sectionLabel = computeSectionLabel(page);
   renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar });
 
+  // Mount view-mode Category/Subsection picker under the title
+  try {
+    ensureViewPickerMounted(page);
+  } catch {}
+
   // Update browser tab title with resolved page title
   try {
     const resolved = (String(page?.title || '').trim()) || (String(page?.slug || '').trim()) || 'Untitled';
@@ -1166,6 +1172,14 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   };
 }
 
+function ensureViewPickerMounted(page) {
+  const h1 = document.getElementById('pageTitleView');
+  if (!h1) return;
+  try { if (isEditingPage(page.id)) return; } catch {}
+  try { const row = document.getElementById('pageSubsectionPickerRow'); if (row) row.remove(); } catch {}
+  try { mountPageLocationControls(page, { anchorEl: h1 }); } catch {}
+}
+
 function getFolderTitleForPage(pageId) {
   const st = getState();
   const { sections } = normalizeSections(st || {});
@@ -1237,51 +1251,33 @@ export async function renderPageBySlug({ match }) {
   return () => { try { cleanup?.(); } catch {}; };
 }
 
-export function enablePageTitleEdit(page) {
-  const h1 = document.getElementById('pageTitleView');
-  if (!h1) return;
-  const input = document.createElement('input');
-  input.id = 'pageTitleInput';
-  input.className = 'page-title-input';
-  input.value = page.title || '';
-  h1.replaceWith(input);
-  bindPageTitleInput(page, input);
-
-   // Live-update tab title as the user types
-   try {
-     const fallback = (String(page?.slug || '').trim()) || 'Untitled';
-     const onLive = () => {
-       const v = String(input.value || '').trim();
-       setDocumentTitle(v || fallback);
-     };
-     input.__vaultLiveTitleHandler = onLive;
-     input.addEventListener('input', onLive);
-   } catch {}
-
-  // Insert Type control (edit mode only), placed near title
+// Shared helper to mount Section + Category controls after a given anchor element.
+// Returns a cleanup() function. Safe to call in edit or view mode.
+function mountPageLocationControls(page, { anchorEl }) {
+  if (!anchorEl) return () => {};
+  try { const prev = document.getElementById('pageTypeControl'); if (prev) prev.remove(); } catch {}
   try {
     const wrap = document.createElement('div');
     wrap.id = 'pageTypeControl';
-    wrap.style.margin = '6px 0';
-    // Make row layout for Type + Category controls
-    wrap.style.display = 'flex';
-    wrap.style.alignItems = 'center';
-    wrap.style.gap = '12px';
-    wrap.style.flexWrap = 'wrap';
-    // Keep label and select simple; do not modify existing hooks/classes
+    try {
+      wrap.style.margin = '6px 0';
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '12px';
+      wrap.style.flexWrap = 'wrap';
+    } catch {}
+
+    // Section control (core + custom folders)
     const label = document.createElement('label');
     label.textContent = 'Section ';
     const sel = document.createElement('select');
     sel.name = 'pageType';
     sel.id = 'pageTypeSelect';
-    // Build unified dropdown with Core sections and user Folders
     const buildTypeFolderOptions = () => {
       sel.innerHTML = '';
-      // Determine current folder selection
       const st = getState();
       const secs = Array.isArray(st?.sections) ? st.sections : [];
       const curFolder = secs.find(s => (s.pageIds || []).includes(page.id)) || null;
-      // Core sections
       const core = [
         { v: 'character', t: 'Characters' },
         { v: 'npc',       t: 'NPCs' },
@@ -1301,7 +1297,6 @@ export function enablePageTitleEdit(page) {
         ogCore.appendChild(o);
       }
       sel.appendChild(ogCore);
-      // Custom sections
       const ogFolders = document.createElement('optgroup');
       ogFolders.label = 'Custom sections';
       const folderList = secs.map(s => ({ id: String(s.id), title: s.title || '', pageIds: Array.isArray(s.pageIds) ? s.pageIds : [] }))
@@ -1319,9 +1314,9 @@ export function enablePageTitleEdit(page) {
     label.appendChild(sel);
     wrap.appendChild(label);
 
-    // Category UI
-    const secKey = sectionKeyForType(page.type || 'note');
-    const { groups, pageToGroup } = getNavGroupsForSection(secKey);
+    // Category control
+    const secKeyInit = sectionKeyForType(page.type || 'note');
+    const { groups, pageToGroup } = getNavGroupsForSection(secKeyInit);
     const currentGid = pageToGroup?.[page.id] || '';
     const gLabel = document.createElement('label');
     gLabel.textContent = 'Category ';
@@ -1345,15 +1340,26 @@ export function enablePageTitleEdit(page) {
     buildGroupOptions(groups, currentGid);
     gLabel.appendChild(gSel);
     wrap.appendChild(gLabel);
-    // Optional New… button
     const btnNew = document.createElement('button');
     btnNew.type = 'button';
     btnNew.className = 'chip';
     btnNew.textContent = 'New…';
     wrap.appendChild(btnNew);
-    input.after(wrap);
 
-    // Persist Category change immediately
+    // Hint for view mode only
+    try {
+      if (anchorEl.id === 'pageTitleView') {
+        const hint = document.createElement('span');
+        hint.className = 'meta';
+        hint.style.opacity = '0.8';
+        hint.textContent = ' Moving a page updates the left sidebar immediately.';
+        wrap.appendChild(hint);
+      }
+    } catch {}
+
+    anchorEl.after(wrap);
+
+    // Category: change
     gSel.addEventListener('change', async () => {
       const key = sectionKeyForType(page.type || 'note');
       const gid = gSel.value || null;
@@ -1366,7 +1372,7 @@ export function enablePageTitleEdit(page) {
       }
     });
 
-    // Create new category inline
+    // Category: new
     btnNew.onclick = async () => {
       const key = sectionKeyForType(page.type || 'note');
       const name = prompt('New category name');
@@ -1379,32 +1385,23 @@ export function enablePageTitleEdit(page) {
         await setGroupForPage(key, page.id, newId);
         try { setPageBreadcrumb(page); } catch {}
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
-      } catch (e) {
-        console.error('Failed to create category', e);
-      }
+      } catch (e) { console.error('Failed to create category', e); }
     };
 
+    // Section/folder change
     sel.addEventListener('change', async () => {
       const val = sel.value;
-      // Handle folder selection vs core section type
       if (val && val.startsWith('folder:')) {
         const folderId = val.slice('folder:'.length);
         try {
-          // Remove from all folders first, then add to chosen folder
           let st = getState();
           const secs = Array.isArray(st?.sections) ? st.sections.slice() : [];
-          for (const s of secs) {
-            st = removePageFromSection(st, s.id, page.id);
-          }
-          if (folderId) {
-            st = addPageToSection(st, folderId, page.id);
-          }
+          for (const s of secs) { st = removePageFromSection(st, s.id, page.id); }
+          if (folderId) { st = addPageToSection(st, folderId, page.id); }
           updateState(st);
           await saveStateNow();
           try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
-          // Rebuild options to reflect new selection state
           buildTypeFolderOptions();
-          // Update breadcrumb and meta to reflect folder as primary section
           try { setPageBreadcrumb(page); } catch {}
           try {
             const meta = document.querySelector('article.page p.meta');
@@ -1415,28 +1412,21 @@ export function enablePageTitleEdit(page) {
               meta.innerHTML = `Section: ${escapeHtml(sectionLabelNow || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
             }
           } catch {}
-        } catch (e) {
-          console.error('Failed to move page to folder', e);
-        }
+        } catch (e) { console.error('Failed to move page to folder', e); }
         return;
       }
 
-      // Core section selected: remove from folders, then PATCH page.type
       const oldKey = sectionKeyForType(page.type || 'note');
       const newType = val;
       try {
-        // Remove page from any folders first
         let st = getState();
         const secs = Array.isArray(st?.sections) ? st.sections.slice() : [];
-        for (const s of secs) {
-          st = removePageFromSection(st, s.id, page.id);
-        }
+        for (const s of secs) { st = removePageFromSection(st, s.id, page.id); }
         updateState(st);
         await saveStateNow();
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
 
         const updated = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}`, { method: 'PATCH', body: JSON.stringify({ type: newType }) });
-        // Reflect updated type in local page and meta display
         page.type = updated.type || newType;
         const meta = document.querySelector('article.page p.meta');
         if (meta) {
@@ -1445,7 +1435,6 @@ export function enablePageTitleEdit(page) {
           const sectionLabel = folderTitleNow || sectionForType(page.type);
           meta.innerHTML = `Section: ${escapeHtml(sectionLabel || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
         }
-        // If section changed, clear old mapping and rebuild Category options
         const newKey = sectionKeyForType(page.type || 'note');
         if (oldKey !== newKey) {
           try { await setGroupForPage(oldKey, page.id, null); } catch {}
@@ -1455,13 +1444,41 @@ export function enablePageTitleEdit(page) {
         }
         try { setPageBreadcrumb(page); } catch {}
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
-        // Rebuild options to ensure correct core selection now that page.type changed
         buildTypeFolderOptions();
-      } catch (e) {
-        console.error('Failed to update type', e);
-      }
+      } catch (e) { console.error('Failed to update type', e); }
     });
-  } catch {}
+
+    return () => { try { wrap.remove(); } catch {}; };
+  } catch { return () => {}; }
+}
+
+export function enablePageTitleEdit(page) {
+  const h1 = document.getElementById('pageTitleView');
+  if (!h1) return;
+  // Hide view-mode picker while editing
+  try { const row = document.getElementById('pageSubsectionPickerRow'); if (row) row.remove(); } catch {}
+  // Remove any existing view-mode control before mounting edit-mode one
+  try { const prev = document.getElementById('pageTypeControl'); if (prev) prev.remove(); } catch {}
+  const input = document.createElement('input');
+  input.id = 'pageTitleInput';
+  input.className = 'page-title-input';
+  input.value = page.title || '';
+  h1.replaceWith(input);
+  bindPageTitleInput(page, input);
+
+   // Live-update tab title as the user types
+   try {
+     const fallback = (String(page?.slug || '').trim()) || 'Untitled';
+     const onLive = () => {
+       const v = String(input.value || '').trim();
+       setDocumentTitle(v || fallback);
+     };
+     input.__vaultLiveTitleHandler = onLive;
+     input.addEventListener('input', onLive);
+   } catch {}
+
+  // Mount Section + Category controls in edit mode (shared helper)
+  try { mountPageLocationControls(page, { anchorEl: input }); } catch {}
 }
 
 export function disablePageTitleEdit(page) {
@@ -1478,6 +1495,8 @@ export function disablePageTitleEdit(page) {
     const typeCtl = document.getElementById('pageTypeControl');
     if (typeCtl) typeCtl.remove();
   } catch {}
+  // Re-mount unified controls beneath the title in view mode
+  try { mountPageLocationControls(page, { anchorEl: h1 }); } catch {}
 }
 
 function bindPageTitleInput(page, input) {

@@ -7,6 +7,7 @@ import { saveToVault } from './save.js';
 import { isFavorited, toggleFavorite } from './favorites.js';
 import { chosenWeaponsForClass } from './assumptions.js';
 import { buildCombatDetails } from './combatDetails.js';
+import { mountSubsectionPicker } from '../../features/subsectionPicker.js';
 
 function titleCase(s) { return String(s || '').replace(/\b([a-z])/g, (m, c) => c.toUpperCase()); }
 
@@ -22,6 +23,23 @@ export async function render(outlet) {
   try { races = await getRaces(); } catch { error = (error || '') + ' Failed to load races.'; }
 
   renderForm(outlet, { classes, races, state: { level: 1, favorited: isFavorited() } });
+  // Mount Tools category picker near the top of the tool UI
+  try {
+    const sec = document.getElementById('egRoot');
+    if (sec) {
+      let row = document.getElementById('enemyGenSubsectionPickerRow');
+      if (!row) {
+        row = document.createElement('div');
+        row.id = 'enemyGenSubsectionPickerRow';
+        row.className = 'meta';
+        row.style.margin = '6px 0';
+        // Insert as the first child inside the card
+        sec.insertBefore(row, sec.firstChild);
+      }
+      row.innerHTML = '';
+      mountSubsectionPicker({ hostEl: row, sectionKey: 'tools', itemId: 'enemy-generator', labelText: 'Category' });
+    }
+  } catch {}
   if (error) $('#egError').textContent = error.trim();
   const selClass = $('#egClass');
   const selRace = $('#egRace');

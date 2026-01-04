@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/http.js';
+import { mountSubsectionPicker } from '../features/subsectionPicker.js';
 import { navigate } from '../lib/router.js';
 
 // Tag Inspector — maintenance dashboard
@@ -38,6 +39,23 @@ export async function render(container, ctx = {}) {
       <div id="tiTable"></div>
     </section>
   `;
+
+  // Mount Tools category picker under the title
+  try {
+    const h1 = container.querySelector('h1');
+    if (h1) {
+      let row = document.getElementById('tagsSubsectionPickerRow');
+      if (!row) {
+        row = document.createElement('div');
+        row.id = 'tagsSubsectionPickerRow';
+        row.className = 'meta';
+        row.style.margin = '6px 0';
+        h1.after(row);
+      }
+      row.innerHTML = '';
+      mountSubsectionPicker({ hostEl: row, sectionKey: 'tools', itemId: 'tags', labelText: 'Category' });
+    }
+  } catch {}
 
   const summaryEl = document.getElementById('tiSummary');
   const tableEl = document.getElementById('tiTable');

@@ -271,12 +271,64 @@ export function renderToolsSection() {
     });
   }
   const list = toolsDetails?.querySelector('.nav-list');
-  for (const t of TOOLS) {
-    const item = document.createElement('li');
-    item.innerHTML = `<a class="nav-item" href="${t.path}" data-link>
-      <span class="nav-text">${escapeHtml(t.name)}</span>
-    </a>`;
-    list.appendChild(item);
+  if (list) list.innerHTML = '';
+
+  // Group tools by user-defined subgroups (navGroups) for 'tools' section
+  const sectionKey = 'tools';
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const { groups, pageToGroup } = getNavGroupsForSection(sectionKey);
+  const hasGroups = Array.isArray(groups) && groups.length > 0;
+
+  if (hasGroups) {
+    const byGroup = new Map(groups.map(g => [g.id, []]));
+    const ungrouped = [];
+    for (const t of TOOLS) {
+      const gid = pageToGroup?.[t.id] || null;
+      if (gid && byGroup.has(gid)) byGroup.get(gid).push(t);
+      else ungrouped.push(t);
+    }
+    const sortedGroups = groups.slice().sort((a, b) => collator.compare(a?.name || '', b?.name || ''));
+    for (const g of sortedGroups) {
+      const gi = document.createElement('li');
+      const toolsInGroup = (byGroup.get(g.id) || []).slice().sort((a, b) => collator.compare(a?.name || '', b?.name || ''));
+      const count = toolsInGroup.length;
+      gi.innerHTML = `
+        <details class="nav-details" open>
+          <summary class="nav-label">
+            <span>${escapeHtml(g.name || 'Group')}</span>
+            <span class="meta" style="margin-left:auto;">${count}</span>
+          </summary>
+          <ul class="nav-list"></ul>
+        </details>
+      `;
+      const glist = gi.querySelector('.nav-list');
+      for (const t of toolsInGroup) {
+        const item = document.createElement('li');
+        item.innerHTML = `<a class="nav-item" href="${t.path}" data-link>
+          <span class="nav-text">${escapeHtml(t.name)}</span>
+        </a>`;
+        glist.appendChild(item);
+      }
+      list.appendChild(gi);
+    }
+    // Ungrouped appear at bottom directly
+    const sortedUngrouped = ungrouped.slice().sort((a, b) => collator.compare(a?.name || '', b?.name || ''));
+    for (const t of sortedUngrouped) {
+      const item = document.createElement('li');
+      item.innerHTML = `<a class="nav-item" href="${t.path}" data-link>
+        <span class="nav-text">${escapeHtml(t.name)}</span>
+      </a>`;
+      list.appendChild(item);
+    }
+  } else {
+    // No groups: flat list
+    for (const t of TOOLS) {
+      const item = document.createElement('li');
+      item.innerHTML = `<a class="nav-item" href="${t.path}" data-link>
+        <span class="nav-text">${escapeHtml(t.name)}</span>
+      </a>`;
+      list.appendChild(item);
+    }
   }
 }
 
