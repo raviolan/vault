@@ -518,6 +518,28 @@ export async function render(container) {
       </div>`;
     const headMeta = topPages ? `<div class="meta">Top pages affected: ${topPages}</div>` : '';
 
+    // Bulk action bar (only for groups with >=5 occurrences)
+    const allowBulk = (g.count || 0) >= 5;
+    const unambig = (g.candidates?.length === 1);
+    const bulkTargetSelect = (!unambig && Array.isArray(g.candidates) && g.candidates.length > 1)
+      ? `<select class="cl-bulk-target" data-group="${escapeHtml(g.key)}">
+            <option value="">— Choose target page —</option>
+            ${g.candidates.map(c => `<option value="${escapeHtml(c.id)}" data-title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</option>`).join('')}
+         </select>`
+      : '';
+    const chosenTargetTitle = unambig ? (g.candidates[0]?.title || '') : '';
+    const bulkBar = allowBulk ? `
+      <div class="card" style="padding:8px 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;" data-bulk-group="${escapeHtml(g.key)}">
+        <div style="font-weight:600;">Bulk actions</div>
+        ${unambig ? '' : bulkTargetSelect}
+        <button class="chip cl-bulk-fix" data-group="${escapeHtml(g.key)}" ${unambig ? '' : 'disabled'} title="${unambig ? '' : 'Choose a target page to resolve to'}">
+          Fix all ${g.count} occurrences → Page ‘${escapeHtml(chosenTargetTitle || g.title)}’
+        </button>
+        <button class="chip cl-bulk-plain" data-group="${escapeHtml(g.key)}">Convert all ${g.count} occurrences to plain text</button>
+        <span class="meta cl-bulk-status" data-group="${escapeHtml(g.key)}" style="margin-left:auto;"></span>
+      </div>
+    ` : '';
+
     const table = `
       <div class="cl-table">
         <div class="cl-row header">
@@ -539,6 +561,7 @@ export async function render(container) {
         ${head}
         ${headMeta}
         <div style="margin-top:6px; display:flex; flex-direction:column; gap:6px;">
+          ${bulkBar}
           ${table}
           ${candidates}
           ${controls}
@@ -550,6 +573,8 @@ export async function render(container) {
       const root = bodyEl.querySelector('.cl-details');
       root?.querySelector('[data-expand]')?.addEventListener('click', () => { expandedKeys.add(g.key); renderUnresolved(); });
       root?.querySelector('[data-collapse]')?.addEventListener('click', () => { expandedKeys.delete(g.key); renderUnresolved(); });
+      // Wire bulk controls for this group
+      wireBulkGroupActions(g);
     }, 0);
 
     return wrap;
@@ -704,6 +729,277 @@ export async function render(container) {
         window.prompt('Copy quick fix:', text);
       }
     }));
+  }
+
+  function wireBulkGroupActions(group) {
+    const key = group.key;
+    // CSS.escape is supported in modern browsers; fallback minimal
+    const selKey = (window.CSS && CSS.escape) ? CSS.escape(key) : key.replace(/[^\w-]/g, '_');
+    const bulkRoot = bodyEl.querySelector(`[data-bulk-group="${selKey}"]`);
+    if (!bulkRoot) return;
+    const fixBtn = bulkRoot.querySelector('.cl-bulk-fix');
+    const plainBtn = bulkRoot.querySelector('.cl-bulk-plain');
+    const statusEl = bulkRoot.querySelector('.cl-bulk-status');
+    const targetSel = bulkRoot.querySelector('.cl-bulk-target');
+
+    if (targetSel && fixBtn) {
+      targetSel.addEventListener('change', () => {
+        const val = targetSel.value || '';
+        if (val) {
+          fixBtn.removeAttribute('disabled');
+          const title = targetSel.options[targetSel.selectedIndex]?.getAttribute('data-title') || '';
+          if (title) fixBtn.textContent = `Fix all ${group.count} occurrences → Page ‘${title}’`;
+        } else {
+          fixBtn.setAttribute('disabled', '');
+          fixBtn.textContent = `Fix all ${group.count} occurrences → Page ‘${group.title}’`;
+        }
+      });
+    }
+
+    if (fixBtn) fixBtn.addEventListener('click', async () => {
+      fixBtn.disabled = true; if (plainBtn) plainBtn.disabled = true;
+      try {
+        const candidates = Array.isArray(group.candidates) ? group.candidates : [];
+        let targetPageId = '';
+        let targetTitle = '';
+        if (candidates.length === 1) { targetPageId = candidates[0].id; targetTitle = candidates[0].title; }
+        else if (targetSel && targetSel.value) {
+          targetPageId = targetSel.value;
+          targetTitle = targetSel.options[targetSel.selectedIndex]?.getAttribute('data-title') || '';
+        }
+        if (!targetPageId) { alert('Choose a target page to resolve to.'); return; }
+        await resolveGroupAll({ groupKey: key, targetPageId, targetTitle }, { statusEl });
+      } catch (e) {
+        console.error(e); alert('Bulk resolve failed: ' + (e?.message || e));
+      } finally { fixBtn.disabled = false; if (plainBtn) plainBtn.disabled = false; }
+    });
+
+    if (plainBtn) plainBtn.addEventListener('click', async () => {
+      if (fixBtn) fixBtn.disabled = true; plainBtn.disabled = true;
+      try {
+        await convertGroupAllToPlain({ groupKey: key }, { statusEl });
+      } catch (e) {
+        console.error(e); alert('Bulk convert failed: ' + (e?.message || e));
+      } finally { if (fixBtn) fixBtn.disabled = false; plainBtn.disabled = false; }
+    });
+  }
+
+  // ------- Bulk operations (within route render for state access)
+  async function resolveGroupAll({ groupKey, targetPageId, targetTitle }, { statusEl } = {}) {
+    const g = (results?.unresolvedGroups || []).find(x => x.key === groupKey);
+    if (!g) throw new Error('Group not found');
+    const occ = Array.isArray(g.occurrences) ? g.occurrences : [];
+    if (!occ.length) { alert('Nothing to fix in this group.'); return; }
+
+    statusEl && (statusEl.textContent = `Dry run…`);
+    const plan = await dryRunVerify(occ, () => `[[page:${targetPageId}|…]]`);
+
+    const willFix = plan.filter(p => p.status === 'ok');
+    const already = plan.filter(p => p.status === 'skip');
+    const failed = plan.filter(p => p.status === 'fail');
+
+    const total = occ.length;
+    const will = willFix.length;
+    const alr = already.length;
+    const fal = failed.length;
+    const examples = summarizePages(willFix, 5);
+    const label = g.title || '';
+    const before = `[[${label}]]`;
+    const after = `[[page:${targetPageId}|${label}]]`;
+    let msg = `About to link ${will} of ${total} occurrences across ${examples.pages} page(s).\n\n` +
+      `Before → After (example):\n${before} → ${after}\n\n` +
+      `Counts:\n` +
+      `• willFix: ${will}\n` +
+      `• alreadyFixedOrMissing: ${alr}\n` +
+      `• failed: ${fal}\n` +
+      `${examples.list ? `\nExample pages: ${examples.list}` : ''}`;
+    if (total >= 20) {
+      const typed = window.prompt(msg + `\n\nType FIX to proceed:`);
+      if (typed !== 'FIX') { statusEl && (statusEl.textContent = 'Cancelled'); return; }
+    } else {
+      const ok = window.confirm(msg + `\n\nProceed?`);
+      if (!ok) { statusEl && (statusEl.textContent = 'Cancelled'); return; }
+    }
+
+    let done = 0, success = 0, fail = 0;
+    const succeededKeys = [];
+    statusEl && (statusEl.textContent = `Fixing ${done} / ${will}…`);
+    const tasks = willFix.map(p => async () => {
+      try {
+        await resolveOneLegacyTokenToPage({
+          pageId: p.item.pageId,
+          blockId: p.item.blockId,
+          token: p.item.token,
+          targetPageId,
+          label: p.item.title || extractLegacyLabel(p.item.token) || '',
+          field: p.item.field || '',
+          matchIndex: p.item.matchIndex,
+          contextBefore: p.item.contextBefore,
+          contextAfter: p.item.contextAfter,
+          title: p.item.title,
+        });
+        success++;
+        succeededKeys.push(`${p.item.pageId}:${p.item.blockId}:${p.item.field}:${p.item.matchIndex}`);
+      } catch (e) { console.error(e); fail++; }
+      finally { done++; statusEl && (statusEl.textContent = `Fixing ${done} / ${will}…`); }
+    });
+
+    await runWithConcurrency(tasks, 4);
+
+    const okSet = new Set(succeededKeys);
+    g.occurrences = (g.occurrences || []).filter(o => !okSet.has(`${o.pageId}:${o.blockId}:${o.field}:${o.matchIndex}`));
+    g.count = g.occurrences.length;
+    if (g.count === 0) {
+      const gi = results.unresolvedGroups.findIndex(x => x.key === g.key);
+      if (gi >= 0) results.unresolvedGroups.splice(gi, 1);
+      if (selectedKey === g.key) selectedKey = results.unresolvedGroups[0]?.key || null;
+    }
+    renderSummary();
+    renderUnresolved();
+
+    alert(`Bulk resolve complete.\n\nLinked: ${success}\nFailed: ${fail}\nSkipped: ${alr}`);
+    statusEl && (statusEl.textContent = '');
+  }
+
+  async function convertGroupAllToPlain({ groupKey }, { statusEl } = {}) {
+    const g = (results?.unresolvedGroups || []).find(x => x.key === groupKey);
+    if (!g) throw new Error('Group not found');
+    const occ = Array.isArray(g.occurrences) ? g.occurrences : [];
+    if (!occ.length) { alert('Nothing to convert in this group.'); return; }
+
+    statusEl && (statusEl.textContent = `Dry run…`);
+    const plan = await dryRunVerify(occ, () => ``);
+    const willFix = plan.filter(p => p.status === 'ok');
+    const already = plan.filter(p => p.status === 'skip');
+    const failed = plan.filter(p => p.status === 'fail');
+    const total = occ.length;
+    const will = willFix.length;
+    const alr = already.length;
+    const fal = failed.length;
+    const examples = summarizePages(willFix, 5);
+    const label = g.title || '';
+    const before = `[[${label}]]`;
+    const after = `${label}`;
+    let msg = `About to convert ${will} of ${total} occurrences to plain text across ${examples.pages} page(s).\n\n` +
+      `Before → After (example):\n${before} → ${after}\n\n` +
+      `Counts:\n` +
+      `• willChange: ${will}\n` +
+      `• alreadyMissing: ${alr}\n` +
+      `• failed: ${fal}\n` +
+      `${examples.list ? `\nExample pages: ${examples.list}` : ''}`;
+    const ok = window.confirm(msg + `\n\nProceed?`);
+    if (!ok) { statusEl && (statusEl.textContent = 'Cancelled'); return; }
+
+    let done = 0, success = 0, fail = 0;
+    const succeededKeys = [];
+    statusEl && (statusEl.textContent = `Converting ${done} / ${will}…`);
+
+    const tasks = willFix.map(p => async () => {
+      try {
+        await convertOneLegacyToken({ pageId: p.item.pageId, blockId: p.item.blockId, token: p.item.token });
+        success++;
+        succeededKeys.push(`${p.item.pageId}:${p.item.blockId}:${p.item.field}:${p.item.matchIndex}`);
+      } catch (e) { console.error(e); fail++; }
+      finally { done++; statusEl && (statusEl.textContent = `Converting ${done} / ${will}…`); }
+    });
+
+    await runWithConcurrency(tasks, 4);
+
+    const okSet = new Set(succeededKeys);
+    g.occurrences = (g.occurrences || []).filter(o => !okSet.has(`${o.pageId}:${o.blockId}:${o.field}:${o.matchIndex}`));
+    g.count = g.occurrences.length;
+    if (g.count === 0) {
+      const gi = results.unresolvedGroups.findIndex(x => x.key === g.key);
+      if (gi >= 0) results.unresolvedGroups.splice(gi, 1);
+      if (selectedKey === g.key) selectedKey = results.unresolvedGroups[0]?.key || null;
+    }
+    renderSummary();
+    renderUnresolved();
+
+    alert(`Bulk convert complete.\n\nConverted: ${success}\nFailed: ${fail}\nSkipped: ${alr}`);
+    statusEl && (statusEl.textContent = '');
+  }
+
+  // Dry run verifier: checks whether each occurrence token is still present using field + index + context + regex fallback
+  async function dryRunVerify(occurrences, makeReplacementPreview) {
+    const items = Array.isArray(occurrences) ? occurrences : [];
+    const out = [];
+    await limitedMap(items, 4, async (o) => {
+      try {
+        const page = await fetchJson(`/api/pages/${encodeURIComponent(o.pageId)}`);
+        const blk = (Array.isArray(page?.blocks) ? page.blocks : []).find(b => b.id === o.blockId);
+        if (!blk) { out.push({ item: o, status: 'fail', reason: 'Block not found' }); return; }
+        const content = safeParse(blk.contentJson);
+        const props = safeParse(blk.propsJson);
+        const field = String(o.field || '');
+        const matchIndex = Number(o.matchIndex);
+        const before = String(o.contextBefore || '');
+        const after = String(o.contextAfter || '');
+        const title = String(o.title || extractLegacyLabel(o.token) || '');
+
+        const textSrc = String(content?.text || '');
+        const htmlSrc = String(props?.html || '');
+
+        const foundText = findOccurrence(textSrc, o.token, matchIndex, before, after, title);
+        const foundHtml = findOccurrence(htmlSrc, o.token, matchIndex, before, after, title);
+
+        const present = (field === 'text') ? (foundText.found || (!foundText.tried && foundHtml.found)) : (field === 'html') ? (foundHtml.found || (!foundHtml.tried && foundText.found)) : (foundText.found || foundHtml.found);
+
+        if (present) {
+          out.push({ item: o, status: 'ok', preview: makeReplacementPreview(o) });
+        } else {
+          const missing = !(textSrc.includes(o.token) || htmlSrc.includes(o.token));
+          out.push({ item: o, status: missing ? 'skip' : 'fail', reason: missing ? 'Missing token' : 'Mismatch' });
+        }
+      } catch (e) {
+        out.push({ item: o, status: 'fail', reason: e?.message || String(e) });
+      }
+    });
+    return out;
+  }
+
+  function summarizePages(planItems, limit) {
+    const byPage = new Map();
+    for (const p of planItems) byPage.set(p.item.pageId, (byPage.get(p.item.pageId) || 0) + 1);
+    const entries = Array.from(byPage.entries()).sort((a,b)=>b[1]-a[1]);
+    return {
+      pages: byPage.size,
+      list: entries.slice(0, limit || 5).map(([pid,cnt]) => `${escapeHtml(getPageTitle(pid) || pid)} (${cnt})`).join(', '),
+    };
+  }
+
+  function runWithConcurrency(taskFns, limit) {
+    const tasks = Array.isArray(taskFns) ? taskFns : [];
+    const n = Math.max(1, Math.min(limit || 4, tasks.length || 0));
+    let i = 0;
+    async function worker() { while (true) { const idx = i++; if (idx >= tasks.length) return; await tasks[idx](); } }
+    return Promise.all(new Array(n).fill(0).map(() => worker()));
+  }
+
+  function findOccurrence(src, token, matchIndex, before, after, title) {
+    const out = { tried: false, found: false };
+    if (!src) return out;
+    out.tried = true;
+    if (typeof matchIndex === 'number' && matchIndex >= 0 && src.slice(matchIndex, matchIndex + token.length) === token) { out.found = true; return out; }
+    let j = -1;
+    while (true) {
+      j = src.indexOf(token, j + 1);
+      if (j < 0) break;
+      const pre = src.slice(Math.max(0, j - String(before||'').length), j);
+      const post = src.slice(j + token.length, j + token.length + String(after||'').length);
+      const okPre = before ? pre.endsWith(before) : true;
+      const okPost = after ? post.startsWith(after) : true;
+      if (okPre && okPost) { out.found = true; return out; }
+    }
+    const t = String(title || '').trim();
+    if (t) {
+      try {
+        const re = new RegExp("\\[\\[\\s*" + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "\\s*\\]\\]", 'g');
+        let m;
+        while ((m = re.exec(src)) !== null) { out.found = true; return out; }
+      } catch {}
+    }
+    return out;
   }
 
   function syncTabs() {
