@@ -264,7 +264,7 @@ export function openTableEditor({ page, block, onClose } = {}) {
         });
         const width = document.createElement('select');
         width.className = 'te-col-width';
-        width.innerHTML = `<option value="auto">Auto</option><option value="s">S</option><option value="m">M</option><option value="l">L</option>`;
+        width.innerHTML = `<option value="auto">Auto</option><option value="s">S</option><option value="m">M</option><option value="l">L</option><option value="xl">XL</option>`;
         width.value = String(col.width || 'auto');
         width.addEventListener('change', () => { col.width = width.value; patch(table); });
         const head = document.createElement('div');
