@@ -49,9 +49,9 @@ function appendCleanupLog(entry) {
 
 // Extract plain text candidates from a text string for unresolved [[Title]] and broken token variants.
 // Returns detailed occurrences for unresolved, broken, and inbound page-id links.
-function scanTextForTokens(text, { pageId, blockId, blockType }) {
+function scanTextForTokens(text, { pageId, blockId, blockType, field }) {
   const s = String(text || '');
-  const unresolved = []; // { title, pageId, blockId, blockType, snippet, fullSnippet, token }
+  const unresolved = []; // { title, pageId, blockId, blockType, snippet, fullSnippet, token, field, matchIndex, contextBefore, contextAfter }
   const broken = []; // { kind, pageId, blockId, blockType, snippet, fullSnippet, token }
   const inboundIds = []; // pageId uuids referenced by id links in this string
 
@@ -83,7 +83,21 @@ function scanTextForTokens(text, { pageId, blockId, blockType }) {
     // Legacy unresolved [[Title]]
     const title = inner.trim();
     if (title) {
-      unresolved.push({ title, pageId, blockId, blockType: blockType || null, snippet: makeSnippet(s, m.index, full.length), fullSnippet: makeLineSnippet(s, m.index, full.length), token: full });
+      const ctxBefore = s.slice(Math.max(0, m.index - 20), m.index);
+      const ctxAfter = s.slice(m.index + full.length, m.index + full.length + 20);
+      unresolved.push({
+        title,
+        pageId,
+        blockId,
+        blockType: blockType || null,
+        snippet: makeSnippet(s, m.index, full.length),
+        fullSnippet: makeLineSnippet(s, m.index, full.length),
+        token: full,
+        field: field || null,
+        matchIndex: m.index,
+        contextBefore: ctxBefore,
+        contextAfter: ctxAfter,
+      });
     }
   }
   // B) Missing closing token: any '[[' with no following ']]'
@@ -181,11 +195,14 @@ async function runScan() {
     for (const b of blocks) {
       const content = safeParse(b?.contentJson);
       const props = safeParse(b?.propsJson);
-      const fields = [];
-      if (content?.text) fields.push(String(content.text));
-      if (props?.html) fields.push(String(props.html));
-      for (const field of fields) {
-        const { unresolved, broken, inboundIds } = scanTextForTokens(field, { pageId: p.id, blockId: b.id, blockType: b?.type || null });
+      if (content?.text) {
+        const { unresolved, broken, inboundIds } = scanTextForTokens(String(content.text), { pageId: p.id, blockId: b.id, blockType: b?.type || null, field: 'text' });
+        if (unresolved.length) allUnresolved.push(...unresolved);
+        if (broken.length) allBroken.push(...broken);
+        for (const targetId of inboundIds) inboundCounts[targetId] = (inboundCounts[targetId] || 0) + 1;
+      }
+      if (props?.html) {
+        const { unresolved, broken, inboundIds } = scanTextForTokens(String(props.html), { pageId: p.id, blockId: b.id, blockType: b?.type || null, field: 'html' });
         if (unresolved.length) allUnresolved.push(...unresolved);
         if (broken.length) allBroken.push(...broken);
         for (const targetId of inboundIds) inboundCounts[targetId] = (inboundCounts[targetId] || 0) + 1;
@@ -307,6 +324,12 @@ export async function render(container) {
         .cl-explainer { font-size: 13px; color: var(--muted); }
         .cl-explainer .title { font-weight: 600; color: var(--text); margin-bottom: 2px; }
         .cl-snippet mark { background: color-mix(in srgb, var(--accent) 28%, transparent); color: inherit; padding: 0 2px; border-radius: 2px; }
+        /* Expanded occurrence panel */
+        .cl-expand { border-bottom:1px solid var(--border); padding:10px; display:flex; flex-direction:column; gap:8px; background: color-mix(in srgb, var(--panel) 60%, transparent); }
+        .cl-expand-snippet { font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace); white-space:pre-wrap; background: var(--bg); border:1px solid var(--border); border-radius: var(--radius-4); padding:8px; }
+        .cl-expand-snippet mark { background: color-mix(in srgb, var(--accent) 28%, transparent); color: inherit; padding: 0 2px; border-radius: 2px; }
+        .cl-expand-meta { display:flex; gap:14px; flex-wrap:wrap; color: var(--muted); }
+        .cl-expand-actions { display:flex; gap:8px; flex-wrap:wrap; }
       </style>
       <h1>Cleanup</h1>
       <div class="tool-tabs cl-header" style="margin: 6px 0;">
@@ -336,6 +359,7 @@ export async function render(container) {
   let results = null;
   let selectedKey = null; // unresolved group key
   const expandedKeys = new Set(); // unresolved group -> expanded occurrences
+  const expandedOcc = new Set(); // per-occurrence expanded: `${pageId}:${blockId}:${token}`
   let pageTitleById = null; // Map of pageId -> title (for display-only)
 
   function applyStamp(ts) {
@@ -413,6 +437,20 @@ export async function render(container) {
     return '';
   }
 
+  function occKey(o) {
+    return `${o.pageId}:${o.blockId}:${o.token}`;
+  }
+
+  function pageHrefAtBlock({ id, slug, title }, blockId) {
+    try {
+      const base = pageHref({ id, slug, title });
+      const sep = base.includes('?') ? '&' : '?';
+      return `${base}${sep}block=${encodeURIComponent(blockId)}`;
+    } catch {
+      return pageHref({ id, slug, title });
+    }
+  }
+
   function renderUnresolved() {
     const groups = results.unresolvedGroups || [];
     // Default selection: first group
@@ -487,7 +525,7 @@ export async function render(container) {
           <div>Source page</div>
           <div>Actions</div>
         </div>
-        ${shown.map(o => renderOccurrenceRow2(o)).join('')}
+        ${shown.map(o => renderOccurrenceRow2(o, g)).join('')}
       </div>`;
 
     const controls = `
@@ -517,7 +555,7 @@ export async function render(container) {
     return wrap;
   }
 
-  function renderOccurrenceRow2(o) {
+  function renderOccurrenceRow2(o, group) {
     const href = pageHref({ id: o.pageId, slug: null, title: o.pageTitle || getPageTitle(o.pageId) || '' });
     const highlighted = highlightSnippetHtml(String(o.snippet || ''), String(o.token || ''));
     const snippet = highlighted.replace(/\n/g, ' ');
@@ -527,19 +565,53 @@ export async function render(container) {
     const blockInfo = escapeHtml(String(o.blockId || ''));
     const blockType = o.blockType ? ` <span class="meta">${escapeHtml(String(o.blockType))}</span>` : '';
     const tooltip = escapeHtml(String(o.fullSnippet || o.snippet || o.token || ''));
+    const key = occKey(o);
+    const isOpen = expandedOcc.has(key);
+    const unambig = (group?.candidates?.length === 1);
+    const cand = unambig ? group.candidates[0] : null;
+    const label = group?.title || extractLegacyLabel(o.token) || '';
+    const hrefAtBlock = pageHrefAtBlock({ id: o.pageId, slug: null, title: o.pageTitle || getPageTitle(o.pageId) || '' }, o.blockId);
     return `
-      <div class="cl-row">
+      <div class="cl-row" data-ockey="${escapeHtml(key)}">
         <div class="cl-snippet meta" title="${tooltip}">${snippet}</div>
         <div class="cl-source" title="${pageInfo}(${pageMuted}) · block ${blockInfo}">Page: ${pageInfo}<span class="meta">(${pageMuted})</span> • Block: <span class="meta">${blockInfo}</span>${blockType}</div>
         <div class="cl-actions">
+          <button class="chip cl-details-toggle" data-ockey="${escapeHtml(key)}">${isOpen ? 'Hide details' : 'Details'}</button>
           <a class="chip" href="${href}" data-link target="_blank" rel="noopener">Open page</a>
           <button class="chip cl-to-plain" data-page="${escapeHtml(o.pageId)}" data-block="${escapeHtml(o.blockId)}" data-token="${escapeHtml(o.token)}" data-snippet="${tooltip}">Convert to plain text</button>
         </div>
-      </div>`;
+      </div>
+      ${isOpen ? `
+        <div class="cl-expand" data-ockey="${escapeHtml(key)}">
+          <div class="cl-expand-snippet">${highlightSnippetHtml(String(o.snippet || ''), String(o.token || '')).replace(/\n/g, '\n')}</div>
+          <div class="cl-expand-meta">
+            <div><strong>Page:</strong> ${pageInfo}<span class="meta">(${pageMuted})</span></div>
+            <div><strong>Block:</strong> <span class="meta">${blockInfo}</span>${blockType}</div>
+          </div>
+          <div class="cl-expand-actions">
+            <a class="chip" href="${href}" data-link target="_blank" rel="noopener">Open page</a>
+            <a class="chip" href="${hrefAtBlock}" data-link target="_blank" rel="noopener">Open page at block</a>
+            ${unambig ? `
+              <button class="chip cl-resolve" data-page="${escapeHtml(o.pageId)}" data-block="${escapeHtml(o.blockId)}" data-token="${escapeHtml(o.token)}" data-target="${escapeHtml(cand.id)}" data-label="${escapeHtml(label)}" data-target-title="${escapeHtml(cand.title)}" data-field="${escapeHtml(String(o.field || ''))}" data-idx="${String(o.matchIndex ?? '')}" data-before="${escapeHtml(String(o.contextBefore || ''))}" data-after="${escapeHtml(String(o.contextAfter || ''))}" data-title="${escapeHtml(String(o.title || label || ''))}">Fix link → "${escapeHtml(cand.title)}"</button>
+              <button class="chip cl-copy-fix" data-target="${escapeHtml(cand.id)}" data-label="${escapeHtml(label)}">Copy quick fix</button>
+            ` : `
+              <button class="chip" disabled title="Ambiguous; open page to resolve manually">Resolve → [[page:…|${escapeHtml(label)}]]</button>
+            `}
+            <button class="chip cl-to-plain" data-page="${escapeHtml(o.pageId)}" data-block="${escapeHtml(o.blockId)}" data-token="${escapeHtml(o.token)}" data-snippet="${tooltip}">Convert to plain text</button>
+          </div>
+        </div>
+      ` : ''}
+    `;
   }
 
   function wireOccurrenceActions() {
     bodyEl.querySelectorAll('a[data-link]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); openHrefNewTab(a.getAttribute('href')); }));
+    bodyEl.querySelectorAll('.cl-details-toggle').forEach(btn => btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-ockey');
+      if (!key) return;
+      if (expandedOcc.has(key)) expandedOcc.delete(key); else expandedOcc.add(key);
+      renderUnresolved();
+    }));
     bodyEl.querySelectorAll('.cl-to-plain').forEach(btn => btn.addEventListener('click', async () => {
       btn.disabled = true;
       try {
@@ -556,6 +628,81 @@ export async function render(container) {
         console.error(e);
         alert('Failed to convert: ' + (e?.message || e));
       } finally { btn.disabled = false; }
+    }));
+    bodyEl.querySelectorAll('.cl-resolve').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const pageId = btn.getAttribute('data-page');
+        const blockId = btn.getAttribute('data-block');
+        const token = btn.getAttribute('data-token');
+        const targetId = btn.getAttribute('data-target');
+        const label = btn.getAttribute('data-label') || '';
+        const targetTitle = btn.getAttribute('data-target-title') || '';
+        const field = btn.getAttribute('data-field') || '';
+        const matchIndex = Number(btn.getAttribute('data-idx') || '-1');
+        const contextBefore = btn.getAttribute('data-before') || '';
+        const contextAfter = btn.getAttribute('data-after') || '';
+        const occTitle = btn.getAttribute('data-title') || label || '';
+        if (!pageId || !blockId || !token || !targetId) throw new Error('Missing parameters');
+        const confirmMsg = `Make this a real internal link?\n\n` +
+          `This will turn the broken [[${label || 'Title'}]] into a clickable link to the page "${targetTitle}".\n` +
+          `Only this one occurrence in this block will be changed.\n\n` +
+          `Before: [[${label || 'Title'}]]\n` +
+          `After: ${label || 'Title'} (links to "${targetTitle}")\n\n` +
+          `Technical details:\n` +
+          `[[page:${targetId}|${label}]]`;
+        const ok = window.confirm(confirmMsg);
+        if (!ok) return;
+        await resolveOneLegacyTokenToPage({ pageId, blockId, token, targetPageId: targetId, label, field, matchIndex, contextBefore, contextAfter, title: occTitle });
+        alert(`✅ Linked this occurrence to page "${targetTitle}".`);
+        // Remove just this occurrence in-place from results, so UI updates without rescan
+        try {
+          const titleKey = normalizeTitleKey(occTitle || label || '');
+          const g = (results?.unresolvedGroups || []).find(x => x.key === titleKey);
+          if (g) {
+            let idx = (g.occurrences || []).findIndex(o => o.pageId === pageId && o.blockId === blockId && (String(o.field||'') === String(field||'') ) && (Number(o.matchIndex||-1) === Number(matchIndex||-1)));
+            if (idx < 0) {
+              // Fallback for older cached results without metadata: match by pageId/blockId/token
+              idx = (g.occurrences || []).findIndex(o => o.pageId === pageId && o.blockId === blockId && String(o.token||'') === String(token||''));
+            }
+            if (idx >= 0) {
+              g.occurrences.splice(idx, 1);
+              g.count = Math.max(0, (g.count||0) - 1);
+              if (g.count === 0 || g.occurrences.length === 0) {
+                const gi = (results.unresolvedGroups || []).findIndex(x => x.key === titleKey);
+                if (gi >= 0) results.unresolvedGroups.splice(gi, 1);
+                if (selectedKey === titleKey) selectedKey = (results.unresolvedGroups[0]?.key) || null;
+              }
+              renderUnresolved();
+            }
+          }
+        } catch {}
+      } catch (e) {
+        console.error(e);
+        if (e && (e.message === 'STALE_SCAN' || e.code === 'STALE_SCAN')) {
+          try {
+            const pages = await fetchJson('/api/pages');
+          } catch {}
+          const href = pageHrefAtBlock({ id: btn.getAttribute('data-page'), slug: null, title: '' }, btn.getAttribute('data-block'));
+          const msg = 'This scan result is out of date — the text in this block has changed. Please Run scan again.\n\nOK: Open page at block\nCancel: Re-run scan now';
+          const choice = window.confirm(msg);
+          if (choice) { openHrefNewTab(href); }
+          else { try { await doRunScan(); } catch {} }
+        } else {
+          alert('Failed to resolve: ' + (e?.message || e));
+        }
+      } finally { btn.disabled = false; }
+    }));
+    bodyEl.querySelectorAll('.cl-copy-fix').forEach(btn => btn.addEventListener('click', async () => {
+      const targetId = btn.getAttribute('data-target');
+      const label = btn.getAttribute('data-label') || '';
+      const text = `[[page:${targetId}|${label}]]`;
+      try {
+        if (navigator?.clipboard?.writeText) { await navigator.clipboard.writeText(text); alert('Copied quick fix.'); }
+        else { window.prompt('Copy quick fix:', text); }
+      } catch {
+        window.prompt('Copy quick fix:', text);
+      }
     }));
   }
 
@@ -768,4 +915,141 @@ async function convertOneLegacyToken({ pageId, blockId, token }) {
 function extractLegacyLabel(token) {
   const m = String(token || '').match(/^\s*\[\[([^\]]*?)\]\]\s*$/);
   return m ? (m[1] || '').trim() : '';
+}
+
+// ------- Safe resolve action (single occurrence)
+
+async function resolveOneLegacyTokenToPage({ pageId, blockId, token, targetPageId, label, field, matchIndex, contextBefore, contextAfter, title }) {
+  // Fetch fresh block content to avoid stale edits
+  const page = await fetchJson(`/api/pages/${encodeURIComponent(pageId)}`);
+  const blk = (Array.isArray(page?.blocks) ? page.blocks : []).find(b => b.id === blockId);
+  if (!blk) throw new Error('Block not found');
+  const content = safeParse(blk.contentJson);
+  const props = safeParse(blk.propsJson);
+  const replacement = `[[page:${targetPageId}|${label || extractLegacyLabel(token) || ''}]]`;
+  let changed = false;
+  let newText = String(content?.text || '');
+  let newHtml = null;
+
+  function escapeRegex(s) { return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function replaceAtIndex(src, idx, oldToken, repl) {
+    if (idx >= 0 && src.slice(idx, idx + oldToken.length) === oldToken) {
+      return src.slice(0, idx) + repl + src.slice(idx + oldToken.length);
+    }
+    return null;
+  }
+
+  function replaceByContext(src, oldToken, repl, approxIdx, before, after) {
+    // Try to find an occurrence whose surrounding context matches
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    let j = -1;
+    while (true) {
+      j = src.indexOf(oldToken, j + 1);
+      if (j < 0) break;
+      const pre = src.slice(Math.max(0, j - String(before||'').length), j);
+      const post = src.slice(j + oldToken.length, j + oldToken.length + String(after||'').length);
+      const okPre = before ? pre.endsWith(before) : true;
+      const okPost = after ? post.startsWith(after) : true;
+      if (okPre && okPost) {
+        const d = (typeof approxIdx === 'number' && approxIdx >= 0) ? Math.abs(j - approxIdx) : 0;
+        if (d < bestDist) { bestDist = d; bestIdx = j; }
+      }
+    }
+    if (bestIdx >= 0) return src.slice(0, bestIdx) + repl + src.slice(bestIdx + oldToken.length);
+    return null;
+  }
+
+  function replaceByTitleRegex(src, titleStr, repl, approxIdx) {
+    const t = String(titleStr || extractLegacyLabel(token) || '').trim();
+    if (!t) return null;
+    const re = new RegExp("\\\\[\\\\[\\s*" + escapeRegex(t) + "\\s*\\\\]\\\\]", 'g');
+    let m, best = null;
+    while ((m = re.exec(src)) !== null) {
+      const idx = m.index;
+      const dist = (typeof approxIdx === 'number' && approxIdx >= 0) ? Math.abs(idx - approxIdx) : 0;
+      if (!best || dist < best.dist) best = { idx, len: m[0].length, dist };
+    }
+    if (best) {
+      return src.slice(0, best.idx) + repl + src.slice(best.idx + best.len);
+    }
+    return null;
+  }
+
+  async function attempt(fieldSel) {
+    if (fieldSel === 'text') {
+      const src = String(content?.text || '');
+      let out = null;
+      // 1) index-based
+      out = replaceAtIndex(src, Number(matchIndex), token, replacement);
+      // 2) context-based
+      if (out == null) out = replaceByContext(src, token, replacement, Number(matchIndex), contextBefore, contextAfter);
+      // 3) tolerant by title
+      if (out == null) out = replaceByTitleRegex(src, title, replacement, Number(matchIndex));
+      if (out != null && out !== src) { newText = out; changed = true; return true; }
+      return false;
+    }
+    if (fieldSel === 'html') {
+      const src = String(props?.html || '');
+      if (!src) return false;
+      let out = null;
+      // 1) index-based
+      out = replaceAtIndex(src, Number(matchIndex), token, replacement);
+      // 2) context-based
+      if (out == null) out = replaceByContext(src, token, replacement, Number(matchIndex), contextBefore, contextAfter);
+      // 3) tolerant by title
+      if (out == null) out = replaceByTitleRegex(src, title, replacement, Number(matchIndex));
+      if (out != null && out !== src) { newHtml = out; changed = true; return true; }
+      return false;
+    }
+    return false;
+  }
+
+  // Primary: use provided field deterministically
+  let tried = false;
+  if (field === 'text' || field === 'html') {
+    tried = true;
+    await attempt(field);
+  }
+
+  // Fallbacks: try the other field and finally the old naive path
+  if (!changed && field === 'text') { await attempt('html'); }
+  if (!changed && field === 'html') { await attempt('text'); }
+
+  if (!changed) {
+    // Final naive attempt to keep previous behavior as a last resort
+    let i = newText.indexOf(token);
+    if (i >= 0) {
+      newText = newText.slice(0, i) + replacement + newText.slice(i + token.length);
+      changed = true;
+    }
+    try {
+      const html = String(props?.html || '');
+      if (!changed && html && html.includes(token)) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+        let tn, replaced = false;
+        while ((tn = walker.nextNode())) {
+          if (replaced) break;
+          const s = tn.nodeValue || '';
+          const j = s.indexOf(token);
+          if (j >= 0) { tn.nodeValue = s.slice(0, j) + replacement + s.slice(j + token.length); replaced = true; }
+        }
+        newHtml = tmp.innerHTML;
+        if (replaced) changed = true;
+      }
+    } catch {}
+  }
+
+  if (!changed) {
+    const err = new Error('STALE_SCAN');
+    err.code = 'STALE_SCAN';
+    throw err;
+  }
+  const patch = { content: { ...(content || {}), text: newText } };
+  if (newHtml != null) patch.props = { ...(props || {}), html: newHtml };
+  await fetchJson(`/api/blocks/${encodeURIComponent(blockId)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  appendCleanupLog({ ts: Date.now(), action: 'resolveToInternalPage', pageId, blockId, targetPageId, before: { text: content?.text || '', html: props?.html || '' }, after: { text: newText, html: newHtml != null ? newHtml : (props?.html || '') } });
 }
