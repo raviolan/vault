@@ -50,6 +50,30 @@ export async function routeOpen5e(req, res, ctx) {
     return true;
   }
 
+  // Local helper: list pages linked to a specific Open5e resource
+  // GET /api/open5e/local-pages?type=creature&slug=hawk
+  try {
+    const tailCheck = decodeURIComponent(m[1] || '').replace(/^\/+/, '');
+    if (tailCheck === 'local-pages') {
+      const t = (url.searchParams.get('type') || '').toLowerCase();
+      const s = (url.searchParams.get('slug') || '').toLowerCase();
+      if (!t || !s) { sendJson(res, 200, { pages: [] }); return true; }
+      // LIKE-based search on JSON text to avoid requiring JSON1
+      const likeType = `%"open5eSource"%"type":"${t.replace(/"/g, '"')}"%`;
+      const likeSlug = `%"open5eSource"%"slug":"${s.replace(/"/g, '"')}"%`;
+      const rows = ctx.db.prepare(
+        `SELECT p.id, p.title, p.slug, p.type
+           FROM pages p
+           JOIN page_sheets ps ON ps.page_id = p.id
+          WHERE ps.sheet_json LIKE ? ESCAPE '\\'
+            AND ps.sheet_json LIKE ? ESCAPE '\\'
+          LIMIT 5`
+      ).all(likeType, likeSlug);
+      sendJson(res, 200, { pages: rows });
+      return true;
+    }
+  } catch {}
+
   // Construct upstream URL safely
   let tail = m[1] || '';
   try { tail = decodeURIComponent(tail); } catch {}
@@ -103,4 +127,3 @@ export async function routeOpen5e(req, res, ctx) {
   res.end(buf);
   return true;
 }
-

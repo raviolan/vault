@@ -5,6 +5,7 @@ import { renderBlocksReadOnly } from '../../blocks/readOnly.js';
 import { parseMaybeJson } from '../../blocks/tree.js';
 // Ensure sheet store listeners (BroadcastChannel/storage) are active in this tab
 import { getPageSheet } from '../../lib/pageSheetStore.js';
+import { getOpen5eResource, normalizeO5eType } from '../../features/open5eCore.js';
 
 const APP_ID = 'hp';
 
@@ -192,7 +193,18 @@ export const HpTrackerApp = {
       async function search(q) {
         const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}`);
         const raw = res?.results || [];
-        items = raw.filter(r => (r?.type === 'npc'));
+        // Pre-filter: likely candidates (npc or anything; refine by sheet)
+        const base = raw.slice(0, 30);
+        const enriched = [];
+        for (const it of base) {
+          if (it?.type === 'npc') { enriched.push(it); continue; }
+          try {
+            const sheet = await getPageSheet(it.id);
+            const src = sheet?.open5eSource || null;
+            if (src && normalizeO5eType(src.type) === 'creature') { enriched.push(it); }
+          } catch {}
+        }
+        items = enriched;
         active = items.length ? 0 : -1;
         render();
       }
@@ -232,6 +244,22 @@ export const HpTrackerApp = {
       let hasAc = false, hasHpMax = false;
       try {
         const sheet = await getPageSheet(page.id);
+        const src = sheet?.open5eSource || null;
+        if (src && normalizeO5eType(src.type) === 'creature' && src.slug) {
+          try {
+            const data = await getOpen5eResource('creature', src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
+            if (data) {
+              const acVal = (data.armor_class != null ? data.armor_class : data.ac);
+              const hpVal = (data.hit_points != null ? data.hit_points : data.hp);
+              if (acVal != null) { ac = Number(acVal) || 0; hasAc = true; }
+              if (hpVal != null) { hpMax = Number(hpVal) || 0; hasHpMax = true; }
+              if (Number.isFinite(Number(data.xp))) {
+                // stash xp reward in a temp field on page for later use when building entry
+                page.__o5eXp = Math.max(0, Math.floor(Number(data.xp) || 0));
+              }
+            }
+          } catch {}
+        }
         if (sheet && (sheet.ac ?? null) !== null) { ac = Number(sheet.ac) || 0; hasAc = true; }
         if (sheet && (sheet.hpMax ?? null) !== null) { hpMax = Number(sheet.hpMax) || 0; hasHpMax = true; }
       } catch {}
@@ -242,7 +270,7 @@ export const HpTrackerApp = {
         if (!hasHpMax) hpMax = extractStatFromBlocks(sheetBlocks, 'hp') ?? 0;
       }
       const hp = hpMax;
-      const entry = ensureNpcDefaults({ pageId: page.id, pageSlug: String(page.slug || ''), title: page.title || 'Untitled', ac, hpMax, hp, avatarUrl });
+      const entry = ensureNpcDefaults({ pageId: page.id, pageSlug: String(page.slug || ''), title: page.title || 'Untitled', ac, hpMax, hp, avatarUrl, xpReward: Number.isFinite(Number(page.__o5eXp)) ? Number(page.__o5eXp) : undefined });
       state.npcs = (state.npcs || []).slice();
       state.npcs.push(entry);
       persist();

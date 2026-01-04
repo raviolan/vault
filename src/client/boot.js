@@ -57,6 +57,7 @@ export async function boot() {
   bindModalBasics('wikilinkCreateModal');
   bindModalBasics('open5eSpellModal');
   bindModalBasics('open5eSpellDetailsModal');
+  bindModalBasics('open5eLinkModal');
   bindModalBasics('inlineCommentModal');
   bindModalBasics('uploadErrorModal');
   try { installOpen5eSpellFeature(); } catch {}
@@ -137,6 +138,14 @@ export async function boot() {
   async function onToggleEdit() {
     const ap = getActivePage();
     if (!ap?.id || !ap?.canEdit) return;
+
+    // Guard: API-managed Open5e-derived pages are read-only
+    try {
+      if (document.body?.dataset?.apiManaged === '1') {
+        alert("Sorry, you can't edit this API page.");
+        return;
+      }
+    } catch {}
 
     const now = !isEditingPage(ap.id);
     setEditModeForPage(ap.id, now);

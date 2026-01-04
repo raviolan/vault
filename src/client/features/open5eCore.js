@@ -1,7 +1,9 @@
-// Small Open5e helper core (<=200 LOC)
+// Small Open5e helper core
 // - searchOpen5e(type, query, { allSources })
 // - fetchOpen5e(type, slug)
-// - buildOpenUrl(type, slug)
+// - buildOpenUrl(type, slug) -> site page
+// - buildApiPath(type, slug) -> our proxy JSON URL
+// - getOpen5eResource(type, slug, { ttlMs }) -> shared in-memory TTL cache
 
 import { fetchJson } from '../lib/http.js';
 
@@ -42,6 +44,12 @@ export function buildOpenUrl(type, slug) {
   return `${base}${path}/${encodeURIComponent(slug)}/`;
 }
 
+export function buildApiPath(type, slug) {
+  const m = mapForType(type) || mapForType('spell');
+  const endpoint = m.api;
+  return `/api/open5e/${endpoint}/${encodeURIComponent(slug)}/`;
+}
+
 export async function searchOpen5e(type, query, { allSources = false } = {}) {
   await ensureDiscovery(); // currently unused, but keeps contract to verify root
   const m = mapForType(type) || mapForType('spell');
@@ -68,3 +76,15 @@ export function normalizeO5eType(t) {
   return s;
 }
 
+// Simple in-memory TTL cache across features (hover + page view)
+const _o5eCache = new Map(); // key -> { ts:number, data:any }
+
+export async function getOpen5eResource(type, slug, { ttlMs = 15 * 60 * 1000 } = {}) {
+  const key = `${normalizeO5eType(type)}:${slug}`;
+  const now = Date.now();
+  const hit = _o5eCache.get(key);
+  if (hit && (now - (hit.ts || 0) < Math.max(1000, ttlMs))) return hit.data;
+  const data = await fetchOpen5e(type, slug);
+  _o5eCache.set(key, { ts: now, data });
+  return data;
+}

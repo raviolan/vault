@@ -20,6 +20,7 @@ import { canonicalPageHref } from '../lib/pageUrl.js';
 import { setActivePage } from '../lib/activePage.js';
 import { setDocumentTitle } from '../lib/documentTitle.js';
 import { getPageSheet, patchPageSheet, setPageSheetCache } from '../lib/pageSheetStore.js';
+import { getOpen5eResource, normalizeO5eType } from '../features/open5eCore.js';
 
 // ---------- Private helpers (pure refactor; no behavior change intended)
 
@@ -736,6 +737,64 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   const cleanupSheetHeader = initSheetHeaderFields(page);
 
   const blocksRoot = document.getElementById('pageBlocks');
+
+  // Detect API-managed Open5e page (read-only) and render derived view
+  let isApiManaged = false;
+  try {
+    const sheet = await getPageSheet(page.id);
+    const src = sheet?.open5eSource || null;
+    if (src && src.readonly && src.type && src.slug) {
+      isApiManaged = true;
+      // mark for global edit toggle guard
+      try { document.body.dataset.apiManaged = '1'; } catch {}
+      // Render derived content for supported types
+      const t = normalizeO5eType(src.type);
+      if (t === 'creature') {
+        const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
+        // Persist snapshot for offline/consistency (best-effort)
+        try {
+          const snap = { lastFetchedAt: Math.floor(Date.now()/1000), json: data || null };
+          await patchPageSheet(page.id, { open5eSnapshotV1: snap });
+        } catch {}
+        // Basic statblock rendering to keep within current structure
+        const host = blocksRoot;
+        if (host) {
+          const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+          const parts = [];
+          const name = data.name || page.title || '';
+          const size = data.size || '';
+          const type = data.type || '';
+          const alignment = data.alignment || '';
+          const cr = data.cr || data.challenge_rating || '';
+          const ac = data.armor_class != null ? data.armor_class : data.ac;
+          const hp = data.hit_points != null ? data.hit_points : data.hp;
+          const speed = typeof data.speed === 'string' ? data.speed : (data.speed_json || data.speed_jsonb || '');
+          parts.push(`<div class="hovercard" style="padding:10px;">`);
+          parts.push(`<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`);
+          const meta = [size, type, alignment].filter(Boolean).join(' • ');
+          parts.push(`<div class="meta" style="margin-bottom:8px;">${esc(meta)}${cr? (meta? ' • ' : '') + `CR ${esc(cr)}` : ''}</div>`);
+          const grid = [];
+          if (ac != null) grid.push(`<div><strong>AC</strong> ${esc(ac)}</div>`);
+          if (hp != null) grid.push(`<div><strong>HP</strong> ${esc(hp)}</div>`);
+          if (speed) grid.push(`<div><strong>Speed</strong> ${esc(speed)}</div>`);
+          const abil = ['strength','dexterity','constitution','intelligence','wisdom','charisma']
+            .map(k => data[k] != null ? data[k] : null);
+          if (abil.some(v => v != null)) {
+            const [str,dex,con,int,wis,cha] = abil.map(v => v == null ? '—' : String(v));
+            grid.push(`<div><strong>STR DEX CON INT WIS CHA</strong> ${esc(`${str} ${dex} ${con} ${int} ${wis} ${cha}`)}</div>`);
+          }
+          if (grid.length) parts.push(`<div style="display:grid; gap:4px; margin-bottom:8px;">${grid.join('')}</div>`);
+          // Traits/actions (basic)
+          const desc = (data.desc || data.description || '').trim();
+          if (desc) parts.push(`<div style="white-space:pre-wrap;">${esc(desc)}</div>`);
+          parts.push(`</div>`);
+          host.innerHTML = parts.join('');
+        }
+      }
+    } else {
+      try { delete document.body.dataset.apiManaged; } catch {}
+    }
+  } catch {}
   // Initialize current blocks respecting NPC sheet split and active tab (supports ?tab for NPC)
   try {
     const st = getState() || {};
@@ -764,7 +823,10 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
       setCurrentPageBlocks(page.blocks || []);
     }
   } catch { setCurrentPageBlocks(page.blocks || []); }
-  if (isEditingPage(page.id)) {
+  if (isApiManaged) {
+    // Read-only derived view; do not mount editor or save indicators
+    try { unmountSaveIndicator(); } catch {}
+  } else if (isEditingPage(page.id)) {
     setUiMode('edit');
     enablePageTitleEdit(page);
     renderBlocksEdit(blocksRoot, page, getCurrentPageBlocks());

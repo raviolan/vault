@@ -72,7 +72,7 @@ function renderSpellDetails(spell) {
 function getSpellDetailsModal() { return document.getElementById('open5eSpellDetailsModal'); }
 
 // Delegated click handler for .o5e-link (and legacy .o5e-spell)
-import { buildOpenUrl, fetchOpen5e, searchOpen5e, normalizeO5eType } from './open5eCore.js';
+import { buildOpenUrl, buildApiPath, fetchOpen5e, searchOpen5e, normalizeO5eType, getOpen5eResource } from './open5eCore.js';
 document.addEventListener('click', function(e) {
   const target = e.target;
   const el = target?.closest?.('.o5e-link, .o5e-spell');
@@ -82,13 +82,18 @@ document.addEventListener('click', function(e) {
   const slug = el.dataset.o5eSlug || el.getAttribute('data-o5e-slug') || '';
   const type = normalizeO5eType(el.dataset.o5eType || el.getAttribute('data-o5e-type') || 'spell');
   if (!slug) return;
+  // Modifier: cmd/ctrl-click bypasses modal to open site
+  const meta = e.metaKey || e.ctrlKey;
+  if (meta) {
+    e.preventDefault();
+    e.stopPropagation();
+    try { window.open(buildOpenUrl(type, slug), '_blank', 'noopener'); } catch {}
+    return;
+  }
   e.preventDefault();
   e.stopPropagation();
-  // Open Open5e site in a new tab; for spells also show details modal as a fallback
-  try { window.open(buildOpenUrl(type, slug), '_blank', 'noopener'); } catch {}
-  if (type === 'spell') {
-    try { setTimeout(() => openSpellDetails(slug), 0); } catch {}
-  }
+  // Default: open link modal for any Open5e type
+  try { void openOpen5eLinkModal({ type, slug }); } catch {}
 });
 import { fetchJson } from '../lib/http.js';
 import { $, $$, escapeHtml } from '../lib/dom.js';
@@ -246,7 +251,7 @@ function installHoverBehavior() {
         const key = `${type}:${slug}`;
         let data = cache.get(key);
         if (!data) {
-          data = await fetchOpen5e(type, slug);
+          data = await getOpen5eResource(type, slug, { ttlMs: 5 * 60 * 1000 });
           cache.set(key, data || {});
         }
         let html = '';
@@ -636,6 +641,98 @@ function wireModal() {
   });
   btnCancel?.addEventListener('click', () => { modal.style.display = 'none'; });
   btnLink?.addEventListener('click', () => commitLink(modal));
+}
+
+// ---- Open5e Link Modal (click on [[o5e:..]] tokens)
+function getO5eLinkModal() { return document.getElementById('open5eLinkModal'); }
+
+async function openOpen5eLinkModal({ type, slug }) {
+  const modal = getO5eLinkModal();
+  if (!modal) return;
+  const titleEl = modal.querySelector('#open5eLinkTitle');
+  const metaEl = modal.querySelector('#open5eLinkMeta');
+  const sel = modal.querySelector('#o5eLinkSectionSelect');
+  const btnCreate = modal.querySelector('#o5eCreatePageBtn');
+  const btnJson = modal.querySelector('#o5eOpenJsonBtn');
+  const btnExisting = modal.querySelector('#o5eOpenExistingBtn');
+  // populate fields
+  try {
+    titleEl.textContent = 'Open5e';
+    metaEl.textContent = '';
+    btnExisting.style.display = 'none';
+  } catch {}
+  modal.dataset.o5eType = type;
+  modal.dataset.o5eSlug = slug;
+  // Prefetch from shared cache with short TTL for quick title
+  try {
+    const data = await getOpen5eResource(type, slug, { ttlMs: 5 * 60 * 1000 });
+    if (data) {
+      const name = data.name || slug;
+      const sub = [];
+      if (type === 'spell') {
+        const level = (data.level_int != null ? data.level_int : data.level) ?? '';
+        const school = data.school || '';
+        if (level !== '' || school) sub.push(`${level === 0 ? 'Cantrip' : (level !== '' ? `Level ${level}` : '')}${school ? ` • ${school}` : ''}`);
+      } else if (type === 'creature') {
+        const cr = data.cr || data.challenge_rating || '';
+        const tp = data.type || '';
+        if (tp) sub.push(tp);
+        if (cr) sub.push(`CR ${cr}`);
+      } else if (type === 'item' || type === 'weapon' || type === 'armor') {
+        const cat = data.type || data.category || '';
+        const rarity = data.rarity || '';
+        if (cat) sub.push(cat);
+        if (rarity) sub.push(rarity);
+      }
+      titleEl.textContent = name;
+      metaEl.textContent = sub.filter(Boolean).join(' • ');
+    }
+  } catch {}
+  // Wire JSON button
+  btnJson.onclick = () => {
+    try { window.open(buildApiPath(type, slug), '_blank', 'noopener'); } catch {}
+  };
+  // Check for existing page by this Open5e resource
+  let existing = null;
+  try {
+    const res = await fetchJson(`/api/open5e/local-pages?type=${encodeURIComponent(type)}&slug=${encodeURIComponent(slug)}`);
+    const arr = Array.isArray(res?.pages) ? res.pages : [];
+    existing = arr[0] || null;
+  } catch {}
+  if (existing) {
+    btnExisting.style.display = '';
+    btnExisting.textContent = `Open existing page`;
+    btnExisting.onclick = () => { try { window.open(existing.slug ? `/p/${encodeURIComponent(existing.slug)}` : `/page/${encodeURIComponent(existing.id)}`, '_blank'); } catch {}; };
+    // Hide create to avoid duplicates
+    btnCreate.style.display = 'none';
+  } else {
+    btnExisting.style.display = 'none';
+    btnCreate.style.display = '';
+    btnCreate.textContent = 'Create new page';
+  }
+  // Wire create flow
+  btnCreate.onclick = async () => {
+    try {
+      const t = modal.dataset.o5eType || type;
+      const s = modal.dataset.o5eSlug || slug;
+      const pageType = sel?.value || 'note';
+      // Create page
+      const data = await getOpen5eResource(t, s, { ttlMs: 5 * 60 * 1000 });
+      const title = (data?.name) || s;
+      const page = await fetchJson('/api/pages', { method: 'POST', body: JSON.stringify({ title, type: pageType }) });
+      // Patch sheet with open5eSource metadata (+ optional snapshot placeholder)
+      const apiUrl = buildApiPath(t, s);
+      const docSlug = (data && (data.document__slug || data.document__slug_name || data.document__slug_field)) || null;
+      const sheetPatch = { open5eSource: { type: t, slug: s, apiUrl, ...(docSlug ? { documentSlug: String(docSlug) } : {}), createdFrom: 'open5e', readonly: true } };
+      try { await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/sheet`, { method: 'PATCH', body: JSON.stringify(sheetPatch) }); } catch {}
+      // Open page in new tab
+      try { window.open(page.slug ? `/p/${encodeURIComponent(page.slug)}` : `/page/${encodeURIComponent(page.id)}`, '_blank'); } catch {}
+    } catch (err) {
+      console.error('[o5e] create page failed', err);
+      alert('Failed to create page for this Open5e resource.');
+    }
+  };
+  modal.style.display = 'block';
 }
 
 export function installOpen5eSpellFeature() {

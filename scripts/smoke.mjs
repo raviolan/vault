@@ -34,6 +34,7 @@ async function main() {
   console.log(`[smoke] Base URL: ${BASE}`);
 
   let createdSmokePageId = null;
+  let createdO5ePageId = null;
   let createdResolvePageId = null;
 
   try {
@@ -145,7 +146,23 @@ async function main() {
     }
 
     // 10) Delete created page(s)
-    process.stdout.write('[10] DELETE /api/pages/:id (cleanup) ... ');
+    // 10) Verify Open5e local-pages lookup
+    process.stdout.write('[10] Open5e local-pages lookup ... ');
+    {
+      // Create a page and mark it as Open5e creature: hawk
+      const { json: p } = await fetchJson('/api/pages', { method: 'POST', body: JSON.stringify({ title: `Hawk (${stamp})`, type: 'note' }) });
+      createdO5ePageId = p.id;
+      await fetchJson(`/api/pages/${encodeURIComponent(p.id)}/sheet`, { method: 'PATCH', body: JSON.stringify({ open5eSource: { type: 'creature', slug: 'hawk', apiUrl: '/api/open5e/monsters/hawk/', createdFrom: 'open5e', readonly: true } }) });
+      const { res, json } = await fetchJson('/api/open5e/local-pages?type=creature&slug=hawk');
+      assert(res.ok, `expected 200, got ${res.status}`);
+      assert(Array.isArray(json.pages), 'pages array missing');
+      const found = json.pages.find(x => x.id === createdO5ePageId);
+      assert(!!found, 'local-pages did not find created page');
+    }
+    console.log('OK');
+
+    // 11) DELETE /api/pages/:id (cleanup)
+    process.stdout.write('[11] DELETE /api/pages/:id (cleanup) ... ');
     {
       const { res } = await fetchJson(`/api/pages/${encodeURIComponent(createdSmokePageId)}`, { method: 'DELETE' });
       assert(res.ok, `delete smoke page failed (${res.status})`);
@@ -153,8 +170,13 @@ async function main() {
     console.log('OK');
 
     if (createdResolvePageId) {
-      process.stdout.write('[11] DELETE resolved ÅTEJ page (cleanup) ... ');
+      process.stdout.write('[12] DELETE resolved ÅTEJ page (cleanup) ... ');
       const { res } = await fetchJson(`/api/pages/${encodeURIComponent(createdResolvePageId)}`, { method: 'DELETE' });
+      if (res.ok) console.log('OK'); else console.log(`WARN (${res.status})`);
+    }
+    if (createdO5ePageId) {
+      process.stdout.write('[13] DELETE created Open5e page (cleanup) ... ');
+      const { res } = await fetchJson(`/api/pages/${encodeURIComponent(createdO5ePageId)}`, { method: 'DELETE' });
       if (res.ok) console.log('OK'); else console.log(`WARN (${res.status})`);
     }
 
@@ -173,4 +195,3 @@ async function main() {
 }
 
 main();
-

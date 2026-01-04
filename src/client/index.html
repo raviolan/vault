@@ -391,6 +391,33 @@
     </div>
   </div>
 
+  <!-- Open5e Link Modal (for o5e links click) -->
+  <div class="modal" id="open5eLinkModal" tabindex="-1" aria-modal="true" style="display:none;">
+    <div class="modal-content" style="max-width:520px;">
+      <h2 id="open5eLinkTitle">Open5e</h2>
+      <div class="o5eLinkMeta meta" id="open5eLinkMeta" style="margin:6px 0 12px;"></div>
+      <div class="o5eLinkActions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:6px;">
+          <span class="meta">Section</span>
+          <select id="o5eLinkSectionSelect">
+            <option value="note">Note</option>
+            <option value="npc">NPC</option>
+            <option value="character">Character</option>
+            <option value="location">Location</option>
+            <option value="arc">Arc</option>
+            <option value="tool">Tool</option>
+          </select>
+        </label>
+        <button type="button" class="btn btn-primary" id="o5eCreatePageBtn">Create new page</button>
+        <button type="button" class="btn" id="o5eOpenJsonBtn">See stats on Open5e</button>
+        <button type="button" class="btn" id="o5eOpenExistingBtn" style="display:none;">Open existing page</button>
+      </div>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="button" class="modal-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Inline Comment Modal (styled similar to spell details modal) -->
   <div class="modal" id="inlineCommentModal" tabindex="-1" aria-modal="true" style="display:none;">
     <div class="modal-inner" style="background: var(--panel); color: var(--text); max-width: 560px;">
