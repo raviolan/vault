@@ -356,23 +356,37 @@
   </div>
 
   <div class="modal" id="open5eSpellModal" tabindex="-1" aria-modal="true" style="display:none;">
-    <div class="modal-content" style="max-width:680px;">
-      <h2>Link Spell</h2>
-      <label>
-        Query
-        <input name="open5eSpellQuery" type="text" placeholder="Search spells…" autocomplete="off" />
-      </label>
-      <label style="display:flex; align-items:center; gap:8px; margin:6px 0;">
-        <input type="checkbox" name="open5eSpellAllSources" />
-        <span>Search all sources</span>
-      </label>
+    <div class="modal-content" style="max-width:720px;">
+      <h2>Link Open5e</h2>
+      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <label>
+          Type
+          <select name="open5eType">
+            <option value="spell">Spell</option>
+            <option value="creature">Creature</option>
+            <option value="condition">Condition</option>
+            <option value="item">Magic Item</option>
+            <option value="weapon">Weapon</option>
+            <option value="armor">Armor</option>
+          </select>
+        </label>
+        <label style="flex:1; min-width:240px;">
+          Query
+          <input name="open5eSpellQuery" type="text" placeholder="Search Open5e…" autocomplete="off" />
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+          <input type="checkbox" name="open5eSpellAllSources" />
+          <span>Search all sources</span>
+        </label>
+      </div>
       <div class="o5eSpellHint" style="font-size:12px; color: var(--muted); min-height: 16px;"></div>
       <div style="display:flex; gap:10px;">
         <div class="o5eSpellResults" style="flex:1; min-width: 0; max-height: 260px; overflow:auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px;"></div>
         <div class="o5eSpellPreview hovercard" style="position:static; display:block; pointer-events:auto; max-width:none; min-width: 260px; flex:1;"></div>
       </div>
-      <div class="modal-actions">
+      <div class="modal-actions" style="display:flex; gap:8px; align-items:center;">
         <button type="button" class="modal-cancel">Cancel</button>
+        <button type="button" class="btn modal-link-all" disabled>Link all occurrences</button>
         <button type="button" class="modal-confirm" disabled>Link</button>
       </div>
     </div>

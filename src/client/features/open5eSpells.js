@@ -77,8 +77,7 @@ document.addEventListener('click', function(e) {
   const target = e.target;
   const el = target?.closest?.('.o5e-link, .o5e-spell');
   if (!el) return;
-  // Only handle in view mode (not edit mode)
-  if (document.body.classList.contains('editing')) return;
+  // Handle in both view and edit modes; modal-only action
   const slug = el.dataset.o5eSlug || el.getAttribute('data-o5e-slug') || '';
   const type = normalizeO5eType(el.dataset.o5eType || el.getAttribute('data-o5e-type') || 'spell');
   if (!slug) return;
@@ -411,7 +410,9 @@ async function doSearch(modal) {
 function selectResult(modal, sel) {
   setModalState(modal, { selection: sel });
   const btn = modal.querySelector('.modal-confirm');
+  const btnAll = modal.querySelector('.modal-link-all');
   if (btn) btn.disabled = !sel;
+  if (btnAll) btnAll.disabled = !sel;
   // Focus selected row visually
   const resultsEl = modal.querySelector('.o5eSpellResults');
   resultsEl?.querySelectorAll('.o5eSpellRow').forEach(n => n.classList.remove('is-selected'));
@@ -548,49 +549,48 @@ async function commitLink(modal) {
           } catch {}
         } catch {}
       } else {
-        const blk = getCurrentPageBlocks().find(b => String(b.id) === String(blockId));
-        const content = JSON.parse(blk?.contentJson || '{}');
-        const props = JSON.parse(blk?.propsJson || '{}');
-        const raw = String(content?.text || '');
-        const term = String(st.selectedText || '').trim();
-        const occIdx = raw.indexOf(term);
-        if (occIdx < 0) throw new Error('Selection not found in block');
-        if (raw.indexOf(term, occIdx + term.length) !== -1) {
-          alert('Term appears multiple times in this block. Edit to place precisely.');
+        // True read-only view selection: replace exactly the selected Range in the block DOM
+        try {
+          const blockEl = document.querySelector(`[data-block-id="${CSS.escape(String(blockId))}"]`);
+          if (!blockEl || !st.range) throw new Error('Missing selection range');
+          const range = st.range;
+          const label = String(st.selectedText || sel.item?.name || sel.slug || '').trim();
+          const t = normalizeO5eType(st.resourceType || st.type || 'spell');
+          const token = `[[o5e:${t}:${sel.slug}|${label}]]`;
+          // Mutate a temporary copy to compute next html/text safely
+          const tmp = document.createElement('div');
+          tmp.innerHTML = blockEl.innerHTML;
+          // Map the live range to the temp fragment by serializing offsets via text content walk
+          // Fallback: apply directly on live DOM, then read back
+          try {
+            range.deleteContents();
+            range.insertNode(document.createTextNode(token));
+          } catch {}
+          const nextHtml = sanitizeRichHtml(blockEl.innerHTML);
+          const nextText = plainTextFromHtmlContainer(blockEl);
+          const blocks = getCurrentPageBlocks();
+          const blk = blocks.find(b => String(b.id) === String(blockId));
+          const content = blk ? JSON.parse(blk.contentJson || '{}') : {};
+          const props = blk ? JSON.parse(blk.propsJson || '{}') : {};
+          updateCurrentBlocks(b => String(b.id) === String(blockId)
+            ? { ...b,
+                contentJson: JSON.stringify({ ...(content || {}), text: nextText }),
+                propsJson: JSON.stringify({ ...(props || {}), html: nextHtml })
+              }
+            : b);
+          rerenderReadOnlyNow();
+          try {
+            if (typeof patchBlockNow === 'function') {
+              void patchBlockNow(blockId, { content: { text: nextText }, props: { html: nextHtml } });
+            } else {
+              debouncePatch(blockId, { content: { text: nextText }, props: { html: nextHtml } }, 0);
+            }
+          } catch {}
+        } catch (e) {
+          console.error('[o5e] precise view selection failed, falling back', e);
+          alert('Failed to link the selected occurrence.');
           return;
         }
-        const label = term || String(sel.item?.name || sel.slug);
-        const t = normalizeO5eType(st.resourceType || st.type || 'spell');
-        const token = `[[o5e:${t}:${sel.slug}|${label}]]`;
-        const nextText = raw.slice(0, occIdx) + token + raw.slice(occIdx + term.length);
-        let nextHtml = null;
-        try {
-          const html = String(props?.html || '');
-          if (html && term && html.includes(term)) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
-            let tn; let replaced = false;
-            while ((tn = walker.nextNode())) {
-              if (replaced) break;
-              const s = tn.nodeValue || '';
-              const j = s.indexOf(term);
-              if (j >= 0) { tn.nodeValue = s.slice(0, j) + token + s.slice(j + term.length); replaced = true; }
-            }
-            nextHtml = tmp.innerHTML;
-          }
-        } catch {}
-        // Optimistic update and instant re-render (read-only)
-        updateCurrentBlocks(b => b.id === blockId ? { ...b, contentJson: JSON.stringify({ ...(content || {}), text: nextText }), ...(nextHtml != null ? { propsJson: JSON.stringify({ ...(props || {}), html: nextHtml }) } : {}) } : b);
-        rerenderReadOnlyNow();
-        // Persist without blocking UI
-        try {
-          if (typeof patchBlockNow === 'function') {
-            void patchBlockNow(blockId, { content: { text: nextText }, ...(nextHtml != null ? { props: { html: nextHtml } } : {}) });
-          } else {
-            debouncePatch(blockId, { content: { text: nextText }, ...(nextHtml != null ? { props: { html: nextHtml } } : {}) }, 0);
-          }
-        } catch {}
       }
     }
   } catch (e) {
@@ -604,9 +604,11 @@ async function commitLink(modal) {
 function openSpellModalWithContext(info, resourceType = 'spell') {
   const modal = getSpellModal();
   if (!modal) return;
-  setModalState(modal, { kind: info.kind, type: normalizeO5eType(resourceType), resourceType: normalizeO5eType(resourceType), textarea: info.textarea || null, start: info.start, end: info.end, blockId: info.blockId || null, selectedText: info.text || '', editableEl: info.editableEl || null, range: info.range || null });
+  const initType = normalizeO5eType(resourceType);
+  setModalState(modal, { kind: info.kind, type: initType, resourceType: initType, textarea: info.textarea || null, start: info.start, end: info.end, blockId: info.blockId || null, selectedText: info.text || '', editableEl: info.editableEl || null, range: info.range || null });
   const input = modal.querySelector('input[name="open5eSpellQuery"]');
   const allCb = modal.querySelector('input[name="open5eSpellAllSources"]');
+  const typeSel = modal.querySelector('select[name="open5eType"]');
   const queryText = info.text || '';
   if (input) input.value = queryText;
   setModalState(modal, { query: queryText, allSources: !!allCb?.checked, selection: null });
@@ -616,7 +618,9 @@ function openSpellModalWithContext(info, resourceType = 'spell') {
   try {
     const h2 = modal.querySelector('h2');
     const labels = { spell: 'Spell', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
-    h2.textContent = `Link ${labels[normalizeO5eType(resourceType)] || 'Open5e'}`;
+    h2.textContent = `Link ${labels[initType] || 'Open5e'}`;
+    if (typeSel) typeSel.value = initType;
+    if (input) input.placeholder = `Search ${labels[initType] || 'Open5e'}…`;
   } catch {}
   modal.style.display = 'block';
   setTimeout(() => { try { input?.focus(); input?.select(); } catch {} void doSearch(modal); }, 0);
@@ -627,8 +631,10 @@ function wireModal() {
   if (!modal) return;
   const input = modal.querySelector('input[name="open5eSpellQuery"]');
   const allCb = modal.querySelector('input[name="open5eSpellAllSources"]');
+  const typeSel = modal.querySelector('select[name="open5eType"]');
   const btnCancel = modal.querySelector('.modal-cancel');
   const btnLink = modal.querySelector('.modal-confirm');
+  const btnLinkAll = modal.querySelector('.modal-link-all');
   let timer = null;
   input?.addEventListener('input', () => {
     setModalState(modal, { query: input.value });
@@ -639,8 +645,20 @@ function wireModal() {
     setModalState(modal, { allSources: !!allCb.checked });
     void doSearch(modal);
   });
+  typeSel?.addEventListener('change', () => {
+    const t = typeSel.value;
+    setModalState(modal, { type: normalizeO5eType(t), selection: null });
+    try {
+      const h2 = modal.querySelector('h2');
+      const labels = { spell: 'Spell', creature: 'Creature', condition: 'Condition', item: 'Magic Item', weapon: 'Weapon', armor: 'Armor' };
+      if (h2) h2.textContent = `Link ${labels[normalizeO5eType(t)] || 'Open5e'}`;
+      if (input) input.placeholder = `Search ${labels[normalizeO5eType(t)] || 'Open5e'}…`;
+    } catch {}
+    void doSearch(modal);
+  });
   btnCancel?.addEventListener('click', () => { modal.style.display = 'none'; });
   btnLink?.addEventListener('click', () => commitLink(modal));
+  btnLinkAll?.addEventListener('click', () => linkAllOccurrences(modal));
 }
 
 // ---- Open5e Link Modal (click on [[o5e:..]] tokens)
@@ -742,8 +760,8 @@ export function installOpen5eSpellFeature() {
   // Register selection menu item using shared menu
   try {
     registerSelectionMenuItem({
-      id: 'o5e-spell-search',
-      label: 'Search Open5e (Spell)…',
+      id: 'o5e-search',
+      label: 'Search Open5e…',
       order: 10,
       isVisible: (ctx) => (
         (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
@@ -761,105 +779,120 @@ export function installOpen5eSpellFeature() {
         }
       }
     });
-    registerSelectionMenuItem({
-      id: 'o5e-creature-search',
-      label: 'Search Open5e (Creature)…',
-      order: 11,
-      isVisible: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      isEnabled: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      onClick: (ctx) => {
-        if (ctx.kind === 'textarea') {
-          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || ''), blockId: ctx.blockId || (ctx.ta?.dataset?.blockId || '') }, 'creature');
-        } else if (ctx.kind === 'view') {
-          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || ''), editableEl: ctx.editableEl || null, range: ctx.range || null }, 'creature');
-        }
-      }
-    });
-    registerSelectionMenuItem({
-      id: 'o5e-condition-search',
-      label: 'Search Open5e (Condition)…',
-      order: 12,
-      isVisible: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      isEnabled: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      onClick: (ctx) => {
-        if (ctx.kind === 'textarea') {
-          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || ''), blockId: ctx.blockId || (ctx.ta?.dataset?.blockId || '') }, 'condition');
-        } else if (ctx.kind === 'view') {
-          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || ''), editableEl: ctx.editableEl || null, range: ctx.range || null }, 'condition');
-        }
-      }
-    });
-    registerSelectionMenuItem({
-      id: 'o5e-item-search',
-      label: 'Search Open5e (Magic Item)…',
-      order: 13,
-      isVisible: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      isEnabled: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      onClick: (ctx) => {
-        if (ctx.kind === 'textarea') {
-          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || ''), blockId: ctx.blockId || (ctx.ta?.dataset?.blockId || '') }, 'item');
-        } else if (ctx.kind === 'view') {
-          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || ''), editableEl: ctx.editableEl || null, range: ctx.range || null }, 'item');
-        }
-      }
-    });
-    registerSelectionMenuItem({
-      id: 'o5e-weapon-search',
-      label: 'Search Open5e (Weapon)…',
-      order: 14,
-      isVisible: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      isEnabled: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      onClick: (ctx) => {
-        if (ctx.kind === 'textarea') {
-          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || ''), blockId: ctx.blockId || (ctx.ta?.dataset?.blockId || '') }, 'weapon');
-        } else if (ctx.kind === 'view') {
-          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || ''), editableEl: ctx.editableEl || null, range: ctx.range || null }, 'weapon');
-        }
-      }
-    });
-    registerSelectionMenuItem({
-      id: 'o5e-armor-search',
-      label: 'Search Open5e (Armor)…',
-      order: 15,
-      isVisible: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      isEnabled: (ctx) => (
-        (ctx.kind === 'textarea' && String(ctx.selected || '').trim())
-        || (ctx.kind === 'view' && String(ctx.text || '').trim())
-      ),
-      onClick: (ctx) => {
-        if (ctx.kind === 'textarea') {
-          openSpellModalWithContext({ kind: 'edit', textarea: ctx.ta, start: ctx.start, end: ctx.end, text: String(ctx.selected || ''), blockId: ctx.blockId || (ctx.ta?.dataset?.blockId || '') }, 'armor');
-        } else if (ctx.kind === 'view') {
-          openSpellModalWithContext({ kind: 'view', blockId: ctx.blockId, text: String(ctx.text || ''), editableEl: ctx.editableEl || null, range: ctx.range || null }, 'armor');
-        }
-      }
-    });
   } catch {}
 }
+
+// ---- Link all occurrences across the page
+function replaceAllInElementTextNodes(root, term, replacement) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let tn; let count = 0;
+  const re = new RegExp(`\\b${term.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'g');
+  const skipSelector = 'a,code,pre,textarea,script,style,.inline-comment';
+  while ((tn = walker.nextNode())) {
+    const p = tn.parentElement;
+    if (!p || p.closest(skipSelector)) continue;
+    const s = tn.nodeValue || '';
+    if (!s) continue;
+    if (re.test(s)) {
+      tn.nodeValue = s.replace(re, () => { count++; return replacement; });
+    }
+  }
+  return count;
+}
+
+function countOccurrencesInElement(root, term) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let tn; let count = 0;
+  const re = new RegExp(`\\b${term.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'g');
+  const skipSelector = 'a,code,pre,textarea,script,style,.inline-comment';
+  while ((tn = walker.nextNode())) {
+    const p = tn.parentElement;
+    if (!p || p.closest(skipSelector)) continue;
+    const s = tn.nodeValue || '';
+    if (!s) continue;
+    const m = s.match(re);
+    if (m) count += m.length;
+  }
+  return count;
+}
+
+async function linkAllOccurrences(modal) {
+  const st = getModalState(modal);
+  const sel = st.selection;
+  if (!sel?.slug) return;
+  const term = String(st.selectedText || '').trim();
+  if (!term) return;
+  const t = normalizeO5eType(st.resourceType || st.type || 'spell');
+  const token = `[[o5e:${t}:${sel.slug}|${term}]]`;
+  // Compute total occurrences across page
+  const blocks = getCurrentPageBlocks();
+  let total = 0;
+  const previews = new Map(); // id -> { nextHtml, nextText, count }
+  for (const b of blocks) {
+    try {
+      const content = JSON.parse(b.contentJson || '{}');
+      const props = JSON.parse(b.propsJson || '{}');
+      const host = document.createElement('div');
+      if (props && props.html) host.innerHTML = String(props.html || ''); else host.textContent = String(content?.text || '');
+      const c = countOccurrencesInElement(host, term);
+      if (c > 0) {
+        // Prepare preview replacement for later commit
+        const host2 = host.cloneNode(true);
+        const replaced = replaceAllInElementTextNodes(host2, term, token);
+        const nextHtml = sanitizeRichHtml(host2.innerHTML);
+        const nextText = plainTextFromHtmlContainer(host2);
+        previews.set(String(b.id), { nextHtml, nextText, count: replaced });
+        total += replaced;
+      }
+    } catch {}
+  }
+  if (total <= 0) {
+    alert('No occurrences found to link.');
+    return;
+  }
+  if (!confirm(`This will link ${total} occurrence${total === 1 ? '' : 's'}. Continue?`)) return;
+  // Apply updates and persist
+  for (const b of blocks) {
+    const p = previews.get(String(b.id));
+    if (!p) continue;
+    try {
+      const content = JSON.parse(b.contentJson || '{}');
+      const props = JSON.parse(b.propsJson || '{}');
+      const patchBlock = {
+        contentJson: JSON.stringify({ ...(content || {}), text: p.nextText }),
+        propsJson: JSON.stringify({ ...(props || {}), html: p.nextHtml }),
+      };
+      updateCurrentBlocks(x => String(x.id) === String(b.id)
+        ? { ...x, contentJson: patchBlock.contentJson, propsJson: patchBlock.propsJson }
+        : x);
+      try {
+        if (typeof patchBlockNow === 'function') {
+          await patchBlockNow(b.id, { content: { text: p.nextText }, props: { html: p.nextHtml } });
+        } else {
+          debouncePatch(b.id, { content: { text: p.nextText }, props: { html: p.nextHtml } }, 0);
+        }
+      } catch {}
+    } catch {}
+  }
+  try { rerenderReadOnlyNow(); } catch {}
+  try { modal.style.display = 'none'; } catch {}
+}
+
+// Dev-only helpers for quick regression smoke checks from console
+try {
+  if (window && !window.__o5e_test) {
+    window.__o5e_test = {
+      countOccurrencesInHtml(html, term) {
+        const div = document.createElement('div');
+        div.innerHTML = String(html || '');
+        return countOccurrencesInElement(div, String(term || ''));
+      },
+      replaceAllInHtml(html, term, token) {
+        const div = document.createElement('div');
+        div.innerHTML = String(html || '');
+        replaceAllInElementTextNodes(div, String(term || ''), String(token || ''));
+        return sanitizeRichHtml(div.innerHTML);
+      }
+    };
+  }
+} catch {}

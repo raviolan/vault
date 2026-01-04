@@ -790,6 +790,60 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
           parts.push(`</div>`);
           host.innerHTML = parts.join('');
         }
+      } else if (t === 'spell') {
+        const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
+        try { const snap = { lastFetchedAt: Math.floor(Date.now()/1000), json: data || null }; await patchPageSheet(page.id, { open5eSnapshotV1: snap }); } catch {}
+        const host = blocksRoot;
+        if (host) {
+          const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+          const parts = [];
+          const name = data.name || page.title || '';
+          const level = (data.level_int != null ? data.level_int : data.level) ?? '';
+          const school = data.school || '';
+          const sub = `${level === 0 ? 'Cantrip' : (level !== '' ? `Level ${level}` : '')}${school ? ` • ${school}` : ''}`.trim();
+          parts.push(`<div class="hovercard" style="padding:10px;">`);
+          parts.push(`<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`);
+          if (sub) parts.push(`<div class="meta" style="margin-bottom:8px;">${esc(sub)}</div>`);
+          const rows = [];
+          if (data.casting_time || data.castingTime) rows.push(`<div><strong>Casting</strong> ${esc(data.casting_time || data.castingTime)}</div>`);
+          if (data.range) rows.push(`<div><strong>Range</strong> ${esc(data.range)}</div>`);
+          if (data.duration) rows.push(`<div><strong>Duration</strong> ${esc(data.duration)}${data.concentration ? ' (Concentration)' : ''}</div>`);
+          if (data.components) rows.push(`<div><strong>Components</strong> ${esc(data.components)}</div>`);
+          if (rows.length) parts.push(`<div style="display:grid; gap:4px; margin-bottom:8px;">${rows.join('')}</div>`);
+          const desc = (data.desc || data.description || '').trim();
+          if (desc) parts.push(`<div style="white-space:pre-wrap;">${esc(desc)}</div>`);
+          const higher = data.higher_level ? String(data.higher_level).trim() : '';
+          if (higher) parts.push(`<div style="white-space:pre-wrap; margin-top:8px;"><strong>At Higher Levels:</strong> ${esc(higher)}</div>`);
+          parts.push(`</div>`);
+          host.innerHTML = parts.join('');
+        }
+      } else if (t === 'condition') {
+        const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
+        try { const snap = { lastFetchedAt: Math.floor(Date.now()/1000), json: data || null }; await patchPageSheet(page.id, { open5eSnapshotV1: snap }); } catch {}
+        const host = blocksRoot;
+        if (host) {
+          const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+          const name = data.name || page.title || '';
+          const desc = (data.desc || data.description || '').trim();
+          host.innerHTML = `<div class="hovercard" style="padding:10px;"><div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>${desc ? `<div style=\"white-space:pre-wrap;\">${esc(desc)}</div>` : ''}</div>`;
+        }
+      } else if (t === 'item' || t === 'weapon' || t === 'armor') {
+        const data = await getOpen5eResource(t, src.slug, { ttlMs: 6 * 60 * 60 * 1000 });
+        try { const snap = { lastFetchedAt: Math.floor(Date.now()/1000), json: data || null }; await patchPageSheet(page.id, { open5eSnapshotV1: snap }); } catch {}
+        const host = blocksRoot;
+        if (host) {
+          const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+          const name = data.name || page.title || '';
+          const cat = data.type || data.category || '';
+          const rarity = data.rarity || '';
+          const meta = [cat, rarity].filter(Boolean).join(' • ');
+          const desc = (data.desc || data.description || '').trim();
+          const parts = [`<div class="hovercard" style="padding:10px;">`, `<div style="font-size:20px; font-weight:700; margin-bottom:4px;">${esc(name)}</div>`];
+          if (meta) parts.push(`<div class="meta" style="margin-bottom:8px;">${esc(meta)}</div>`);
+          if (desc) parts.push(`<div style="white-space:pre-wrap;">${esc(desc)}</div>`);
+          parts.push(`</div>`);
+          host.innerHTML = parts.join('');
+        }
       }
     } else {
       try { delete document.body.dataset.apiManaged; } catch {}

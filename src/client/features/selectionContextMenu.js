@@ -72,7 +72,8 @@ function pickViewSelectionContext() {
   } catch {}
   let range = null;
   try {
-    if (editableEl) range = sel.getRangeAt(0).cloneRange();
+    // Always capture a cloned Range for precise view-mode operations
+    range = sel.getRangeAt(0).cloneRange();
   } catch {}
   return { kind: 'view', blockId, text: s, ...(editableEl ? { editableEl } : {}), ...(range ? { range } : {}) };
 }
