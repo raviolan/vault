@@ -743,8 +743,8 @@ h4 {
     box-decoration-break: clone;
 }
 
-/* Open5e spell inline label */
-.o5e-spell {
+/* Open5e inline label */
+.o5e-link, .o5e-spell {
     display: inline-block;
     padding: 1px 6px;
     border-radius: 999px;
@@ -756,7 +756,7 @@ h4 {
     text-decoration: none;
     cursor: help;
 }
-.o5e-spell:hover {
+.o5e-link:hover, .o5e-spell:hover {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .o5e-hovercard.hovercard {

@@ -60,11 +60,11 @@ export function buildWikiTextNodes(text, blockIdForLegacyReplace = null) {
 function buildWikiTextNodesCore(text, blockIdForLegacyReplace = null) {
   const frag = document.createDocumentFragment();
   // Supported tokens:
-  // - [[o5e:spell:<slug>|Label]]
+  // - [[o5e:<type>:<slug>|Label]] (type: spell, creature, condition, item, weapon, armor)
   // - [[page:<uuid>|Label]]
   // - [[cmt:<uuid>|Label]] (inline comment; comment text stored in block props.comments[uuid])
   // - [[Title]] (legacy unresolved)
-  const re = /\[\[(?:o5e:spell:([a-z0-9-]+)\|([^\]]*?)|page:([0-9a-fA-F-]{36})\|([^\]]*?)|cmt:([0-9a-fA-F-]{36})\|([^\]]*?)|([^\]]+))\]\]/gi;
+  const re = /\[\[(?:o5e:([a-z]+):([a-z0-9-]+)\|([^\]]*?)|page:([0-9a-fA-F-]{36})\|([^\]]*?)|cmt:([0-9a-fA-F-]{36})\|([^\]]*?)|([^\]]+))\]\]/gi;
   let lastIndex = 0;
   let m;
 
@@ -86,13 +86,14 @@ function buildWikiTextNodesCore(text, blockIdForLegacyReplace = null) {
   while ((m = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, m.index);
     if (before) appendFormatted(before);
-    const [full, spellSlug, spellLabel, idPart, labelPart, cmtId, cmtLabel, legacyTitle] = m;
-    if (spellSlug) {
-      const slug = (spellSlug || '').trim();
-      const label = (spellLabel || '').trim() || slug;
+    const [full, o5eType, o5eSlug, o5eLabel, idPart, labelPart, cmtId, cmtLabel, legacyTitle] = m;
+    if (o5eSlug) {
+      const t = String(o5eType || 'spell').toLowerCase();
+      const slug = (o5eSlug || '').trim();
+      const label = (o5eLabel || '').trim() || slug;
       const span = document.createElement('span');
-      span.className = 'o5e-spell';
-      span.setAttribute('data-o5e-type', 'spell');
+      span.className = `o5e-link o5e-${t}`;
+      span.setAttribute('data-o5e-type', t);
       span.setAttribute('data-o5e-slug', slug);
       span.textContent = label;
       frag.appendChild(span);

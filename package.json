@@ -9,6 +9,7 @@
     "dev": "npm run build && npm run start",
     "smoke": "node scripts/smoke.mjs",
     "smoke:annotations": "node scripts/smoke-annotations.mjs",
+    "smoke:o5e": "node scripts/smoke-open5e-links.mjs",
     "verify": "npm run build && node scripts/verify.mjs"
   },
   "dependencies": {
