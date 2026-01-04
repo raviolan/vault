@@ -18,6 +18,12 @@ export const TOOLS = [
     path: '/apps/hp',
     icon: '❤️',
   },
+  {
+    id: 'cleanup',
+    name: 'Cleanup',
+    path: '/cleanup',
+    icon: '🧹',
+  },
 ];
 
 export function getToolById(id) {
