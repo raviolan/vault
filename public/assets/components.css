@@ -1467,3 +1467,8 @@ body.lightbox-open .layout {
     border-radius: var(--radius-4);
     box-shadow: var(--shadow-img)
 }
+/* --- Search result match previews --- */
+.search-matches { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.search-match-where { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+.search-match-snippet { color: var(--text); line-height: 1.35; }
+mark { background: color-mix(in srgb, var(--accent) 20%, transparent); color: inherit; padding: 0 1px; border-radius: 2px; }

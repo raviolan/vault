@@ -46,6 +46,7 @@ export function installSearchPreview() {
   let items = [];
   let activeIndex = -1;
   let searchSeq = 0;
+  let explicitPick = false;
 
   function positionDropdown() {
     try {
@@ -104,6 +105,7 @@ export function installSearchPreview() {
         navigate(href);
       });
       el.addEventListener('mouseenter', () => {
+        explicitPick = true;
         activeIndex = idx;
         renderPreviewPane();
         list.querySelectorAll('.search-item').forEach((n,i)=>n.classList.toggle('active', i===activeIndex));
@@ -139,12 +141,14 @@ export function installSearchPreview() {
     if (seq !== searchSeq) return; // stale
     items = base.map(it => ({ ...it, ...(snapMap[it.id] || {}) }));
     activeIndex = items.length ? 0 : -1;
+    explicitPick = false; // reset when results change
     render();
   }
 
   input.addEventListener('input', () => {
     const q = input.value.trim();
     clearTimeout(timer);
+    explicitPick = false;
     if (!q) { dropdown.style.display = 'none'; return; }
     timer = setTimeout(() => void doSearch(q), 150);
   });
@@ -159,21 +163,24 @@ export function installSearchPreview() {
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (items.length) { activeIndex = (activeIndex + 1) % items.length; renderList(); renderPreviewPane(); }
+      if (items.length) { explicitPick = true; activeIndex = (activeIndex + 1) % items.length; renderList(); renderPreviewPane(); }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (items.length) { activeIndex = (activeIndex - 1 + items.length) % items.length; renderList(); renderPreviewPane(); }
+      if (items.length) { explicitPick = true; activeIndex = (activeIndex - 1 + items.length) % items.length; renderList(); renderPreviewPane(); }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (activeIndex >= 0 && activeIndex < items.length) {
+      const q = input.value.trim();
+      if (explicitPick && activeIndex >= 0 && activeIndex < items.length) {
         const it = items[activeIndex];
         input.value = '';
         dropdown.style.display = 'none';
         const href = it.slug ? `/p/${encodeURIComponent(it.slug)}` : `/page/${encodeURIComponent(it.id)}`;
         navigate(href);
       } else {
-        const q = input.value.trim();
-        if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+        if (q) {
+          dropdown.style.display = 'none';
+          navigate(`/search?q=${encodeURIComponent(q)}`);
+        }
       }
     } else if (e.key === 'Escape') {
       dropdown.style.display = 'none';

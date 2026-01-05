@@ -2,6 +2,7 @@ import { escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
 import { openLinkifyTermModal } from './wikiLinks.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
+import { highlightHtml } from '../lib/searchHighlight.js';
 
 export async function renderSearchResults() {
   setBreadcrumb('Search');
@@ -21,7 +22,7 @@ export async function renderSearchResults() {
   `;
   const root = document.getElementById('searchResultsPage');
   if (!q.trim()) { root.innerHTML = '<p class="meta">Type in the search box above.</p>'; return; }
-  const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}`);
+  const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}&detail=1&limit=200`);
   const results = res?.results || [];
   const btn = document.getElementById('searchLinkifyBtn');
   const pageIds = Array.isArray(results) ? results.map(r => r.id).filter(Boolean) : [];
@@ -38,10 +39,25 @@ export async function renderSearchResults() {
   for (const r of results) {
     const li = document.createElement('li');
     const href = r.slug ? `/p/${encodeURIComponent(r.slug)}` : `/page/${encodeURIComponent(r.id)}`;
+    const meta = `${escapeHtml(r.type || '')} · ${escapeHtml(r.updatedAt || '')}`;
+    const matches = Array.isArray(r.matches) ? r.matches : [];
+    const matchRows = matches.map(m => {
+      const where = (Array.isArray(m.sectionPath) && m.sectionPath.length)
+        ? `In: ${m.sectionPath.map(escapeHtml).join(' › ')}`
+        : '';
+      const snippetHtml = highlightHtml(String(m.excerpt || ''), q);
+      return `
+        <div class="search-match">
+          ${where ? `<div class="search-match-where meta">${where}</div>` : ''}
+          <div class="search-match-snippet">${snippetHtml}</div>
+        </div>`;
+    }).join('');
+    const more = Math.max(0, Number(r.matchCount || 0) - matches.length);
+    const moreLine = more > 0 ? `<div class="meta search-match-more">and ${more} more…</div>` : '';
     li.innerHTML = `
       <a href="${href}" data-link class="search-title">${escapeHtml(r.title)}</a>
-      <div class="meta">${escapeHtml(r.type || '')} · ${escapeHtml(r.updatedAt || '')}</div>
-      <div class="search-snippet">${escapeHtml(r.snippet || '')}</div>
+      <div class="meta">${meta}</div>
+      <div class="search-matches">${matchRows || `<div class=\"search-snippet\">${escapeHtml(r.snippet || '')}</div>`}${moreLine}</div>
     `;
     ul.appendChild(li);
   }

@@ -309,6 +309,31 @@ async function run() {
     }
     console.log('OK');
 
+    // F2) Detailed search includes matches and excerpts
+    process.stdout.write('[F2] GET /api/search?detail=1 includes matches ... ');
+    {
+      const term = 'veriTerm-' + Math.random().toString(36).slice(2,7);
+      const { json: pr } = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: 'Detail Search Page ' + Date.now(), type: 'note' }) });
+      const pid = pr.page.id;
+      // Add a paragraph containing the term
+      await fetchJson(`/api/pages/${encodeURIComponent(pid)}/blocks`, {
+        method: 'POST',
+        body: JSON.stringify({ type: 'paragraph', content: { text: `This is a paragraph with ${term} in the middle for testing.` } })
+      });
+      const { res, json } = await fetchJson(`/api/search?q=${encodeURIComponent(term)}&detail=1&limit=50`);
+      assert(res.ok, `expected 200, got ${res.status}`);
+      assert(json && Array.isArray(json.results), 'detail search bad shape');
+      const found = json.results.find(r => r.id === pid);
+      assert(found, 'detail search did not include created page');
+      assert(typeof found.matchCount === 'number' && Array.isArray(found.matches), 'missing matchCount/matches');
+      assert(found.matches.length >= 1, 'expected at least one match');
+      const anyExcerpt = found.matches.some(m => String(m.excerpt || '').toLowerCase().includes(term.toLowerCase()));
+      assert(anyExcerpt, 'expected excerpt to include the term');
+      // sectionPath should be an array (may be empty)
+      assert(found.matches.every(m => Array.isArray(m.sectionPath)), 'sectionPath should be an array');
+    }
+    console.log('OK');
+
     // G) User state roundtrip
     process.stdout.write('[G] User state GET/PUT ... ');
     {
