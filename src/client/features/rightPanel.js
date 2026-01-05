@@ -8,6 +8,7 @@ import { TodoApp } from '../miniapps/todo/app.js';
 import { ConditionsApp } from '../miniapps/conditions/app.js';
 import { HpTrackerApp } from '../miniapps/hp/app.js';
 import { RandomOccurrencesApp } from '../miniapps/randomOccurrences/app.js';
+import { BacklinksApp } from '../miniapps/backlinks/app.js';
 import { getAppState, setAppState, getUserState, patchUserState } from '../miniapps/state.js';
 import { initRightPanelSplit } from './rightPanelSplit.js';
 
@@ -18,7 +19,7 @@ export function bindRightPanel() {
   if (!toggle || !drawer) return;
 
   // Register built-in mini apps once, keeping order stable
-  registerMany([NotepadApp, TodoApp, ConditionsApp, HpTrackerApp, RandomOccurrencesApp]);
+  registerMany([NotepadApp, TodoApp, ConditionsApp, HpTrackerApp, RandomOccurrencesApp, BacklinksApp]);
 
   // init from state
   const s = getState();
@@ -131,6 +132,16 @@ export function bindRightPanel() {
     }),
   });
 
+  // Backlinks single panel host
+  const backlinksHost = createMiniAppHost({
+    surfaceId: 'rightPanelBacklinks',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+    }),
+  });
+
   // Split-mode Conditions hosts (mount into top/bottom mounts)
   const conditionsTopHost = createMiniAppHost({
     surfaceId: 'rightPanelConditionsTop',
@@ -143,6 +154,26 @@ export function bindRightPanel() {
   });
   const conditionsBottomHost = createMiniAppHost({
     surfaceId: 'rightPanelConditionsBottom',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightTodoMount'),
+    }),
+  });
+
+  // Backlinks split hosts (top/bottom mounts)
+  const backlinksTopHost = createMiniAppHost({
+    surfaceId: 'rightPanelBacklinksTop',
+    rootEl: drawer,
+    getCtx: () => ({
+      pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
+      userState: { getUserState, patchUserState, getAppState, setAppState },
+      mountEl: document.getElementById('rightNotepadMount'),
+    }),
+  });
+  const backlinksBottomHost = createMiniAppHost({
+    surfaceId: 'rightPanelBacklinksBottom',
     rootEl: drawer,
     getCtx: () => ({
       pageId: (location.pathname.match(/^\/page\/([^/]+)$/) || [null, null])[1] || null,
@@ -243,11 +274,11 @@ export function bindRightPanel() {
     const st = getState() || {};
     let top = st.rightSplitTopApp || 'notepad';
     let bottom = st.rightSplitBottomApp || 'todo';
-    const ALLOWED = new Set(['notepad', 'todo', 'conditions', 'hp', 'randomOccurrences']);
+    const ALLOWED = new Set(['notepad', 'todo', 'conditions', 'hp', 'randomOccurrences', 'backlinks']);
     if (!ALLOWED.has(top)) top = 'notepad';
     if (!ALLOWED.has(bottom)) bottom = 'todo';
     if (top === bottom) {
-      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences','backlinks'];
       const next = ORDER.find(x => x !== top) || 'todo';
       if (bottom === top) bottom = next;
     }
@@ -277,7 +308,14 @@ export function bindRightPanel() {
     // Update headers
     const npH = drawer.querySelector(".right-panel[data-panel='notepad'] h3.meta");
     const tdH = drawer.querySelector(".right-panel[data-panel='todo'] h3.meta");
-    const labelFor = (v) => v === 'notepad' ? 'Notepad' : (v === 'todo' ? 'To-Do' : (v === 'conditions' ? 'Conditions' : (v === 'hp' ? 'HP' : (v === 'randomOccurrences' ? 'Random' : String(v)))));
+    const labelFor = (v) => (
+      v === 'notepad' ? 'Notepad' :
+      v === 'todo' ? 'To-Do' :
+      v === 'conditions' ? 'Conditions' :
+      v === 'hp' ? 'HP' :
+      v === 'randomOccurrences' ? 'Random' :
+      v === 'backlinks' ? 'Backlinks' : String(v)
+    );
     if (npH) npH.textContent = labelFor(top);
     if (tdH) tdH.textContent = labelFor(bottom);
 
@@ -303,6 +341,8 @@ export function bindRightPanel() {
     hpBottomHost.show(null);
     randomTopHost.show(null);
     randomBottomHost.show(null);
+    backlinksTopHost.show(null);
+    backlinksBottomHost.show(null);
 
     // Top slot
     if (top === 'notepad') {
@@ -325,6 +365,9 @@ export function bindRightPanel() {
       if (topMount) topMount.hidden = false;
       if (randomNative) randomNative.hidden = false;
       randomTopHost.show('randomOccurrences');
+    } else if (top === 'backlinks') {
+      if (topMount) topMount.hidden = false;
+      backlinksTopHost.show('backlinks');
     }
     // Bottom slot
     if (bottom === 'notepad') {
@@ -347,6 +390,9 @@ export function bindRightPanel() {
       if (bottomMount) bottomMount.hidden = false;
       if (randomNative) randomNative.hidden = false;
       randomBottomHost.show('randomOccurrences');
+    } else if (bottom === 'backlinks') {
+      if (bottomMount) bottomMount.hidden = false;
+      backlinksBottomHost.show('backlinks');
     }
 
     // Split mode uses the split hosts; ensure single-tab Conditions is unmounted
@@ -464,6 +510,7 @@ export function bindRightPanel() {
     randomTopHost.show(null);
     randomBottomHost.show(null);
     randomHost.show(null);
+    backlinksHost.show(null);
     if (name === 'conditions') conditionsHost.show('conditions');
     if (name === 'randomOcc') {
       const randomNative = drawer.querySelector('#randomOccNative');
@@ -472,6 +519,7 @@ export function bindRightPanel() {
       if (randomNative) randomNative.hidden = false;
       randomHost.show('randomOccurrences');
     }
+    if (name === 'backlinks') backlinksHost.show('backlinks');
     if (name === 'settings') renderSettingsPanel();
     updateTopAppButtonsActive();
   };
@@ -539,7 +587,7 @@ export function bindRightPanel() {
     let top = splitTopSelect.value;
     let bottom = getState().rightSplitBottomApp || 'todo';
     if (top === bottom) {
-      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences','backlinks'];
       bottom = ORDER.find(x => x !== top) || 'todo';
     }
     updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
@@ -549,7 +597,7 @@ export function bindRightPanel() {
     let bottom = splitBottomSelect.value;
     let top = getState().rightSplitTopApp || 'notepad';
     if (top === bottom) {
-      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences','backlinks'];
       top = ORDER.find(x => x !== bottom) || 'notepad';
     }
     updateState({ rightSplitTopApp: top, rightSplitBottomApp: bottom });
@@ -560,7 +608,7 @@ export function bindRightPanel() {
     let newTop = cfg.bottom;
     let newBottom = cfg.top;
     if (newTop === newBottom) {
-      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences'];
+      const ORDER = ['notepad','todo','conditions','hp','randomOccurrences','backlinks'];
       newBottom = ORDER.find(x => x !== newTop) || 'todo';
     }
     updateState({ rightSplitTopApp: newTop, rightSplitBottomApp: newBottom });
