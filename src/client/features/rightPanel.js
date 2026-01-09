@@ -59,6 +59,7 @@ export function bindRightPanel() {
   const btnCond  = document.getElementById('rightTopAppConditions');
   const btnHp    = document.getElementById('rightTopAppHp');
   const btnRandom = document.getElementById('rightTopAppRandomOcc');
+  const btnBacklinks = document.getElementById('rightTopAppBacklinks');
   const splitToggle = document.getElementById('rightSplitToggle');
   const splitPicker = document.getElementById('rightSplitPicker');
   const splitTopSelect = document.getElementById('rightSplitTopSelect');
@@ -247,6 +248,19 @@ export function bindRightPanel() {
   btnCond && (btnCond.onclick  = () => setTopAppChoice('conditions'));
   btnHp && (btnHp.onclick    = () => setTopAppChoice('hp'));
   btnRandom && (btnRandom.onclick = () => setTopAppChoice('randomOccurrences'));
+  btnBacklinks && (btnBacklinks.onclick = () => {
+    const st = getState() || {};
+    if (st.rightPanelSplitActive) {
+      updateState({ rightPanelSplitActive: false, rightPanelLastSingleTab: 'backlinks', rightPanelTab: 'backlinks' });
+      setPanelHeadersDefault();
+      if (modeSelect) modeSelect.value = 'single';
+      if (singleGroup) singleGroup.style.display = 'flex';
+      if (splitGroup) splitGroup.style.display = 'none';
+    } else {
+      updateState({ rightPanelTab: 'backlinks', rightPanelLastSingleTab: 'backlinks' });
+    }
+    show('backlinks');
+  });
 
   // Active state styling for buttons
   function updateTopAppButtonsActive() {

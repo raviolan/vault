@@ -95,6 +95,63 @@ async function run() {
     }
     console.log('OK');
 
+    // D4) Move section subtree between pages
+    process.stdout.write('[D4] POST /api/blocks/moveSubtree (section subtree) ... ');
+    {
+      // Create source (A) and target (B) pages
+      const { json: srcRes } = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: 'MoveSrc ' + Date.now(), type: 'note' }) });
+      const { json: tgtRes } = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: 'MoveTgt ' + Date.now(), type: 'note' }) });
+      const A = srcRes.page; const B = tgtRes.page;
+      // Create a section on A
+      const { json: sec } = await fetchJson(`/api/pages/${encodeURIComponent(A.id)}/blocks`, {
+        method: 'POST', body: JSON.stringify({ type: 'section', parentId: null, sort: 0, props: { level: 1, collapsed: false }, content: { title: 'Transfer Me' } })
+      });
+      // Child paragraph with a wikilink token
+      const paraText = 'Child with link to [[Some Page]]';
+      const { json: para } = await fetchJson(`/api/pages/${encodeURIComponent(A.id)}/blocks`, {
+        method: 'POST', body: JSON.stringify({ type: 'paragraph', parentId: sec.id, sort: 0, props: {}, content: { text: paraText } })
+      });
+      // Nested subsection and nested paragraph to verify recursion
+      const { json: nestedSec } = await fetchJson(`/api/pages/${encodeURIComponent(A.id)}/blocks`, {
+        method: 'POST', body: JSON.stringify({ type: 'section', parentId: sec.id, sort: 1, props: { level: 2 }, content: { title: 'Nested' } })
+      });
+      const { json: nestedPara } = await fetchJson(`/api/pages/${encodeURIComponent(A.id)}/blocks`, {
+        method: 'POST', body: JSON.stringify({ type: 'paragraph', parentId: nestedSec.id, sort: 0, props: {}, content: { text: 'Nested body' } })
+      });
+
+      // Perform move
+      const { res: mvRes, json: mvOut, text: mvText } = await fetchJson('/api/blocks/moveSubtree', {
+        method: 'POST', body: JSON.stringify({ sourcePageId: A.id, blockId: sec.id, targetPageId: B.id, targetParentId: null, targetSort: null })
+      });
+      assert(mvRes.ok, `expected 200, got ${mvRes.status} — ${mvText}`);
+      const movedIds = new Set((mvOut?.movedBlockIds || []).map(String));
+      assert(movedIds.has(String(sec.id)) && movedIds.has(String(para.id)) && movedIds.has(String(nestedSec.id)) && movedIds.has(String(nestedPara.id)), 'moved ids missing subtree members');
+
+      // Verify A no longer contains moved ids
+      const { json: afterA } = await fetchJson(`/api/pages/${encodeURIComponent(A.id)}`);
+      const hasInA = (afterA.blocks || []).some(b => movedIds.has(String(b.id)));
+      assert(!hasInA, 'source page still contains moved blocks');
+
+      // Verify B contains all moved ids; parent relationships preserved
+      const { json: afterB } = await fetchJson(`/api/pages/${encodeURIComponent(B.id)}`);
+      const byId = new Map((afterB.blocks || []).map(b => [String(b.id), b]));
+      for (const id of movedIds) assert(byId.has(id), 'target page missing a moved block');
+      const paraAfter = byId.get(String(para.id));
+      const nestedAfter = byId.get(String(nestedSec.id));
+      const nestedParaAfter = byId.get(String(nestedPara.id));
+      assert(String(paraAfter.parentId || '') === String(sec.id), 'child paragraph parent changed');
+      assert(String(nestedAfter.parentId || '') === String(sec.id), 'nested section parent changed');
+      assert(String(nestedParaAfter.parentId || '') === String(nestedSec.id), 'nested paragraph parent changed');
+      // Text unchanged (wikilink token preserved)
+      const txt = JSON.parse(paraAfter.contentJson || '{}').text || '';
+      assert(/\[\[Some Page\]\]/.test(txt), 'paragraph text lost wikilink token');
+
+      // Optional: endpoint rejects virtual pages
+      const { res: badRes } = await fetchJson('/api/blocks/moveSubtree', { method: 'POST', body: JSON.stringify({ sourcePageId: 'dashboard', blockId: 'x', targetPageId: B.id }) });
+      assert(badRes.status === 400, `expected 400 for virtual page, got ${badRes.status}`);
+    }
+    console.log('OK');
+
     // C2) Type change via PATCH reflects in list
     process.stdout.write('[C2] PATCH /api/pages/:id type to npc ... ');
     {

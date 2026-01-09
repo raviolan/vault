@@ -418,5 +418,32 @@ export function routeBlocks(req, res, ctx) {
     })();
   }
 
+  // POST /api/blocks/moveSubtree
+  if (pathname === '/api/blocks/moveSubtree' && req.method === 'POST') {
+    return (async () => {
+      const bodyRaw = await readBody(req);
+      let reqBody = {};
+      try { reqBody = JSON.parse(bodyRaw || '{}'); } catch {}
+      const sourcePageId = reqBody.sourcePageId;
+      const rootBlockId = reqBody.blockId;
+      const targetPageId = reqBody.targetPageId;
+      const targetParentId = (reqBody.targetParentId === undefined) ? null : reqBody.targetParentId;
+      const targetSort = (reqBody.targetSort === undefined) ? null : reqBody.targetSort;
+      if (!sourcePageId || !rootBlockId || !targetPageId) { badRequest(res, 'sourcePageId, blockId, targetPageId required'); return true; }
+      const isVirtual = (pid) => {
+        const s = String(pid || '');
+        return s === 'dashboard' || s === 'session' || s.startsWith('section:');
+      };
+      if (isVirtual(sourcePageId) || isVirtual(targetPageId)) { badRequest(res, 'virtual pages not supported for move'); return true; }
+      try {
+        const out = ctx.dbMoveBlockSubtree(ctx.db, { sourcePageId, rootBlockId, targetPageId, targetParentId: targetParentId ?? null, targetSort: targetSort ?? null });
+        sendJson(res, 200, out);
+      } catch (e) {
+        badRequest(res, e?.message || 'move failed');
+      }
+      return true;
+    })();
+  }
+
   return false;
 }

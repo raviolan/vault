@@ -15,7 +15,7 @@ import { serveStaticOrSpa } from './lib/static.js';
 import { routeRequest } from './routes/index.js';
 import { ensureUserDirs } from './routes/userState.js';
 import { sendText } from './lib/http.js';
-import { openDb, migrate, backfillSlugs, listPages as dbListPages, searchPages as dbSearchPages, searchPagesWithMatches as dbSearchPagesWithMatches, getBacklinks as dbGetBacklinks, createPage as dbCreatePage, getPageWithBlocks as dbGetPageWithBlocks, getPageWithBlocksBySlug as dbGetPageWithBlocksBySlug, patchPage as dbPatchPage, deletePage as dbDeletePage, createBlock as dbCreateBlock, patchBlock as dbPatchBlock, deleteBlock as dbDeleteBlock, reorderBlocks as dbReorderBlocks, ensureTag as dbEnsureTag, listTagsWithCounts as dbListTagsWithCounts, getPageTags as dbGetPageTags, setPageTags as dbSetPageTags, getPageSnapshots as dbGetPageSnapshots, setPageMedia as dbSetPageMedia, clearPageMediaSlot as dbClearPageMediaSlot } from './db/index.js';
+import { openDb, migrate, backfillSlugs, listPages as dbListPages, searchPages as dbSearchPages, searchPagesWithMatches as dbSearchPagesWithMatches, getBacklinks as dbGetBacklinks, createPage as dbCreatePage, getPageWithBlocks as dbGetPageWithBlocks, getPageWithBlocksBySlug as dbGetPageWithBlocksBySlug, patchPage as dbPatchPage, deletePage as dbDeletePage, createBlock as dbCreateBlock, patchBlock as dbPatchBlock, deleteBlock as dbDeleteBlock, reorderBlocks as dbReorderBlocks, moveBlockSubtree as dbMoveBlockSubtree, ensureTag as dbEnsureTag, listTagsWithCounts as dbListTagsWithCounts, getPageTags as dbGetPageTags, setPageTags as dbSetPageTags, getPageSnapshots as dbGetPageSnapshots, setPageMedia as dbSetPageMedia, clearPageMediaSlot as dbClearPageMediaSlot } from './db/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +104,7 @@ function createRequestListener({ db, reloadDb, paths }) {
         dbPatchBlock,
         dbDeleteBlock,
         dbReorderBlocks,
+        dbMoveBlockSubtree,
         dbEnsureTag,
         dbListTagsWithCounts,
         dbGetPageTags,

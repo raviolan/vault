@@ -25,3 +25,9 @@ export async function apiReorder(pageId, moves) {
   });
 }
 
+export async function apiMoveBlockSubtree({ sourcePageId, blockId, targetPageId, targetParentId = null, targetSort = null }) {
+  return fetchJson('/api/blocks/moveSubtree', {
+    method: 'POST',
+    body: JSON.stringify({ sourcePageId, blockId, targetPageId, targetParentId, targetSort }),
+  });
+}

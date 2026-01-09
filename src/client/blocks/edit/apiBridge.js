@@ -1,5 +1,5 @@
 import { setCurrentPageBlocks } from '../../lib/pageStore.js';
-export { apiCreateBlock, apiPatchBlock, apiDeleteBlock, apiReorder } from '../api.js';
+export { apiCreateBlock, apiPatchBlock, apiDeleteBlock, apiReorder, apiMoveBlockSubtree } from '../api.js';
 
 export async function refreshBlocksFromServer(pageId) {
   const res = await fetch(`/api/pages/${encodeURIComponent(pageId)}`);

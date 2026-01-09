@@ -108,3 +108,60 @@ export function reorderBlocks(db, pageId, moves) {
   return { ok: true };
 }
 
+// Move a section block and its entire descendant subtree to another page.
+// Keeps internal parent/child relationships intact; only the root reattaches under targetParentId.
+export function moveBlockSubtree(db, { sourcePageId, rootBlockId, targetPageId, targetParentId = null, targetSort = null }) {
+  const ts = nowTs();
+  // 1) Validate root exists on source page and is a section
+  const root = db.prepare('SELECT id, page_id, parent_id, sort, type FROM blocks WHERE id = ? AND page_id = ?').get(rootBlockId, sourcePageId);
+  if (!root) throw new Error('root block not found on source page');
+  if (String(root.type) !== 'section') throw new Error('root block must be a section');
+
+  // 2) Collect subtree ids (restricted to source page)
+  const subtreeRows = db.prepare(`
+    WITH RECURSIVE subtree(id) AS (
+      SELECT id FROM blocks WHERE id = ? AND page_id = ?
+      UNION ALL
+      SELECT b.id FROM blocks b JOIN subtree s ON b.parent_id = s.id WHERE b.page_id = ?
+    ) SELECT id FROM subtree;
+  `).all(rootBlockId, sourcePageId, sourcePageId);
+  const movedIds = subtreeRows.map(r => r.id);
+  if (!movedIds.length) throw new Error('empty subtree');
+
+  // 3) Transactional move
+  const trx = db.transaction(() => {
+    // Compute effective sort at target
+    let effectiveTargetSort;
+    if (targetSort != null) {
+      const n = Number(targetSort);
+      effectiveTargetSort = Number.isFinite(n) ? n : 0;
+    } else {
+      const row = db.prepare('SELECT MAX(sort) AS m FROM blocks WHERE page_id = ? AND parent_id IS ?').get(targetPageId, targetParentId ?? null);
+      const maxSort = (row && (row.m || row.m === 0)) ? Number(row.m) : null;
+      effectiveTargetSort = (maxSort == null ? 0 : (maxSort + 1));
+    }
+
+    // Bulk update page_id + updated_at for entire subtree
+    const updMany = db.prepare(`UPDATE blocks SET page_id = ?, updated_at = ? WHERE id IN (${movedIds.map(()=>'?').join(',')})`);
+    updMany.run(targetPageId, ts, ...movedIds);
+
+    // Reattach root under target parent with chosen sort
+    db.prepare('UPDATE blocks SET parent_id = ?, sort = ?, updated_at = ? WHERE id = ?')
+      .run(targetParentId ?? null, effectiveTargetSort, ts, rootBlockId);
+
+    // Normalize sibling sort in SOURCE (under old parent)
+    const rowsSrc = db.prepare('SELECT id FROM blocks WHERE page_id = ? AND parent_id IS ? ORDER BY sort, created_at, id').all(sourcePageId, root.parent_id ?? null);
+    const updSort = db.prepare('UPDATE blocks SET sort = ? WHERE id = ?');
+    let i = 0; for (const r of rowsSrc) updSort.run(i++, r.id);
+
+    // Normalize sibling sort in TARGET (under targetParentId)
+    const rowsTgt = db.prepare('SELECT id FROM blocks WHERE page_id = ? AND parent_id IS ? ORDER BY sort, created_at, id').all(targetPageId, targetParentId ?? null);
+    i = 0; for (const r of rowsTgt) updSort.run(i++, r.id);
+
+    // Touch both pages
+    db.prepare('UPDATE pages SET updated_at = ? WHERE id IN (?, ?)').run(ts, sourcePageId, targetPageId);
+  });
+  trx();
+
+  return { ok: true, movedBlockIds: movedIds, rootBlockId, sourcePageId, targetPageId };
+}

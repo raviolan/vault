@@ -1056,6 +1056,13 @@ function renderEditorDom({ rootEl, page }) {
       addBtn.title = 'Add child paragraph';
       controls.appendChild(addBtn);
 
+      const moveBtn = document.createElement('button');
+      moveBtn.type = 'button';
+      moveBtn.className = 'chip section-move-page';
+      moveBtn.textContent = '↪';
+      moveBtn.title = 'Move this section to another page…';
+      controls.appendChild(moveBtn);
+
       header.appendChild(controls);
       wrap.classList.add('section-block');
       if (lvl) wrap.classList.add(`section--lvl${lvl}`); else wrap.classList.add('section--plain');

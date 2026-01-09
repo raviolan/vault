@@ -18,6 +18,7 @@ export {
   reorderBlocks,
   normalizeSiblingSort,
   touchPage,
+  moveBlockSubtree,
   searchPages,
   escapeLike,
   getBacklinks,

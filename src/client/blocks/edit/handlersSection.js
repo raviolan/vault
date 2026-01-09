@@ -160,6 +160,7 @@ export function bindSectionHeaderControls({ page, block, rootEl, titleInput, onA
   const upBtn = header.querySelector('.section-move-up');
   const downBtn = header.querySelector('.section-move-down');
   const delBtn = header.querySelector('.section-delete-empty');
+  const movePageBtn = header.querySelector('.section-move-page');
 
   toggle.addEventListener('click', async () => {
     const wasActive = document.activeElement && rootEl.contains(document.activeElement);
@@ -223,6 +224,37 @@ export function bindSectionHeaderControls({ page, block, rootEl, titleInput, onA
         }
         if (focusTargetId) focus(focusTargetId);
       } catch (err) { console.error('unwrap section failed', err); }
+    });
+  }
+
+  // Move section subtree to another page
+  if (movePageBtn) {
+    movePageBtn.addEventListener('click', async (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch {}
+      const title = window.prompt('Move section to which page title?');
+      const t = String(title || '').trim();
+      if (!t) return;
+      try {
+        const { fetchJson } = await import('../../lib/http.js');
+        const resolved = await fetchJson('/api/pages/resolve', { method: 'POST', body: JSON.stringify({ title: t, type: 'note' }) });
+        const targetPage = resolved?.page || resolved;
+        const targetPageId = targetPage?.id;
+        if (!targetPageId) throw new Error('could not resolve target page');
+        const { apiMoveBlockSubtree } = await import('./apiBridge.js');
+        const out = await apiMoveBlockSubtree({ sourcePageId: page.id, blockId: block.id, targetPageId, targetParentId: null, targetSort: null });
+        const moved = Array.isArray(out?.movedBlockIds) ? out.movedBlockIds.map(String) : [];
+        if (moved.length) {
+          const movedSet = new Set(moved);
+          const { getCurrentPageBlocks, setCurrentPageBlocks } = await import('../../lib/pageStore.js');
+          const next = (getCurrentPageBlocks() || []).filter(b => !movedSet.has(String(b.id)));
+          setCurrentPageBlocks(next);
+        }
+        try { await onAfterChange(); } catch {}
+        try { alert('Moved section to: ' + (targetPage?.title || 'target page')); } catch {}
+      } catch (err) {
+        console.error('move section to page failed', err);
+        alert('Move failed: ' + (err?.message || err));
+      }
     });
   }
 }
