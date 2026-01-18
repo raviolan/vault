@@ -10,7 +10,9 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:annotations": "node scripts/smoke-annotations.mjs",
     "smoke:o5e": "node scripts/smoke-open5e-links.mjs",
-    "verify": "npm run build && node scripts/verify.mjs"
+    "verify": "npm run build && node scripts/verify.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^9.6.0"
