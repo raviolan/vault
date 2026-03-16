@@ -14,6 +14,7 @@ import { routeSearch } from './search.js';
 import { routeBacklinks } from './backlinks.js';
 import { routeTags } from './tags.js';
 import { routeTagInspector } from './tagInspector.js';
+import { routeContentHealth } from './contentHealth.js';
 import { routeUserState } from './userState.js';
 import { routeOpen5e } from './open5e.js';
 import { routeMedia } from './media.js';
@@ -117,6 +118,7 @@ const ROUTES = [
   { name: 'meta', handle: routeMeta },
   { name: 'tags', handle: routeTags },
   { name: 'tagInspector', handle: routeTagInspector },
+  { name: 'contentHealth', handle: routeContentHealth },
   // Media must be early to serve /media/* quickly
   { name: 'media', handle: routeMedia },
   { name: 'export', handle: routeExport },

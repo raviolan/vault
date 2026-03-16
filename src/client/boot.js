@@ -32,6 +32,7 @@ import { mountLeftPanelWeather } from './surfaces/leftPanelWeather.js';
 import * as WeatherSettingsRoute from './routes/weatherSettings.js';
 import * as HpRoute from './routes/hp.js';
 import * as CleanupRoute from './routes/cleanup.js';
+import * as HealthRoute from './routes/health.js';
 import * as EnemyGenerator from './tools/enemyGenerator/index.js';
 import { renderFavorites } from './features/favorites.js';
 import { initPanels } from './features/panelControls.js';
@@ -300,6 +301,14 @@ export async function boot() {
     const outlet = document.getElementById('outlet');
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     return CleanupRoute.render(outlet, {});
+  });
+  route(/^\/health\/?$/, () => {
+    setDocumentTitle('Health');
+    setBreadcrumb('Health');
+    setPageActionsEnabled({ canEdit: false, canDelete: false });
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
+    const outlet = document.getElementById('outlet');
+    return HealthRoute.render(outlet, {});
   });
   // Dedicated Weather app settings route
   route(/^\/apps\/weather\/settings\/?$/, () => {

@@ -68,7 +68,6 @@ Preferred split pattern:
 Planned:
 
 - Archive
-- Simplified navigation by default
 - Contextual tool toggles in the right panel
 - Health/quality dashboard
 - Upgraded backlinks
@@ -115,33 +114,7 @@ Do not:
 - Move archived pages out of the main DB.
 - Treat archive as delete-lite with special file handling.
 
-### 2. Simplified Navigation By Default
-
-Goal:
-
-- Make the default left nav calmer and easier to scan.
-
-Current reuse target:
-
-- Evolve `nav.js` and section landing pages instead of introducing a second nav system.
-
-Desired behavior:
-
-- Fewer top-level groups by default.
-- Advanced grouping remains available, but not required.
-- Archived pages are hidden from the main nav by default.
-
-Likely direction:
-
-- Default buckets: `World`, `People`, `Campaign`, `Tools`, `Archive`.
-- Keep user sections and grouping as an advanced organization layer.
-
-Do not:
-
-- Remove existing grouping capabilities.
-- Break direct links to section routes.
-
-### 3. Contextual Tool Toggles
+### 2. Contextual Tool Toggles
 
 Goal:
 
@@ -170,7 +143,7 @@ Do not:
 - Duplicate mini-app mounting logic.
 - Keep legacy and new panel controls alive forever after the migration.
 
-### 4. Health / Quality Dashboard
+### 3. Health / Quality Dashboard
 
 Goal:
 
@@ -194,7 +167,7 @@ Do not:
 - Duplicate audits that already exist in `Cleanup`.
 - Mix destructive actions with passive reporting without clear confirmation flows.
 
-### 5. Upgraded Backlinks
+### 4. Upgraded Backlinks
 
 Goal:
 
@@ -220,7 +193,7 @@ Do not:
 - Replace wiki links.
 - Require typed relations for basic linking to remain useful.
 
-### 6. Merged Search + Command Surface
+### 5. Merged Search + Command Surface
 
 Goal:
 
@@ -249,7 +222,7 @@ Do not:
 - Maintain two hotkey systems that compete for `Cmd/Ctrl+K`.
 - Reimplement search result rendering separately for command and search.
 
-### 7. Timeline
+### 6. Timeline
 
 Goal:
 
@@ -278,7 +251,7 @@ Do not:
 
 - Store timeline logic only inside freeform page blocks if it needs fast querying.
 
-### 8. Stronger Search Relevance
+### 7. Stronger Search Relevance
 
 Goal:
 
@@ -352,13 +325,12 @@ Avoid:
 ## Suggested Delivery Order
 
 1. Archive
-2. Simplified nav by default
-3. Contextual tool toggles
-4. Health / quality dashboard
-5. Upgraded backlinks
-6. Merge search + command surface
-7. Timeline
-8. Stronger search relevance
+2. Contextual tool toggles
+3. Health / quality dashboard
+4. Upgraded backlinks
+5. Merge search + command surface
+6. Timeline
+7. Stronger search relevance
 
 Reason:
 

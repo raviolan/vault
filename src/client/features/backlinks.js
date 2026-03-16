@@ -12,6 +12,15 @@ export async function fetchBacklinks(pageId) {
   }
 }
 
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 export function renderBacklinksInto({ listEl, emptyEl, links }) {
   if (!listEl) return;
   try { listEl.innerHTML = ''; } catch {}
@@ -24,12 +33,30 @@ export function renderBacklinksInto({ listEl, emptyEl, links }) {
   }
   for (const p of arr) {
     const li = document.createElement('li');
-    const a = document.createElement('a');
     const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
-    a.href = href;
-    a.setAttribute('data-link', '');
-    a.textContent = `${p.title} (${p.count})`;
-    li.appendChild(a);
+    const matches = Array.isArray(p.matches) ? p.matches : [];
+    const extra = Math.max(0, Number(p.count || 0) - matches.length);
+    li.style.marginBottom = '12px';
+    li.innerHTML = `
+      <div style="display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;">
+        <a href="${href}" data-link>${escapeHtml(p.title)}</a>
+        <span class="meta">${escapeHtml(p.type || '')} · ${escapeHtml(String(p.count || 0))} reference${Number(p.count || 0) === 1 ? '' : 's'}</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+        ${matches.map(match => {
+          const where = Array.isArray(match.sectionPath) && match.sectionPath.length
+            ? `In: ${match.sectionPath.map(escapeHtml).join(' › ')}`
+            : (match.blockType === 'section' ? 'In: Section title' : (match.blockType === 'heading' ? 'In: Heading' : ''));
+          return `
+            <div style="padding-left:10px; border-left:2px solid var(--border);">
+              ${where ? `<div class="meta">${where}</div>` : ''}
+              <div class="meta" style="color:var(--text);">${escapeHtml(match.excerpt || '')}</div>
+            </div>
+          `;
+        }).join('')}
+        ${extra > 0 ? `<div class="meta" style="padding-left:10px;">and ${extra} more…</div>` : ''}
+      </div>
+    `;
     listEl.appendChild(li);
   }
 }

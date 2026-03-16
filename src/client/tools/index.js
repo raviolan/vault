@@ -24,6 +24,12 @@ export const TOOLS = [
     path: '/cleanup',
     icon: '🧹',
   },
+  {
+    id: 'health',
+    name: 'Health',
+    path: '/health',
+    icon: '🩺',
+  },
 ];
 
 export function getToolById(id) {

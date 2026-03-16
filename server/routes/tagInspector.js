@@ -11,7 +11,7 @@ function normKey(input) {
   return { key, display };
 }
 
-function getAllTagsWithUsage(db) {
+export function getAllTagsWithUsage(db) {
   const tags = db.prepare(`SELECT id, name, display_name, created_at FROM tags`).all();
   const usage = db.prepare(`
     SELECT pt.tag_id AS tag_id, COUNT(DISTINCT pt.page_id) AS pages
@@ -71,7 +71,7 @@ function pluralBase(s) {
   return w.toLowerCase();
 }
 
-function computeFlags(rows, pageTypes) {
+export function computeFlags(rows, pageTypes) {
   const tags = rows.map(r => ({ key: r.key, display: r.tag, count: r.usedOnPagesCount }));
   // Precompute groups for near-duplicates
   const groupKeyToMembers = new Map();
@@ -308,4 +308,3 @@ export function routeTagInspector(req, res, ctx) {
 
   return false;
 }
-

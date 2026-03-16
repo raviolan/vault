@@ -71,7 +71,7 @@ export function renderNavSections(pages, navCfg) {
   }
 
   const sections = (navCfg?.sections?.length ? navCfg.sections.slice() : Array.from(bySection.keys()).map(label => ({ label })));
-  if (bySection.has('Archive') && !sections.some(sec => String(sec?.label || '').toLowerCase() === 'archive')) {
+  if (!sections.some(sec => String(sec?.label || '').toLowerCase() === 'archive')) {
     sections.push({ label: 'Archive' });
   }
 
