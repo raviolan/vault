@@ -12,7 +12,13 @@ export function escapeLike(str) {
   return String(str || '').replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
 }
 
-export function searchPages(db, q, limit = 30) {
+function archiveFilterClause(mode) {
+  if (mode === 'only') return 'p.archived_at IS NOT NULL';
+  if (mode === 'include') return '';
+  return 'p.archived_at IS NULL';
+}
+
+export function searchPages(db, q, limit = 30, { archived = 'exclude' } = {}) {
   const qTrim = String(q || '').trim();
   if (!qTrim) return [];
   const like = `%${escapeLike(qTrim)}%`;
@@ -29,11 +35,13 @@ export function searchPages(db, q, limit = 30) {
                ORDER BY b.sort, b.created_at LIMIT 1
             ) AS fallback_snippet_json
        FROM pages p
-      WHERE p.title LIKE ? ESCAPE '\\'
-         OR EXISTS (
+      WHERE (
+             p.title LIKE ? ESCAPE '\\'
+          OR EXISTS (
               SELECT 1 FROM blocks b2
                WHERE b2.page_id = p.id AND b2.type = 'paragraph' AND b2.content_json LIKE ? ESCAPE '\\'
-            )
+            ))
+        ${archiveFilterClause(archived) ? `AND ${archiveFilterClause(archived)}` : ''}
       ORDER BY p.updated_at DESC
       LIMIT ?`
   ).all(like, like, like, Number(limit) || 30);
@@ -98,9 +106,8 @@ function computeSectionPath(blockId, blocksById, maxDepth = 20) {
   return out;
 }
 
-// Detailed search including per-page matches and locations.
-export function searchPagesWithMatches(db, q, limit = 30, perPageMatchLimit = 3) {
-  const base = searchPages(db, q, limit);
+export function searchPagesWithMatches(db, q, limit = 30, perPageMatchLimit = 3, { archived = 'exclude' } = {}) {
+  const base = searchPages(db, q, limit, { archived });
   const qTrim = String(q || '').trim();
   if (!qTrim) return [];
   const termLower = qTrim.toLowerCase();

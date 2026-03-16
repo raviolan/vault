@@ -15,7 +15,7 @@
     "restore": "node scripts/restore.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0"
+    "better-sqlite3": "^12.6.2"
   },
   "devDependencies": {
     "adm-zip": "^0.5.16",

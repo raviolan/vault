@@ -1,0 +1,2 @@
+ALTER TABLE pages ADD COLUMN archived_at INTEGER;
+ALTER TABLE pages ADD COLUMN archive_reason TEXT NOT NULL DEFAULT '';

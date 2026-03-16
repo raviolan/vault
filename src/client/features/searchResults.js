@@ -3,28 +3,36 @@ import { fetchJson } from '../lib/http.js';
 import { openLinkifyTermModal } from './wikiLinks.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { highlightHtml } from '../lib/searchHighlight.js';
+import { navigate } from '../lib/router.js';
 
 export async function renderSearchResults() {
   setBreadcrumb('Search');
   setPageActionsEnabled({ canEdit: false, canDelete: false });
   const outlet = document.getElementById('outlet');
   if (!outlet) return;
-  const q = new URL(window.location.href).searchParams.get('q') || '';
+  const params = new URL(window.location.href).searchParams;
+  const q = params.get('q') || '';
+  const includeArchived = params.get('archived') === '1';
   outlet.innerHTML = `
     <section>
       <h1>Search</h1>
       <p class="meta">Showing results for “${escapeHtml(q)}”</p>
       <div class="row" style="margin: 10px 0;">
         <button type="button" class="chip" id="searchLinkifyBtn">Linkify “${escapeHtml(q)}”...</button>
+        <label class="chip" style="display:inline-flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="searchIncludeArchived"${includeArchived ? ' checked' : ''} />
+          <span>Include archived</span>
+        </label>
       </div>
       <div id="searchResultsPage"></div>
     </section>
   `;
   const root = document.getElementById('searchResultsPage');
   if (!q.trim()) { root.innerHTML = '<p class="meta">Type in the search box above.</p>'; return; }
-  const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}&detail=1&limit=200`);
+  const res = await fetchJson(`/api/search?q=${encodeURIComponent(q)}&detail=1&limit=200${includeArchived ? '&archived=1' : ''}`);
   const results = res?.results || [];
   const btn = document.getElementById('searchLinkifyBtn');
+  const includeArchivedInput = document.getElementById('searchIncludeArchived');
   const pageIds = Array.isArray(results) ? results.map(r => r.id).filter(Boolean) : [];
   if (btn) {
     if (!q.trim() || !pageIds.length) btn.disabled = true;
@@ -33,6 +41,13 @@ export async function renderSearchResults() {
       openLinkifyTermModal({ term: q, pageIds });
     });
   }
+  includeArchivedInput?.addEventListener('change', () => {
+    const next = new URL(window.location.href);
+    if (includeArchivedInput.checked) next.searchParams.set('archived', '1');
+    else next.searchParams.delete('archived');
+    const qs = next.searchParams.toString();
+    navigate(qs ? `${next.pathname}?${qs}` : next.pathname);
+  });
   if (!results.length) { root.innerHTML = '<p class="meta">No matches.</p>'; return; }
   root.innerHTML = '<ul class="search-list"></ul>';
   const ul = root.querySelector('ul');

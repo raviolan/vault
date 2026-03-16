@@ -4,13 +4,20 @@ import { badRequest, notFound } from '../lib/errors.js';
 // Centralized allowlist for page types
 const ALLOWED_TYPES = new Set(['note', 'npc', 'character', 'location', 'arc', 'tool']);
 
+function parseArchivedMode(raw) {
+  const mode = String(raw || '').toLowerCase();
+  if (mode === 'only' || mode === 'include') return mode;
+  return 'exclude';
+}
+
 export function routePages(req, res, ctx) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname } = url;
 
   // GET /api/pages
   if (pathname === '/api/pages' && req.method === 'GET') {
-    sendJson(res, 200, ctx.dbListPages(ctx.db));
+    const archived = parseArchivedMode(url.searchParams.get('archived'));
+    sendJson(res, 200, ctx.dbListPages(ctx.db, { archived }));
     return true;
   }
 
@@ -220,7 +227,20 @@ export function routePages(req, res, ctx) {
           const t = String(body.type);
           if (!ALLOWED_TYPES.has(t)) { badRequest(res, 'invalid type'); return true; }
         }
-        const updated = ctx.dbPatchPage(ctx.db, id, { title: body.title, type: body.type, regenerateSlug: !!body.regenerateSlug });
+        let archivedAt = undefined;
+        if (body.archived !== undefined) {
+          archivedAt = body.archived ? new Date().toISOString() : null;
+        } else if (body.archivedAt !== undefined) {
+          archivedAt = body.archivedAt ? String(body.archivedAt) : null;
+        }
+        const archiveReason = body.archiveReason !== undefined ? String(body.archiveReason || '') : undefined;
+        const updated = ctx.dbPatchPage(ctx.db, id, {
+          title: body.title,
+          type: body.type,
+          regenerateSlug: !!body.regenerateSlug,
+          archivedAt,
+          archiveReason,
+        });
         if (!updated) { notFound(res); return true; }
         sendJson(res, 200, updated);
         return true;

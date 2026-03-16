@@ -7,6 +7,7 @@ import { renderBlocksReadOnly } from '../blocks/readOnly.js';
 import { setPageActionsEnabled } from '../lib/ui.js';
 import { getCurrentPageBlocks, setCurrentPageBlocks } from '../lib/pageStore.js';
 import { setActivePage } from '../lib/activePage.js';
+import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndicator.js';
 
 export function render(container, ctx = {}) {
   if (!container) return;
@@ -35,23 +36,46 @@ export function render(container, ctx = {}) {
   const widgetsHost = container.querySelector('#dashWidgetsHost');
   let headerCtl = null;
   let mo = null; // MutationObserver for global edit mode
+  let loadError = '';
 
   async function ensurePageLoaded() {
     if (page) return page;
+    loadError = '';
     try {
-      page = await fetchJson('/api/pages/dashboard');
+      const loaded = await fetchJson('/api/pages/dashboard');
+      if (!loaded || !Array.isArray(loaded.blocks)) throw new Error('Invalid response for Dashboard page');
+      page = loaded;
+      // Initialize current blocks for the virtual page
+      setCurrentPageBlocks(page.blocks || []);
+      return page;
     } catch (e) {
-      // Fallback minimal object if not present to keep editor stable
-      page = { id: 'dashboard', title: 'Dashboard', blocks: [] };
+      loadError = e?.message || String(e || 'Unknown error');
+      console.error('Failed to load Dashboard page', e);
+      return null;
     }
-    // Initialize current blocks for the virtual page
-    setCurrentPageBlocks(page.blocks || []);
-    return page;
   }
   async function refresh() {
     // Load dashboard page and derive mode from global top-bar
-    await ensurePageLoaded();
+    const loaded = await ensurePageLoaded();
+    if (!loaded) {
+      try { unmountSaveIndicator(); } catch {}
+      if (blocksRoot) {
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        blocksRoot.innerHTML = `
+          <div class="card" style="padding:10px;">
+            <div style="font-size:16px; font-weight:700; color:#a33;">Failed to load Dashboard content</div>
+            <div class="meta" style="margin-top:6px; white-space:pre-wrap;">${esc(loadError || 'Unknown error')}</div>
+          </div>
+        `;
+      }
+      return;
+    }
     const editing = document.body?.dataset?.mode === 'edit';
+    if (editing) {
+      try { mountSaveIndicator(); } catch {}
+    } else {
+      try { unmountSaveIndicator(); } catch {}
+    }
 
     // Read current in-memory state to avoid races with debounced saves
     const state = getState();
@@ -166,5 +190,6 @@ export function render(container, ctx = {}) {
   // Cleanup on route change
   return () => {
     try { mo && mo.disconnect(); } catch {}
+    try { unmountSaveIndicator(); } catch {}
   };
 }

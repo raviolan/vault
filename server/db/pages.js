@@ -2,16 +2,33 @@ import { randomUUID } from 'node:crypto';
 import { ensureUniqueSlug, slugifyTitle } from './slugs.js';
 import { getPageMedia as dbGetPageMedia } from './pageMedia.js';
 
-export function listPages(db) {
-  const rows = db.prepare('SELECT id, title, type, slug, created_at, updated_at FROM pages ORDER BY updated_at DESC, created_at DESC').all();
-  return rows.map(r => ({
+function mapPageRow(r) {
+  return {
     id: r.id,
     title: r.title,
     type: r.type,
     slug: r.slug,
+    archivedAt: r.archived_at ? new Date(r.archived_at * 1000).toISOString() : null,
+    archiveReason: r.archive_reason || '',
     createdAt: new Date(r.created_at * 1000).toISOString(),
     updatedAt: new Date(r.updated_at * 1000).toISOString(),
-  }));
+  };
+}
+
+function archiveWhereClause(mode) {
+  if (mode === 'only') return 'WHERE p.archived_at IS NOT NULL';
+  if (mode === 'include') return '';
+  return 'WHERE p.archived_at IS NULL';
+}
+
+export function listPages(db, { archived = 'exclude' } = {}) {
+  const rows = db.prepare(
+    `SELECT p.id, p.title, p.type, p.slug, p.archived_at, p.archive_reason, p.created_at, p.updated_at
+       FROM pages p
+       ${archiveWhereClause(archived)}
+      ORDER BY p.updated_at DESC, p.created_at DESC`
+  ).all();
+  return rows.map(mapPageRow);
 }
 
 export function createPage(db, { title, type = 'note' }) {
@@ -25,13 +42,15 @@ export function createPage(db, { title, type = 'note' }) {
     title,
     type,
     slug,
+    archivedAt: null,
+    archiveReason: '',
     createdAt: new Date(ts * 1000).toISOString(),
     updatedAt: new Date(ts * 1000).toISOString(),
   };
 }
 
 export function getPageWithBlocks(db, id) {
-  const page = db.prepare('SELECT id, title, type, slug, created_at, updated_at FROM pages WHERE id = ?').get(id);
+  const page = db.prepare('SELECT id, title, type, slug, archived_at, archive_reason, created_at, updated_at FROM pages WHERE id = ?').get(id);
   if (!page) return null;
   const blocks = db.prepare('SELECT id, page_id, parent_id, sort, type, props_json, content_json, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY parent_id IS NOT NULL, parent_id, sort, created_at').all(id);
   const media = (() => {
@@ -42,12 +61,7 @@ export function getPageWithBlocks(db, id) {
     } catch { return { header: null, profile: null }; }
   })();
   return {
-    id: page.id,
-    title: page.title,
-    type: page.type,
-    slug: page.slug,
-    createdAt: new Date(page.created_at * 1000).toISOString(),
-    updatedAt: new Date(page.updated_at * 1000).toISOString(),
+    ...mapPageRow(page),
     media,
     blocks: blocks.map(b => ({
       id: b.id,
@@ -69,19 +83,25 @@ export function getPageWithBlocksBySlug(db, slug) {
   return getPageWithBlocks(db, row.id);
 }
 
-export function patchPage(db, pageId, { title, type, regenerateSlug = false } = {}) {
+export function patchPage(db, pageId, { title, type, regenerateSlug = false, archivedAt, archiveReason } = {}) {
   const cur = db.prepare('SELECT * FROM pages WHERE id = ?').get(pageId);
   if (!cur) return null;
   const nextTitle = (title === undefined ? cur.title : String(title));
   const nextType = (type === undefined ? cur.type : String(type));
+  const nextArchivedAt = archivedAt === undefined
+    ? cur.archived_at
+    : (archivedAt ? Math.floor(new Date(archivedAt).getTime() / 1000) : null);
+  const nextArchiveReason = archiveReason === undefined
+    ? (cur.archive_reason || '')
+    : String(archiveReason || '');
   let nextSlug = cur.slug;
   if (regenerateSlug) {
     nextSlug = ensureUniqueSlug(db, slugifyTitle(nextTitle || ''));
   }
   const ts = Math.floor(Date.now() / 1000);
   const trx = db.transaction(() => {
-    db.prepare('UPDATE pages SET title = ?, type = ?, slug = ?, updated_at = ? WHERE id = ?')
-      .run(nextTitle, nextType, nextSlug, ts, pageId);
+    db.prepare('UPDATE pages SET title = ?, type = ?, slug = ?, archived_at = ?, archive_reason = ?, updated_at = ? WHERE id = ?')
+      .run(nextTitle, nextType, nextSlug, nextArchivedAt, nextArchiveReason, ts, pageId);
   });
   trx();
   return getPageWithBlocks(db, pageId);

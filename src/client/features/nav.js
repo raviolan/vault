@@ -5,14 +5,18 @@ import { getState, updateState } from '../lib/state.js';
 import { getNavGroupsForSection } from './navGroups.js';
 import { normalizeSections } from '../lib/sections.js';
 import { TOOLS } from '../tools/index.js';
+import { sectionForType } from '../lib/pageSections.js';
+import { buildArchiveBuckets } from './archiveBuckets.js';
 
 let cachedPages = [];
 
 export function getCachedPages() { return cachedPages; }
 
-export async function loadPages() {
-  cachedPages = await fetchJson('/api/pages');
-  return cachedPages;
+export async function loadPages({ archived = 'exclude' } = {}) {
+  const qs = archived && archived !== 'exclude' ? `?archived=${encodeURIComponent(archived)}` : '';
+  const pages = await fetchJson(`/api/pages${qs}`);
+  if (archived === 'exclude') cachedPages = pages;
+  return pages;
 }
 
 export async function loadNavConfig() {
@@ -23,35 +27,9 @@ export async function loadNavConfig() {
   }
 }
 
-export function sectionForType(type) {
-  switch (type) {
-    case 'npc': return 'NPCs';
-    case 'location': return 'World';
-    case 'arc': return 'Arcs';
-    case 'tool': return 'Tools';
-    case 'pc':
-    case 'character':
-    default:
-      return type === 'note' ? 'Campaign' : 'Characters';
-  }
-}
-
-// Return a stable section key for a given page type
-export function sectionKeyForType(type) {
-  switch (type) {
-    case 'npc': return 'npcs';
-    case 'location': return 'world';
-    case 'arc': return 'arcs';
-    case 'tool': return 'tools';
-    case 'note': return 'campaign';
-    case 'pc':
-    case 'character':
-    default: return 'characters';
-  }
-}
-
 function sectionKey(label) {
   const key = String(label || '').toLowerCase();
+  if (key.includes('archive')) return 'archive';
   if (key.includes('npc')) return 'npcs';
   if (key.includes('world') || key.includes('location')) return 'world';
   if (key.includes('arc')) return 'arcs';
@@ -83,16 +61,19 @@ export function renderNavSections(pages, navCfg) {
   }
 
   const folderIds = getFolderPageIdSet();
-  const corePages = pages.filter(p => !folderIds.has(p.id));
+  const corePages = pages.filter(p => p.archivedAt || !folderIds.has(p.id));
 
   const bySection = new Map();
   for (const p of corePages) {
-    const label = sectionForType(p.type);
+    const label = p.archivedAt ? 'Archive' : sectionForType(p.type);
     if (!bySection.has(label)) bySection.set(label, []);
     bySection.get(label).push(p);
   }
 
-  const sections = (navCfg?.sections?.length ? navCfg.sections : Array.from(bySection.keys()).map(label => ({ label })));
+  const sections = (navCfg?.sections?.length ? navCfg.sections.slice() : Array.from(bySection.keys()).map(label => ({ label })));
+  if (bySection.has('Archive') && !sections.some(sec => String(sec?.label || '').toLowerCase() === 'archive')) {
+    sections.push({ label: 'Archive' });
+  }
 
   // Use a natural, case-insensitive collator for display-only sorting
   // Note: Sorting is applied at render time only; persisted user ordering is unchanged.
@@ -107,12 +88,13 @@ export function renderNavSections(pages, navCfg) {
 
     const li = document.createElement('li');
     li.className = 'nav-section';
+    const sectionHref = key === 'archive' ? '/archive' : `/section/${encodeURIComponent(key)}`;
     li.innerHTML = `
       <details class="nav-details" data-section="${escapeHtml(key)}" open>
         <summary class="nav-label nav-section-header">
           <span class="nav-icon">${escapeHtml(sec.icon || '')}</span>
           <span>${escapeHtml(label)}</span>
-          <a class="nav-open-link" href="/section/${encodeURIComponent(key)}" data-link title="Open ${escapeHtml(label)}" aria-label="Open ${escapeHtml(label)}"></a>
+          <a class="nav-open-link" href="${sectionHref}" data-link title="Open ${escapeHtml(label)}" aria-label="Open ${escapeHtml(label)}"></a>
         </summary>
         <ul class="nav-list"></ul>
       </details>
@@ -145,9 +127,36 @@ export function renderNavSections(pages, navCfg) {
       } catch {}
     });
     // If user has groups for this section, render grouped subsections
-    const { groups, pageToGroup } = getNavGroupsForSection(key);
+    const archiveBuckets = key === 'archive' ? buildArchiveBuckets(items, getState()) : null;
+    const hasArchiveBuckets = Array.isArray(archiveBuckets) && archiveBuckets.length > 0;
+    const { groups, pageToGroup } = key === 'archive' ? { groups: [], pageToGroup: {} } : getNavGroupsForSection(key);
     const hasGroups = Array.isArray(groups) && groups.length > 0;
-    if (hasGroups) {
+    if (hasArchiveBuckets) {
+      for (const bucket of archiveBuckets) {
+        const gi = document.createElement('li');
+        const pagesInGroup = bucket.pages || [];
+        const count = pagesInGroup.length;
+        gi.innerHTML = `
+          <details class="nav-details" open>
+            <summary class="nav-label">
+              <span>${escapeHtml(bucket.name || 'Archive')}</span>
+              <span class="meta" style="margin-left:auto;">${count}</span>
+            </summary>
+            <ul class="nav-list"></ul>
+          </details>
+        `;
+        const glist = gi.querySelector('.nav-list');
+        for (const p of pagesInGroup) {
+          const href = p.slug ? `/p/${encodeURIComponent(p.slug)}` : `/page/${encodeURIComponent(p.id)}`;
+          const item = document.createElement('li');
+          item.innerHTML = `<a class="nav-item" href="${href}" data-link>
+            <span class="nav-text">${escapeHtml(p.title)}</span>
+          </a>`;
+          glist.appendChild(item);
+        }
+        list.appendChild(gi);
+      }
+    } else if (hasGroups) {
       // Group pages by groupId; sort at display time only
       const byGroup = new Map(groups.map(g => [g.id, []]));
       const ungrouped = [];
@@ -222,7 +231,7 @@ export function renderNavSections(pages, navCfg) {
 }
 
 export async function refreshNav() {
-  const [pages, navCfg] = await Promise.all([loadPages(), loadNavConfig()]);
+  const [pages, navCfg] = await Promise.all([loadPages({ archived: 'include' }), loadNavConfig()]);
   renderNavSections(pages, navCfg);
   // Append Tools items into existing Tools section (avoid duplicate)
   try { renderToolsSection(); } catch {}

@@ -2,7 +2,7 @@ import { $, escapeHtml } from '../lib/dom.js';
 import { setBreadcrumb, setPageActionsEnabled } from '../lib/ui.js';
 import { setUiMode } from '../lib/uiMode.js';
 import { setActivePage } from '../lib/activePage.js';
-import { loadPages, sectionForType, refreshNav } from '../features/nav.js';
+import { loadPages, refreshNav } from '../features/nav.js';
 import { getState, updateState, saveStateNow } from '../lib/state.js';
 import { normalizeSections, removeSection } from '../lib/sections.js';
 import { navigate } from '../lib/router.js';
@@ -12,8 +12,11 @@ import { renderHeaderMedia } from '../features/headerMedia.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
 import { loadState } from '../lib/state.js';
 import { setPartyPinned } from '../miniapps/partyDrawer/app.js';
+import { sectionForType } from '../lib/pageSections.js';
+import { buildArchiveBuckets } from '../features/archiveBuckets.js';
 
 const KEY_TO_LABEL = new Map([
+  ['archive', 'Archive'],
   ['characters', 'Characters'],
   ['npcs', 'NPCs'],
   ['world', 'World'],
@@ -25,13 +28,14 @@ const KEY_TO_LABEL = new Map([
 
 export async function render(outlet, { key }) {
   if (!outlet) return;
+  const lowerKey = String(key || '').toLowerCase();
+  const isArchive = lowerKey === 'archive';
   // Store section key on the outlet for delegated handlers
   outlet.dataset.sectionKey = String(key || '');
-  try { setActivePage({ id: `section:${String(key||'')}`, slug: null, canEdit: true, kind: 'page' }); } catch {}
+  try { setActivePage({ id: `section:${String(key||'')}`, slug: null, canEdit: !isArchive, kind: 'page' }); } catch {}
   // Local cleanup for header media click binding
   let cleanupHeaderMedia = null;
-  const pages = await loadPages();
-  const lowerKey = String(key || '').toLowerCase();
+  const pages = await loadPages({ archived: isArchive ? 'only' : 'exclude' });
   const labelFromMap = KEY_TO_LABEL.get(lowerKey) || 'Section';
   const st = getState();
   const { sections: userSections } = normalizeSections(st || {});
@@ -39,7 +43,7 @@ export async function render(outlet, { key }) {
   const matchedCustom = isCustom ? (userSections || []).find(s => (`u-${String(s.id)}`) === lowerKey) : null;
   const label = isCustom ? (matchedCustom?.title || 'Section') : labelFromMap;
   try { setBreadcrumb(label); } catch {}
-  try { setPageActionsEnabled({ canEdit: true, canDelete: false }); } catch {}
+  try { setPageActionsEnabled({ canEdit: !isArchive, canDelete: false }); } catch {}
 
   // Build set of page ids that belong to user folders; exclude them from core section listings
   function getFolderPageIdSet() {
@@ -58,7 +62,11 @@ export async function render(outlet, { key }) {
   const folderIds = getFolderPageIdSet();
 
   let filtered = [];
-  if (isCustom) {
+  if (isArchive) {
+    filtered = pages
+      .slice()
+      .sort((a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' }));
+  } else if (isCustom) {
     // Custom section: resolve by stored pageIds and show those pages
     const ids = Array.isArray(matchedCustom?.pageIds) ? matchedCustom.pageIds : [];
     const pageById = new Map(pages.map(p => [String(p.id), p]));
@@ -72,11 +80,12 @@ export async function render(outlet, { key }) {
       .sort((a,b) => a.title.localeCompare(b.title));
   }
 
-  const { groups, pageToGroup } = getNavGroupsForSection(key);
+  const archiveBuckets = isArchive ? buildArchiveBuckets(filtered, getState()) : null;
+  const { groups, pageToGroup } = isArchive ? { groups: [], pageToGroup: {} } : getNavGroupsForSection(key);
 
   const isEditMode = () => (document?.body?.dataset?.mode === 'edit');
   // Organizer UI (visible only in Edit mode)
-  const organizer = isEditMode() ? `
+  const organizer = (isEditMode() && !isArchive) ? `
     <section class="card" style="margin-bottom: 12px;">
       <h2>Organize</h2>
       <div style="display:flex; gap:8px; align-items:center; margin: 8px 0;">
@@ -88,15 +97,20 @@ export async function render(outlet, { key }) {
   ` : '';
 
   // Build accordion groups (Nav groups + Ungrouped)
-  const byGroupId = new Map();
-  for (const g of (groups || [])) byGroupId.set(String(g.id), { id: String(g.id), name: String(g.name || ''), pages: [] });
-  const ungrouped = { id: 'ungrouped', name: 'Ungrouped', pages: [] };
-  for (const p of filtered) {
-    const gid = pageToGroup[p.id] ? String(pageToGroup[p.id]) : '';
-    const bucket = gid && byGroupId.has(gid) ? byGroupId.get(gid) : ungrouped;
-    bucket.pages.push(p);
+  let groupList = [];
+  if (isArchive) {
+    groupList = Array.isArray(archiveBuckets) ? archiveBuckets : [];
+  } else {
+    const byGroupId = new Map();
+    for (const g of (groups || [])) byGroupId.set(String(g.id), { id: String(g.id), name: String(g.name || ''), pages: [] });
+    const ungrouped = { id: 'ungrouped', name: 'Ungrouped', pages: [] };
+    for (const p of filtered) {
+      const gid = pageToGroup[p.id] ? String(pageToGroup[p.id]) : '';
+      const bucket = gid && byGroupId.has(gid) ? byGroupId.get(gid) : ungrouped;
+      bucket.pages.push(p);
+    }
+    groupList = [...byGroupId.values(), ungrouped];
   }
-  const groupList = [...byGroupId.values(), ungrouped];
   // Persisted accordion open state
   const st2 = getState();
   const accAll = st2?.sectionLandingAccordionV1 || {};
@@ -125,7 +139,7 @@ export async function render(outlet, { key }) {
     return `<li class="sectionRow" data-pid="${escapeHtml(p.id)}" style="display:flex; align-items:center; gap:8px;">
       <a href="${href}" data-link style="flex:1 1 auto; min-width:0;">${escapeHtml(p.title)}</a>
       ${pinBtn}
-      ${isEditMode() ? `<select data-pid="${escapeHtml(p.id)}" title="Group">${opts}</select>` : ''}
+      ${isEditMode() && !isArchive ? `<select data-pid="${escapeHtml(p.id)}" title="Group">${opts}</select>` : ''}
     </li>`;
   };
   const listHtml = groupList.length ? groupList.map(g => `

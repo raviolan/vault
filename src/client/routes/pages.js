@@ -11,7 +11,7 @@ import { renderBacklinksPanel } from '../features/backlinks.js';
 import { mountSaveIndicator, unmountSaveIndicator } from '../features/saveIndicator.js';
 import { renderHeaderMedia } from '../features/headerMedia.js';
 import { uploadMedia, updatePosition, deleteMedia } from '../lib/mediaUpload.js';
-import { sectionForType, sectionKeyForType } from '../features/nav.js';
+import { sectionForType, sectionKeyForType } from '../lib/pageSections.js';
 import { mountSubsectionPicker } from '../features/subsectionPicker.js';
 import { getNavGroupsForSection, setGroupForPage, addGroup } from '../features/navGroups.js';
 import { flushDebouncedPatches } from '../blocks/edit/state.js';
@@ -181,8 +181,19 @@ function getPageOutletOrNull() {
 }
 
 function computeSectionLabel(page) {
+  if (page?.archivedAt) return 'Archive';
   const folderTitle = getFolderTitleForPage(page.id);
   return folderTitle || sectionForType(page.type);
+}
+
+function buildPageMetaLine(page, sectionLabel) {
+  const parts = [`Section: ${escapeHtml(sectionLabel || page.type || '')}`];
+  if (page?.archivedAt) {
+    parts.push(`Archived: ${escapeHtml(page.archivedAt)}`);
+    if (page.archiveReason) parts.push(`Reason: ${escapeHtml(page.archiveReason)}`);
+  }
+  parts.push(`Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}`);
+  return parts.join(' · ');
 }
 
 function renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar }) {
@@ -209,7 +220,7 @@ function renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar }) {
         <div id=\"pageBlocks\"></div>
         <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
       </div>
-      <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <p class=\"meta\">${buildPageMetaLine(page, sectionLabel)}</p>
     </article>
   `;
   } else {
@@ -233,7 +244,7 @@ function renderPageShell(outlet, page, { sectionLabel, includeTagsToolbar }) {
         <div id=\"pageBlocks\"></div>
         <div id=\"pageSheet\" class=\"page-sheet\" hidden></div>
       </div>
-      <p class=\"meta\">Section: ${escapeHtml(sectionLabel || page.type || '')} · Updated: ${escapeHtml(page.updatedAt || page.createdAt || '')}</p>
+      <p class=\"meta\">${buildPageMetaLine(page, sectionLabel)}</p>
     </article>
   `;
   }
@@ -1197,6 +1208,10 @@ function getFolderTitleForPage(pageId) {
 
 function setPageBreadcrumb(page) {
   try {
+    if (page?.archivedAt) {
+      setBreadcrumb(['Archive', page.title].filter(Boolean).join(' • '));
+      return;
+    }
     const folderTitle = getFolderTitleForPage(page.id);
     if (folderTitle) { setBreadcrumb(`${folderTitle} • ${page.title}`); return; }
     const sectionLabel = sectionForType(page.type);
@@ -1346,6 +1361,12 @@ function mountPageLocationControls(page, { anchorEl }) {
     btnNew.textContent = 'New…';
     wrap.appendChild(btnNew);
 
+    const archiveBtn = document.createElement('button');
+    archiveBtn.type = 'button';
+    archiveBtn.className = 'chip';
+    archiveBtn.textContent = page.archivedAt ? 'Unarchive' : 'Archive';
+    wrap.appendChild(archiveBtn);
+
     // Hint for view mode only
     try {
       if (anchorEl.id === 'pageTitleView') {
@@ -1406,10 +1427,9 @@ function mountPageLocationControls(page, { anchorEl }) {
           try {
             const meta = document.querySelector('article.page p.meta');
             if (meta) {
-              const updatedAt = String(page.updatedAt || page.createdAt || '');
               const folderTitleNow = getFolderTitleForPage(page.id);
-              const sectionLabelNow = folderTitleNow || sectionForType(page.type);
-              meta.innerHTML = `Section: ${escapeHtml(sectionLabelNow || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
+              const sectionLabelNow = page.archivedAt ? 'Archive' : (folderTitleNow || sectionForType(page.type));
+              meta.innerHTML = buildPageMetaLine(page, sectionLabelNow);
             }
           } catch {}
         } catch (e) { console.error('Failed to move page to folder', e); }
@@ -1430,10 +1450,9 @@ function mountPageLocationControls(page, { anchorEl }) {
         page.type = updated.type || newType;
         const meta = document.querySelector('article.page p.meta');
         if (meta) {
-          const updatedAt = (updated.updatedAt || updated.createdAt || '').toString();
           const folderTitleNow = getFolderTitleForPage(page.id);
-          const sectionLabel = folderTitleNow || sectionForType(page.type);
-          meta.innerHTML = `Section: ${escapeHtml(sectionLabel || page.type)} · Updated: ${escapeHtml(updatedAt)}`;
+          const sectionLabel = page.archivedAt ? 'Archive' : (folderTitleNow || sectionForType(page.type));
+          meta.innerHTML = buildPageMetaLine(updated, sectionLabel);
         }
         const newKey = sectionKeyForType(page.type || 'note');
         if (oldKey !== newKey) {
@@ -1446,6 +1465,27 @@ function mountPageLocationControls(page, { anchorEl }) {
         try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
         buildTypeFolderOptions();
       } catch (e) { console.error('Failed to update type', e); }
+    });
+
+    archiveBtn.addEventListener('click', async () => {
+      const nextArchived = !page.archivedAt;
+      const archiveReason = nextArchived ? (prompt('Archive reason (optional)') || '') : '';
+      try {
+        const updated = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ archived: nextArchived, archiveReason }),
+        });
+        page.archivedAt = updated.archivedAt || null;
+        page.archiveReason = updated.archiveReason || '';
+        page.updatedAt = updated.updatedAt || page.updatedAt;
+        archiveBtn.textContent = page.archivedAt ? 'Unarchive' : 'Archive';
+        const meta = document.querySelector('article.page p.meta');
+        if (meta) meta.innerHTML = buildPageMetaLine(page, computeSectionLabel(page));
+        try { setPageBreadcrumb(page); } catch {}
+        try { await import('../features/nav.js').then(m => m.refreshNav()); } catch {}
+      } catch (e) {
+        console.error('Failed to update archive state', e);
+      }
     });
 
     return () => { try { wrap.remove(); } catch {}; };

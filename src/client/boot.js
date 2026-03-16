@@ -42,7 +42,8 @@ import { PartyDrawerApp } from './miniapps/partyDrawer/app.js';
 import { setDocumentTitle } from './lib/documentTitle.js';
 
 export async function boot() {
-  $('#year').textContent = String(new Date().getFullYear());
+  const yearEl = $('#year');
+  if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
   installLinkInterceptor();
   setFallback(() => { setDocumentTitle('Not Found'); return renderNotFound(); });
@@ -169,7 +170,10 @@ export async function boot() {
       try {
         const { refreshBlocksFromServer } = await import('./blocks/edit/apiBridge.js');
         await refreshBlocksFromServer(ap.id);
-      } catch {}
+      } catch (e) {
+        console.error('Failed to refresh blocks from server after edit', e);
+        try { alert(`Could not refresh after saving. Existing content is kept in view.\n\n${e?.message || e}`); } catch {}
+      }
     }
     try { window.dispatchEvent(new Event('vault:modechange')); } catch {}
     updateEditButtonState();
@@ -239,6 +243,13 @@ export async function boot() {
   });
   route(/^\/page\/([^\/]+)$/, (ctx) => renderPage(ctx));
   route(/^\/p\/([^\/]+)$/, (ctx) => renderPageBySlug(ctx));
+  route(/^\/archive\/?$/, () => {
+    setDocumentTitle('Archive');
+    setBreadcrumb('Archive');
+    setPageActionsEnabled({ canEdit: false, canDelete: false });
+    const outlet = document.getElementById('outlet');
+    return SectionRoute.render(outlet, { key: 'archive' });
+  });
   route(/^\/search\/?$/, () => { setDocumentTitle('Search'); try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {} return renderSearchResults(); });
   route(/^\/tags\/?$/, () => {
     setDocumentTitle('Tag Inspector');
