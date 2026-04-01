@@ -2,7 +2,7 @@
 // Keeps ratio persisted in user state and supports pointer + keyboard adjustments.
 // Debug: set window.__DEBUG_RIGHT_SPLIT = true to enable logs at runtime.
 
-const DEFAULT_RATIO = 0.40; // top fraction when unset
+const DEFAULT_RATIO = 0.55; // top fraction when unset
 
 // Track which DOM we are currently bound to so we can re-bind when replaced
 let bound = { root: null, handle: null, notepadPanel: null, todoPanel: null, notepadSlot: null, todoSlot: null };
@@ -48,8 +48,8 @@ export function initRightPanelSplit({ getUserState, patchUserState }) {
     teardown = null;
   }
 
-  const MIN_TOP = 160; // Notepad min px
-  const MIN_BOTTOM = 220; // To-Do min px
+  const MIN_TOP = 280; // Keep notes readable in split view
+  const MIN_BOTTOM = 180; // Leave room for the lower tool without collapsing the top
 
   function readRatio() {
     const st = (typeof getUserState === 'function' ? getUserState() : {}) || {};

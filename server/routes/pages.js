@@ -253,5 +253,14 @@ export function routePages(req, res, ctx) {
     }
   }
 
+  const duplicateMatch = pathname.match(/^\/api\/pages\/([^\/]+)\/duplicate$/);
+  if (duplicateMatch && req.method === 'POST') {
+    const id = decodePathParam(duplicateMatch[1]);
+    const page = ctx.dbDuplicatePage(ctx.db, id);
+    if (!page) { notFound(res); return true; }
+    sendJson(res, 201, page);
+    return true;
+  }
+
   return false;
 }

@@ -33,6 +33,8 @@ import * as WeatherSettingsRoute from './routes/weatherSettings.js';
 import * as HpRoute from './routes/hp.js';
 import * as CleanupRoute from './routes/cleanup.js';
 import * as HealthRoute from './routes/health.js';
+import * as TimelineRoute from './routes/timeline.js';
+import * as WorkspaceRoute from './routes/workspace.js';
 import * as EnemyGenerator from './tools/enemyGenerator/index.js';
 import { renderFavorites } from './features/favorites.js';
 import { initPanels } from './features/panelControls.js';
@@ -41,8 +43,13 @@ import { installGlobalLightbox } from './features/lightbox.js';
 import { getUserState, patchUserState } from './miniapps/state.js';
 import { PartyDrawerApp } from './miniapps/partyDrawer/app.js';
 import { setDocumentTitle } from './lib/documentTitle.js';
+import { bindWorkspacePicker } from './features/workspacePicker.js';
 
 export async function boot() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    document.body.classList.toggle('embedded-view', params.get('embed') === '1');
+  } catch {}
   const yearEl = $('#year');
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 
@@ -64,6 +71,8 @@ export async function boot() {
   bindModalBasics('open5eLinkModal');
   bindModalBasics('inlineCommentModal');
   bindModalBasics('uploadErrorModal');
+  bindModalBasics('workspacePagePickerModal');
+  bindWorkspacePicker();
   try { installOpen5eSpellFeature(); } catch {}
   try { installInlineComments(); } catch {}
   // Dev-only: regression smoke harness (opt-in via ?smoke=1)
@@ -309,6 +318,22 @@ export async function boot() {
     try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
     const outlet = document.getElementById('outlet');
     return HealthRoute.render(outlet, {});
+  });
+  route(/^\/timeline\/?$/, () => {
+    setDocumentTitle('Timeline');
+    setBreadcrumb('Timeline');
+    setPageActionsEnabled({ canEdit: false, canDelete: false });
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
+    const outlet = document.getElementById('outlet');
+    return TimelineRoute.render(outlet, {});
+  });
+  route(/^\/workspace\/?$/, () => {
+    setDocumentTitle('Workspace');
+    setBreadcrumb('Workspace');
+    setPageActionsEnabled({ canEdit: false, canDelete: false, canDuplicate: false, canOpenBeside: false });
+    try { setActivePage({ id: null, slug: null, canEdit: false, kind: 'page' }); } catch {}
+    const outlet = document.getElementById('outlet');
+    return WorkspaceRoute.render(outlet, {});
   });
   // Dedicated Weather app settings route
   route(/^\/apps\/weather\/settings\/?$/, () => {

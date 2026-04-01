@@ -22,6 +22,9 @@ import { setActivePage } from '../lib/activePage.js';
 import { setDocumentTitle } from '../lib/documentTitle.js';
 import { getPageSheet, patchPageSheet, setPageSheetCache } from '../lib/pageSheetStore.js';
 import { getOpen5eResource, normalizeO5eType, buildApiPath } from '../features/open5eCore.js';
+import { openWorkspacePicker } from '../features/workspacePicker.js';
+import { buildWorkspaceHref } from '../lib/workspace.js';
+import { navigate } from '../lib/router.js';
 
 // ---- Open5e full-details renderer (generic, robust, small)
 // Renders remaining JSON fields in a readable layout.
@@ -890,7 +893,7 @@ function initBacklinks(page) {
 
 async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
   setPageBreadcrumb(page);
-  setPageActionsEnabled({ canEdit: true, canDelete: true });
+  setPageActionsEnabled({ canEdit: true, canDelete: true, canDuplicate: true, canOpenBeside: true });
 
   const outlet = getPageOutletOrNull();
   if (!outlet) return () => {};
@@ -1158,6 +1161,41 @@ async function renderPageCore(page, { includeTagsToolbar, cheatHtml }) {
 
   const btnDelete = document.getElementById('btnDeletePage');
   if (btnDelete) { btnDelete.onclick = () => openDeleteModal(page); }
+  const btnDuplicate = document.getElementById('btnDuplicatePage');
+  if (btnDuplicate) {
+    btnDuplicate.onclick = async () => {
+      if (isEditingPage(page.id)) {
+        alert('Finish editing this page before duplicating it.');
+        return;
+      }
+      btnDuplicate.disabled = true;
+      const originalLabel = btnDuplicate.textContent;
+      btnDuplicate.textContent = 'Duplicating…';
+      try {
+        const duplicate = await fetchJson(`/api/pages/${encodeURIComponent(page.id)}/duplicate`, { method: 'POST' });
+        window.location.href = canonicalPageHref(duplicate);
+      } finally {
+        btnDuplicate.disabled = false;
+        btnDuplicate.textContent = originalLabel || 'Duplicate';
+      }
+    };
+  }
+  const btnOpenBeside = document.getElementById('btnOpenBesidePage');
+  if (btnOpenBeside) {
+    btnOpenBeside.onclick = () => {
+      if (isEditingPage(page.id)) {
+        alert('Finish editing this page before opening it in a workspace.');
+        return;
+      }
+      openWorkspacePicker({
+        title: `Open beside "${page.title}"`,
+        excludePageIds: [page.id],
+        onPick(otherPage) {
+          navigate(buildWorkspaceHref([page.id, otherPage.id], otherPage.id));
+        },
+      });
+    };
+  }
 
   // Do not mount edit lifecycle for API-managed pages to avoid wiping derived content
   let cleanupEditLifecycle = () => {};

@@ -463,7 +463,7 @@ body[data-mode='edit'] .editor-add-controls .chip {
 /* Split view: Notepad (top ~40%), To-Do (bottom ~60%) */
 .right-drawer-content[data-notes-split='true'] .right-panel[data-panel='notepad'] {
     flex: 0 0 auto;
-    min-height: 160px;
+    min-height: 280px;
     overflow: hidden;
 }
 
@@ -486,25 +486,39 @@ body[data-mode='edit'] .editor-add-controls .chip {
 /* Split handle styles */
 #rightSplitHandle {
     position: relative;
-    height: 16px;
-    margin: -3px 0;
-    /* net 16-6 = 10px -> same visual spacing as before */
+    height: 22px;
+    margin: 8px 0;
     cursor: row-resize;
     z-index: 5;
-    /* ensure it sits above slot content */
     touch-action: none;
 }
 
 #rightSplitHandle::before {
     content: '';
     position: absolute;
-    left: 10px;
-    right: 10px;
+    left: 0;
+    right: 0;
     top: 50%;
-    height: 2px;
+    height: 1px;
     transform: translateY(-50%);
-    background: var(--border);
-    border-radius: 2px;
+    background: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.right-drawer-content #rightSplitHandle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 56px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    background:
+        radial-gradient(circle, color-mix(in srgb, var(--muted) 80%, transparent) 1.2px, transparent 1.3px)
+        center / 12px 6px repeat-x,
+        color-mix(in srgb, var(--panel) 92%, transparent);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
 
 /* Only show split handle in split mode */
@@ -853,16 +867,10 @@ body[data-mode='edit'] .main>#outlet>section.page.page--hp {
     color: var(--text);
 }
 
-#rightSplitHandle::after {
-    content: '⋮';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%) rotate(90deg);
-    color: var(--muted);
-    line-height: 1;
-    font-size: 14px;
-    opacity: .9;
+.right-drawer-content #rightSplitHandle:hover::after,
+.right-drawer-content #rightSplitHandle:focus-visible::after {
+    border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
 }
 
 #rightSplitHandle:hover,
@@ -1851,6 +1859,143 @@ h4 {
 
 .delete-page-btn svg {
     display: block
+}
+
+.workspace-route {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: calc(100vh - 180px);
+}
+
+.workspace-strip {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.workspace-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.workspace-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+}
+
+.workspace-tab.is-active {
+    border-color: var(--link);
+}
+
+.workspace-tab-focus {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 6px 10px;
+    cursor: pointer;
+    font: inherit;
+}
+
+.workspace-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.workspace-tab-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+}
+
+.workspace-panes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 12px;
+    align-items: stretch;
+}
+
+.workspace-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 72vh;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    overflow: hidden;
+}
+
+.workspace-pane.is-active {
+    border-color: color-mix(in srgb, var(--link) 45%, var(--border));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--link) 20%, transparent);
+}
+
+.workspace-pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.workspace-frame {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    border: 0;
+    background: var(--bg);
+}
+
+body.embedded-view .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "top" "main";
+}
+
+body.embedded-view .left,
+body.embedded-view .right,
+body.embedded-view .resizer,
+body.embedded-view .left-drawer-tab,
+body.embedded-view .drawer-tab {
+    display: none !important;
+}
+
+body.embedded-view .top {
+    padding: 8px 12px;
+    min-height: 0;
+    justify-content: flex-start;
+}
+
+body.embedded-view .top .toolbar {
+    gap: 8px;
+}
+
+body.embedded-view .top .toolbar > :not(#btnEditPage),
+body.embedded-view .top .search,
+body.embedded-view #searchResults,
+body.embedded-view #themeModeSwitch,
+body.embedded-view #partyDrawerRoot {
+    display: none !important;
+}
+
+body.embedded-view .main {
+    padding: 20px 24px;
 }
 
 .graph-side {

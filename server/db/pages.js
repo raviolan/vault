@@ -49,6 +49,17 @@ export function createPage(db, { title, type = 'note' }) {
   };
 }
 
+function buildDuplicateTitle(db, title) {
+  const base = `${String(title || '').trim() || 'Untitled'} Copy`;
+  let candidate = base;
+  let suffix = 2;
+  while (db.prepare('SELECT 1 FROM pages WHERE title = ?').get(candidate)) {
+    candidate = `${base} ${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
 export function getPageWithBlocks(db, id) {
   const page = db.prepare('SELECT id, title, type, slug, archived_at, archive_reason, created_at, updated_at FROM pages WHERE id = ?').get(id);
   if (!page) return null;
@@ -109,4 +120,84 @@ export function patchPage(db, pageId, { title, type, regenerateSlug = false, arc
 
 export function deletePage(db, id) {
   db.prepare('DELETE FROM pages WHERE id = ?').run(id);
+}
+
+export function duplicatePage(db, id) {
+  const source = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
+  if (!source) return null;
+
+  const nextId = randomUUID();
+  const ts = Math.floor(Date.now() / 1000);
+  const nextTitle = buildDuplicateTitle(db, source.title);
+  const nextSlug = ensureUniqueSlug(db, slugifyTitle(nextTitle));
+  const sourceBlocks = db.prepare(
+    `SELECT id, parent_id, sort, type, props_json, content_json
+       FROM blocks
+      WHERE page_id = ?
+      ORDER BY parent_id IS NOT NULL, parent_id, sort, created_at`
+  ).all(id);
+  const sourceSheet = db.prepare('SELECT sheet_json FROM page_sheets WHERE page_id = ?').get(id);
+  const sourceTags = db.prepare('SELECT tag_id FROM page_tags WHERE page_id = ? ORDER BY tag_id').all(id);
+  const sourceMedia = db.prepare('SELECT * FROM page_media WHERE page_id = ?').get(id);
+  const blockIds = new Map(sourceBlocks.map((block) => [block.id, randomUUID()]));
+
+  const trx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO pages(id, title, type, slug, archived_at, archive_reason, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NULL, '', ?, ?)`
+    ).run(nextId, nextTitle, source.type, nextSlug, ts, ts);
+
+    if (sourceBlocks.length) {
+      const insertBlock = db.prepare(
+        `INSERT INTO blocks(id, page_id, parent_id, sort, type, props_json, content_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const block of sourceBlocks) {
+        insertBlock.run(
+          blockIds.get(block.id),
+          nextId,
+          block.parent_id ? blockIds.get(block.parent_id) || null : null,
+          block.sort,
+          block.type,
+          block.props_json,
+          block.content_json,
+          ts,
+          ts,
+        );
+      }
+    }
+
+    if (sourceSheet?.sheet_json) {
+      db.prepare('INSERT INTO page_sheets(page_id, sheet_json, updated_at) VALUES (?, ?, ?)')
+        .run(nextId, sourceSheet.sheet_json, ts);
+    }
+
+    if (sourceTags.length) {
+      const insertTag = db.prepare('INSERT INTO page_tags(page_id, tag_id) VALUES (?, ?)');
+      for (const row of sourceTags) insertTag.run(nextId, row.tag_id);
+    }
+
+    if (sourceMedia) {
+      db.prepare(
+        `INSERT INTO page_media(
+           page_id, header_path, header_pos_x, header_pos_y, header_zoom,
+           profile_path, profile_pos_x, profile_pos_y, profile_zoom, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        nextId,
+        sourceMedia.header_path,
+        sourceMedia.header_pos_x,
+        sourceMedia.header_pos_y,
+        sourceMedia.header_zoom,
+        sourceMedia.profile_path,
+        sourceMedia.profile_pos_x,
+        sourceMedia.profile_pos_y,
+        sourceMedia.profile_zoom,
+        ts,
+      );
+    }
+  });
+
+  trx();
+  return getPageWithBlocks(db, nextId);
 }

@@ -1,6 +1,8 @@
-import { escapeHtml, $ } from '../lib/dom.js';
+import { escapeHtml } from '../lib/dom.js';
 import { fetchJson } from '../lib/http.js';
 import { navigate } from '../lib/router.js';
+import { stripMarkdownStyling } from '../lib/searchResultText.js';
+import { getOmniboxActions } from './omniboxActions.js';
 
 let hotkeyInstalled = false;
 
@@ -78,10 +80,9 @@ export function installSearchPreview() {
     }
     const metaBits = [];
     if (sel.type) metaBits.push(escapeHtml(String(sel.type)));
-    if (sel.updatedAt) metaBits.push(new Date(sel.updatedAt).toLocaleDateString());
     const meta = metaBits.length ? `<div class="search-meta">${metaBits.join(' · ')}</div>` : '';
     const ctxTitle = sel.contextTitle ? `<div class="search-title">${escapeHtml(sel.contextTitle)}</div>` : '';
-    const body = sel.contextText ? sel.contextText : (sel.snippet || '');
+    const body = stripMarkdownStyling(sel.contextText ? sel.contextText : (sel.snippet || ''));
     prev.innerHTML = `${meta}${ctxTitle}<div class="search-secondary" style="white-space:pre-wrap">${escapeHtml(body)}</div>`;
   }
 
@@ -91,18 +92,15 @@ export function installSearchPreview() {
     if (!list) return;
     list.innerHTML = items.map((it, idx) => {
       const cls = `search-item${idx===activeIndex?' active':''}`;
-      const secondary = it.contextTitle || it.snippet || '';
-      return `<div class="${cls}" data-id="${it.id}" data-slug="${it.slug||''}">\n        <span class="search-title">${escapeHtml(it.title)}</span>\n        <span class="search-secondary">${escapeHtml(secondary)}</span>\n      </div>`;
+      const secondary = stripMarkdownStyling(it.contextTitle || it.snippet || '');
+      const kind = it.kind || 'page';
+      const badge = kind === 'action' ? '<span class="search-meta">Action</span>' : '';
+      return `<div class="${cls}" data-id="${it.id || ''}" data-slug="${it.slug||''}" data-kind="${kind}">\n        ${badge}\n        <span class="search-title">${escapeHtml(it.title)}</span>\n        <span class="search-secondary">${escapeHtml(secondary)}</span>\n      </div>`;
     }).join('');
     list.querySelectorAll('.search-item').forEach((el, idx) => {
       el.addEventListener('mousedown', (e) => { e.preventDefault(); });
       el.addEventListener('click', () => {
-        const id = el.getAttribute('data-id');
-        const slug = el.getAttribute('data-slug') || '';
-        input.value = '';
-        dropdown.style.display = 'none';
-        const href = slug ? `/p/${encodeURIComponent(slug)}` : `/page/${encodeURIComponent(id)}`;
-        navigate(href);
+        openItem(items[idx]);
       });
       el.addEventListener('mouseenter', () => {
         explicitPick = true;
@@ -119,6 +117,18 @@ export function installSearchPreview() {
     positionDropdown();
     renderList();
     renderPreviewPane();
+  }
+
+  function openItem(item) {
+    if (!item) return;
+    input.value = '';
+    dropdown.style.display = 'none';
+    if (typeof item.run === 'function') {
+      item.run();
+      return;
+    }
+    const href = item.slug ? `/p/${encodeURIComponent(item.slug)}` : `/page/${encodeURIComponent(item.id)}`;
+    navigate(href);
   }
 
   async function fetchSnapshots(ids) {
@@ -139,7 +149,9 @@ export function installSearchPreview() {
     let snapMap = {};
     try { snapMap = await fetchSnapshots(ids); } catch {}
     if (seq !== searchSeq) return; // stale
-    items = base.map(it => ({ ...it, ...(snapMap[it.id] || {}) }));
+    const pageItems = base.map(it => ({ ...it, ...(snapMap[it.id] || {}), kind: 'page' }));
+    const actionItems = getOmniboxActions(q).map((it) => ({ ...it, kind: 'action' }));
+    items = [...pageItems, ...actionItems];
     activeIndex = items.length ? 0 : -1;
     explicitPick = false; // reset when results change
     render();
@@ -171,11 +183,7 @@ export function installSearchPreview() {
       e.preventDefault();
       const q = input.value.trim();
       if (explicitPick && activeIndex >= 0 && activeIndex < items.length) {
-        const it = items[activeIndex];
-        input.value = '';
-        dropdown.style.display = 'none';
-        const href = it.slug ? `/p/${encodeURIComponent(it.slug)}` : `/page/${encodeURIComponent(it.id)}`;
-        navigate(href);
+        openItem(items[activeIndex]);
       } else {
         if (q) {
           dropdown.style.display = 'none';

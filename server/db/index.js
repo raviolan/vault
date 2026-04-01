@@ -1,10 +1,11 @@
 export { openDb } from './open.js';
 export { migrate, cleanMigrationSql } from './migrate.js';
 export { slugifyTitle, ensureUniqueSlug, backfillSlugs } from './slugs.js';
-export { listPages, createPage, getPageWithBlocks, getPageWithBlocksBySlug, patchPage, deletePage } from './pages.js';
+export { listPages, createPage, getPageWithBlocks, getPageWithBlocksBySlug, patchPage, deletePage, duplicatePage } from './pages.js';
 export { createBlock, patchBlock, deleteBlock, reorderBlocks, normalizeSiblingSort, touchPage, moveBlockSubtree } from './blocks.js';
 export { searchPages, searchPagesWithMatches, escapeLike } from './search.js';
 export { getBacklinks } from './backlinks.js';
 export { ensureTag, listTagsWithCounts, getPageTags, setPageTags } from './tags.js';
 export { getPageSnapshots } from './snapshots.js';
 export { getPageMedia, setPageMedia, clearPageMediaSlot } from './pageMedia.js';
+export { listTimelineEvents, getTimelineEvent, getTimelineFilterOptions, createTimelineEvent, patchTimelineEvent, deleteTimelineEvent } from './timeline.js';

@@ -13,6 +13,7 @@ import { routeBlocks } from './blocks.js';
 import { routeSearch } from './search.js';
 import { routeBacklinks } from './backlinks.js';
 import { routeTags } from './tags.js';
+import { routeTimeline } from './timeline.js';
 import { routeTagInspector } from './tagInspector.js';
 import { routeContentHealth } from './contentHealth.js';
 import { routeUserState } from './userState.js';
@@ -115,6 +116,7 @@ const ROUTES = [
   { name: 'health', handle: routeHealth },
   { name: 'pages', handle: routePages },
   { name: 'search', handle: routeSearch },
+  { name: 'timeline', handle: routeTimeline },
   { name: 'meta', handle: routeMeta },
   { name: 'tags', handle: routeTags },
   { name: 'tagInspector', handle: routeTagInspector },

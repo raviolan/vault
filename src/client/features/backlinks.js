@@ -1,7 +1,15 @@
 import { fetchJson } from '../lib/http.js';
 
+function isBacklinkEligiblePageId(pageId) {
+  const id = String(pageId || '').trim();
+  if (!id) return false;
+  if (id === 'dashboard' || id === 'session') return false;
+  if (id.startsWith('section:')) return false;
+  return true;
+}
+
 export async function fetchBacklinks(pageId) {
-  if (!pageId) return [];
+  if (!isBacklinkEligiblePageId(pageId)) return [];
   try {
     const res = await fetchJson(`/api/pages/${encodeURIComponent(pageId)}/backlinks`);
     const links = res?.backlinks || res || [];
